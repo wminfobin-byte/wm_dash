@@ -728,8 +728,9 @@ function applyAuth(){
 }
 
 async function autoSyncDownload(){
-  const hasLocal=allFiles.length>0||cdAllFiles.length>0;
-  if(hasLocal)return;
+  const ngReady=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+  const cdReady=cdAllFiles.length>0;
+  if(ngReady&&cdReady)return;
   try{
     const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
     if(!res.ok)return;
