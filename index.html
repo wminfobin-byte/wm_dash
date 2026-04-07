@@ -1424,12 +1424,16 @@ async function generate(dbFileId, contFileId){
     }
 
     // N_C 연속 횟수 — 2026-04-02 이후 이력만 카운트
+    const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
+    const lastSaved=localStorage.getItem('ngroup_last_saved');
+    const skipFirst=(lastSaved===sheetName); // 현재 기간 이력이 이미 저장되어 있으면 skip
     const streaks={};
     for(const name of members){
       const past=history[name]||[];
       const times=historyTimes[name]||[];
       let count=0;
-      for(let i=0;i<past.length;i++){
+      const startIdx=skipFirst?1:0;
+      for(let i=startIdx;i<past.length;i++){
         if(times[i] && times[i]<HISTORY_START) break;
         if(past[i]==='N_C그룹'||past[i]==='H그룹') count++;
         else break;
@@ -1440,8 +1444,7 @@ async function generate(dbFileId, contFileId){
       if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
     }
 
-    // 시트명 = DB파일 분배일 마지막 날
-    const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
+    // 시트명 = DB파일 분배일 마지막 날 (위에서 이미 계산됨)
     const savedPeriod=await getResultBySheet(sheetName);
     if(savedPeriod){
       const savedGroups={};
