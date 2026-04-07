@@ -1426,16 +1426,16 @@ async function generate(dbFileId, contFileId){
     // 시트명 = DB파일 분배일 마지막 날
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // N_C 연속 횟수 — IDB에 저장된 이전 기간 결과 기반
-    const allPastResults=await getAllResults();
-    const prevResults=allPastResults.filter(r=>r.sheetName!==sheetName&&r.sheetName<sheetName);
-    // prevResults: 최신순 정렬 (내림차순)
+    // N_C 연속 횟수 — IDB 이전 기간 결과 기반 (현재 기간 제외, 읽기 전용)
+    const allStoredResults=await getAllResults();
+    // 현재 기간 제외, 이전 기간만 (최신순)
+    const olderResults=allStoredResults.filter(r=>r.sheetName<sheetName);
     const streaks={};
     for(const name of members){
       let count=0;
       if(groups[name]==='N_C그룹'||groups[name]==='H그룹'){
-        count=1;
-        for(const prev of prevResults){
+        count=1; // 현재 기간 = 1
+        for(const prev of olderResults){
           const row=prev.rows.find(r=>r.name===name);
           if(row&&(row.group==='N_C그룹'||row.group==='H그룹'))count++;
           else break;
