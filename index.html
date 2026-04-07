@@ -728,16 +728,12 @@ function applyAuth(){
 }
 
 async function autoSyncDownload(){
-  console.log('[Sync] autoSyncDownload 시작, allFiles:', allFiles.length, 'cdAllFiles:', cdAllFiles.length);
   const hasLocal=allFiles.length>0||cdAllFiles.length>0;
-  if(hasLocal){console.log('[Sync] 로컬 데이터 있어서 스킵');return;}
+  if(hasLocal)return;
   try{
-    const url=`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`;
-    console.log('[Sync] fetch:', url);
-    const res=await fetch(url);
-    if(!res.ok){console.log('[Sync] fetch 실패:', res.status);return;}
+    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
+    if(!res.ok)return;
     const payload=await res.json();
-    console.log('[Sync] payload v:', payload.v, 'ng:', payload.ng?.length, 'ngResults:', payload.ngResults?.length);
 
     // N그룹 복원
     if(payload.ng){
@@ -765,12 +761,16 @@ async function autoSyncDownload(){
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
       if(ok)cdGenerate();
     }
-    // localStorage 이력 복원 후 N그룹 생성 (한 번만 실행)
+    // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
-    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-    if(ready)generate();
-  }catch(e){console.log('[Sync] 오류:',e.message,e);}
-  console.log('[Sync] autoSyncDownload 완료');
+    // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
+    if(payload.ngResults&&payload.ngResults.length>0){
+      restoreResultFromSync(payload.ngResults);
+    } else {
+      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+      if(ready)generate();
+    }
+  }catch(e){console.log('자동 동기화 스킵:',e.message);}
 }
 
 function doLogout(){
@@ -903,8 +903,6 @@ async function doSyncDownloadManual(){
       for(const r of payload.ngResults) await saveResultToIDB(r);
     }
     updateStatusDots();updateUploadStatus();
-    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-    if(ready)generate();
 
     if(payload.cd){for(const f of payload.cd){let data=f.data;
       if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
@@ -913,9 +911,15 @@ async function doSyncDownloadManual(){
     const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
     if(ok)cdGenerate();
 
-    // localStorage 이력 복원 + N그룹 재생성
+    // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
-    if(ready)generate();
+    // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
+    if(payload.ngResults&&payload.ngResults.length>0){
+      restoreResultFromSync(payload.ngResults);
+    } else {
+      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+      if(ready)generate();
+    }
 
     syncLog('다운로드 완료!');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
@@ -943,13 +947,10 @@ async function doSyncDownload(token){
       }
       updateStatusDots();updateUploadStatus();
 
-      // IDB results 복원 (수동 그룹 수정 포함) — generate() 전에 넣어야 복원됨
+      // IDB results 복원 (수동 그룹 수정 포함)
       if(payload.ngResults&&payload.ngResults.length>0){
         for(const r of payload.ngResults) await saveResultToIDB(r);
       }
-
-      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-      if(ready)generate();
     }
 
     syncLog('<span class="sync-spin">↻</span> 취소율 데이터 복원 중...');
@@ -976,6 +977,16 @@ async function doSyncDownload(token){
       cdUpdateStatusDots();cdUpdateUploadStatus();
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
       if(ok)cdGenerate();
+    }
+
+    // localStorage 이력 복원
+    if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
+    // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
+    if(payload.ngResults&&payload.ngResults.length>0){
+      restoreResultFromSync(payload.ngResults);
+    } else {
+      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+      if(ready)generate();
     }
 
     syncLog('다운로드 완료! 대시보드가 갱신되었습니다.');
@@ -1468,25 +1479,14 @@ async function generate(dbFileId, contFileId){
     }
 
     const savedPeriod=await getResultBySheet(sheetName);
-    console.log('[N그룹] sheetName:', sheetName, '| savedPeriod:', savedPeriod ? savedPeriod.rows.length+'행' : 'null');
     if(savedPeriod){
       const savedGroups={};
       savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
-      console.log('[N그룹] members:', JSON.stringify(members.slice(0,5)));
-      console.log('[N그룹] savedGroups keys:', JSON.stringify(Object.keys(savedGroups).slice(0,5)));
-      // 이은영C 디버그
-      const ey=members.find(n=>n.includes('이은영'));
-      const eyKey=Object.keys(savedGroups).find(n=>n.includes('이은영'));
-      console.log('[N그룹] 이은영 members:', ey, '| savedGroups:', eyKey, '→', eyKey?savedGroups[eyKey]:null, '| auto:', ey?groups[ey]:null);
-      let restored=0;
       for(const name of members){
         if(savedGroups[name] && savedGroups[name]!==groups[name]){
-          console.log('[N그룹] 수동수정 복원:', name, groups[name], '→', savedGroups[name]);
           groups[name]=savedGroups[name];
-          restored++;
         }
       }
-      console.log('[N그룹] 수동수정 복원 건수:', restored);
     }
 
     // 수동 수정으로 그룹 변경된 경우 streak 재조정
@@ -1535,6 +1535,74 @@ async function generate(dbFileId, contFileId){
   } catch(err){
     alert('오류: '+err.message); console.error(err);
   }
+}
+
+// ═══════════════════════════════════════════
+//  동기화 결과 직접 복원 (재계산 없이 동기화 당시 값 그대로)
+// ═══════════════════════════════════════════
+function restoreResultFromSync(ngResults){
+  // 최신 기간 결과 사용
+  const sorted=[...ngResults].sort((a,b)=>b.sheetName.localeCompare(a.sheetName));
+  const latest=sorted[0];
+  if(!latest||!latest.rows||latest.rows.length===0) return;
+
+  const members=latest.rows.map(r=>r.name);
+  const groups={}, stats={}, streaks={};
+  const protectedMembers=new Set();
+
+  latest.rows.forEach(r=>{
+    groups[r.name]=r.group;
+    stats[r.name]={
+      db:r.db||0, contract:r.contract||0, contractRate:r.contractRate||0,
+      refCancelRate:r.refCancelRate||0, refAdjContract:r.refAdjContract||0, refAdjRate:r.refAdjRate||0
+    };
+    if(r.isProtected) protectedMembers.add(r.name);
+  });
+
+  // streak 계산 (IDB results 기반)
+  const STREAK_START='260402';
+  const olderResults=sorted.filter(r=>r.sheetName<latest.sheetName&&r.sheetName>=STREAK_START);
+  for(const name of members){
+    let count=0;
+    if(groups[name]==='N_C그룹'||groups[name]==='H그룹'){
+      count=1;
+      for(const prev of olderResults){
+        const row=prev.rows.find(r=>r.name===name);
+        if(row&&(row.group==='N_C그룹'||row.group==='H그룹'))count++;
+        else break;
+      }
+    }
+    streaks[name]=count;
+  }
+
+  // cutlines 계산
+  const entries=Object.entries(stats).map(([name,s])=>({name,rate:s.refAdjRate})).sort((a,b)=>b.rate-a.rate);
+  const aMembers=entries.filter(e=>groups[e.name]==='N_A그룹');
+  const bMembers=entries.filter(e=>groups[e.name]==='N_B그룹');
+  const cutlines={
+    aToBIdx:aMembers.length, bToCIdx:aMembers.length+bMembers.length,
+    aToBVal:aMembers.length>0?aMembers[aMembers.length-1].rate:0,
+    bToCVal:bMembers.length>0?bMembers[bMembers.length-1].rate:0,
+  };
+
+  // 날짜 파싱 (startStr/endStr에서)
+  const parseYMD=s=>{const m=s?.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;};
+  const minDistDate=parseYMD(latest.startStr);
+  const maxDistDate=parseYMD(latest.endStr);
+
+  const dbFile=getLatest('db');
+  const contFile=getLatest('cont');
+
+  result={members,stats,groups,streaks,cutlines,protectedMembers,minDistDate,maxDistDate,
+    dbFileName:dbFile?.fileName||'', contFileName:contFile?.fileName||'',
+    dbUploadTime:dbFile?.uploadTime||0, contUploadTime:contFile?.uploadTime||0,
+    dbFileId:dbFile?.id||0, contFileId:contFile?.id||0};
+
+  buildPeriodSelector();
+  renderDashboard();
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+  console.log('[Sync] 동기화 결과 직접 복원 완료:', latest.sheetName, members.length+'명');
 }
 
 // ═══════════════════════════════════════════
