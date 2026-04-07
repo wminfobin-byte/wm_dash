@@ -1522,12 +1522,6 @@ async function generate(dbFileId, contFileId){
     const endStr=maxDistDate?_fd(maxDistDate):'';
     saveResultToIDB({sheetName, startStr, endStr, rows:periodRows});
 
-    // 이전 오늘 날짜 기준 시트 정리 (분배일 기준으로 변경되기 전 생성된 잔여 데이터)
-    const todaySheet=fmtDateShort(new Date());
-    if(todaySheet!==sheetName){
-      try{ const tx=idb.transaction('results','readwrite'); tx.objectStore('results').delete(todaySheet); }catch(e){}
-    }
-
     buildPeriodSelector();
     renderDashboard();
     document.getElementById('dashboard').classList.remove('hidden');
