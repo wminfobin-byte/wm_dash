@@ -2197,9 +2197,15 @@ function fmtDateTime(d){
     updateStatusDots();
     updateUploadStatus();
 
-    // 4종 모두 있으면 자동 대시보드 생성
-    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-    if(ready) generate();
+    // IDB에 저장된 결과가 있으면 재계산 없이 직접 표시 (수동 수정 보존)
+    const savedResults=await getAllResults();
+    if(savedResults.length>0){
+      restoreResultFromSync(savedResults);
+    } else {
+      // 저장된 결과 없으면 파일에서 계산
+      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+      if(ready) generate();
+    }
   } catch(err){
     console.error('IndexedDB 초기화 오류:', err);
     // 버전 충돌 시 DB 삭제 후 재생성
