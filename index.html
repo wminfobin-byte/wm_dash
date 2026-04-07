@@ -1472,6 +1472,12 @@ async function generate(dbFileId, contFileId){
     if(savedPeriod){
       const savedGroups={};
       savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
+      console.log('[N그룹] members:', JSON.stringify(members.slice(0,5)));
+      console.log('[N그룹] savedGroups keys:', JSON.stringify(Object.keys(savedGroups).slice(0,5)));
+      // 이은영C 디버그
+      const ey=members.find(n=>n.includes('이은영'));
+      const eyKey=Object.keys(savedGroups).find(n=>n.includes('이은영'));
+      console.log('[N그룹] 이은영 members:', ey, '| savedGroups:', eyKey, '→', eyKey?savedGroups[eyKey]:null, '| auto:', ey?groups[ey]:null);
       let restored=0;
       for(const name of members){
         if(savedGroups[name] && savedGroups[name]!==groups[name]){
