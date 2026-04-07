@@ -1,0 +1,7 @@
+# 고객 민감정보 포함 엑셀 데이터 파일
+*.xlsx
+*.xls
+
+# OS
+Thumbs.db
+.DS_Store

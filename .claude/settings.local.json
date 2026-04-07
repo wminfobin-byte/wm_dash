@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx http-server:*)",
+      "Bash(node -e \"require\\('xlsx'\\)\")",
+      "Bash(npm install:*)",
+      "Bash(node -e ':*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"http-server -p 8082\")",
+      "Bash(rm index_new.html index_mid.js index_tail.html)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh api:*)",
+      "Bash(rm \"C:/Users/weaversmind/OneDrive/Desktop/VS Code/n_group/sync_check.json\")",
+      "Bash(rm sync_check.json)",
+      "Bash(npm list:*)",
+      "Bash(npx pm2:*)",
+      "Bash(where pm2:*)",
+      "Bash(schtasks:*)",
+      "Bash(MSYS_NO_PATHCONV=1 schtasks:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(pm2 start:*)"
+    ]
+  }
+}
