@@ -851,7 +851,7 @@ async function doSyncUpload(token){
     });
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_history','ngroup_history_times','ngroup_last_saved','ngroup_history_start','cd_member_history'];
+    const lsKeys=['ngroup_history','ngroup_history_times','ngroup_last_saved_sheet','ngroup_last_saved_groups','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     const payload=JSON.stringify({v:3,ts:Date.now(),ng:ngFiles,cd:cdFiles,ls:lsData});
@@ -1423,17 +1423,36 @@ async function generate(dbFileId, contFileId){
       }
     }
 
-    // N_C 연속 횟수 — 2026-04-02 이후 이력만 카운트
+    // 시트명 = DB파일 분배일 마지막 날
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
-    const lastSaved=localStorage.getItem('ngroup_last_saved');
-    const skipFirst=(lastSaved===sheetName); // 현재 기간 이력이 이미 저장되어 있으면 skip
+
+    // 이력 저장: 새 기간이 시작될 때만 이전 기간 그룹을 이력에 추가
+    // (현재 기간은 이력에 넣지 않음 → 이중 카운트 방지)
+    const lastSavedSheet=localStorage.getItem('ngroup_last_saved_sheet')||'';
+    const lastSavedGroups=JSON.parse(localStorage.getItem('ngroup_last_saved_groups')||'{}');
+    if(lastSavedSheet && lastSavedSheet!==sheetName && Object.keys(lastSavedGroups).length>0){
+      // 이전 기간 그룹을 이력에 추가
+      const h2=loadHistory();
+      const t2=JSON.parse(localStorage.getItem('ngroup_history_times')||'{}');
+      const now2=Date.now();
+      for(const[name,group]of Object.entries(lastSavedGroups)){
+        if(!h2[name])h2[name]=[];if(!t2[name])t2[name]=[];
+        h2[name].unshift(group);t2[name].unshift(now2);
+        if(h2[name].length>20){h2[name]=h2[name].slice(0,20);t2[name]=t2[name].slice(0,20);}
+      }
+      localStorage.setItem(HISTORY_KEY,JSON.stringify(h2));
+      localStorage.setItem('ngroup_history_times',JSON.stringify(t2));
+      // 이력 다시 로드
+      Object.assign(history,h2);
+    }
+
+    // N_C 연속 횟수 — 이력만으로 카운트 (현재 기간은 이력에 없음)
     const streaks={};
     for(const name of members){
       const past=history[name]||[];
       const times=historyTimes[name]||[];
       let count=0;
-      const startIdx=skipFirst?1:0;
-      for(let i=startIdx;i<past.length;i++){
+      for(let i=0;i<past.length;i++){
         if(times[i] && times[i]<HISTORY_START) break;
         if(past[i]==='N_C그룹'||past[i]==='H그룹') count++;
         else break;
@@ -1444,7 +1463,6 @@ async function generate(dbFileId, contFileId){
       if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
     }
 
-    // 시트명 = DB파일 분배일 마지막 날 (위에서 이미 계산됨)
     const savedPeriod=await getResultBySheet(sheetName);
     if(savedPeriod){
       const savedGroups={};
@@ -1466,11 +1484,11 @@ async function generate(dbFileId, contFileId){
       dbUploadTime:dbFile.uploadTime, contUploadTime:contFile.uploadTime,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // 같은 날 중복 저장 방지
-    if(lastSaved!==sheetName){
-      saveHistory(groups);
-      localStorage.setItem('ngroup_last_saved',sheetName);
-    }
+    // 현재 기간 그룹 저장 (이력이 아닌 별도 저장 → 다음 기간 시작 시 이력에 추가됨)
+    localStorage.setItem('ngroup_last_saved_sheet',sheetName);
+    localStorage.setItem('ngroup_last_saved_groups',JSON.stringify(
+      Object.fromEntries(members.map(n=>[n,groups[n]]))
+    ));
     const allPeriodRows=Object.entries(stats).map(([name,s])=>({
       group:groups[name], name, isProtected:protectedMembers.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
