@@ -1426,23 +1426,23 @@ async function generate(dbFileId, contFileId){
     // 시트명 = DB파일 분배일 마지막 날
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // N_C 연속 횟수 — 단순 카운터 방식
-    // 같은 기간 재생성 → 동일값 유지, 새 기간 → 이전값+1 또는 리셋
-    const streakData=JSON.parse(localStorage.getItem('ngroup_streak_data')||'{}');
-    const prevSheet=streakData.sheet||'';
-    const prevStreaks=streakData.streaks||{};
+    // N_C 연속 횟수 — IDB에 저장된 이전 기간 결과 기반
+    const allPastResults=await getAllResults();
+    const prevResults=allPastResults.filter(r=>r.sheetName!==sheetName&&r.sheetName<sheetName);
+    // prevResults: 최신순 정렬 (내림차순)
     const streaks={};
     for(const name of members){
+      let count=0;
       if(groups[name]==='N_C그룹'||groups[name]==='H그룹'){
-        if(sheetName===prevSheet){
-          streaks[name]=prevStreaks[name]||1;
-        }else{
-          streaks[name]=(prevStreaks[name]||0)+1;
+        count=1;
+        for(const prev of prevResults){
+          const row=prev.rows.find(r=>r.name===name);
+          if(row&&(row.group==='N_C그룹'||row.group==='H그룹'))count++;
+          else break;
         }
-      }else{
-        streaks[name]=0;
       }
-      if(groups[name]==='N_C그룹'&&streaks[name]>=3) groups[name]='H그룹';
+      streaks[name]=count;
+      if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
     }
 
     const savedPeriod=await getResultBySheet(sheetName);
@@ -1466,8 +1466,7 @@ async function generate(dbFileId, contFileId){
       dbUploadTime:dbFile.uploadTime, contUploadTime:contFile.uploadTime,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // streak 저장
-    localStorage.setItem('ngroup_streak_data',JSON.stringify({sheet:sheetName,streaks}));
+    // (streak은 IDB results에서 자동 계산되므로 별도 저장 불필요)
     const allPeriodRows=Object.entries(stats).map(([name,s])=>({
       group:groups[name], name, isProtected:protectedMembers.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
