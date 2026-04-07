@@ -1427,9 +1427,10 @@ async function generate(dbFileId, contFileId){
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
     // N_C 연속 횟수 — IDB 이전 기간 결과 기반 (현재 기간 제외, 읽기 전용)
+    // 260402가 카운팅 시작점 → 그 이전 기간은 무시
+    const STREAK_START='260402';
     const allStoredResults=await getAllResults();
-    // 현재 기간 제외, 이전 기간만 (최신순)
-    const olderResults=allStoredResults.filter(r=>r.sheetName<sheetName);
+    const olderResults=allStoredResults.filter(r=>r.sheetName<sheetName&&r.sheetName>=STREAK_START);
     const streaks={};
     for(const name of members){
       let count=0;
