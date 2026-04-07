@@ -1483,7 +1483,7 @@ async function generate(dbFileId, contFileId){
       const savedGroups={};
       savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
       for(const name of members){
-        if(savedGroups[name] && savedGroups[name]!==groups[name]){
+        if(savedGroups[name]){
           groups[name]=savedGroups[name];
         }
       }
@@ -1618,35 +1618,12 @@ function buildPeriodSelector(){
     `DB: ${result.dbFileName} / 계약: ${result.contFileName}`;
 }
 
-async function onPeriodChange(){
+function onPeriodChange(){
   const sel=document.getElementById('periodSelect');
   const dbId=+sel.value;
   const dbFile=allFiles.find(f=>f.id===dbId);
   if(!dbFile) return;
-
-  // 해당 기간의 IDB 저장 결과가 있으면 재계산 없이 직접 표시
-  const allResults=await getAllResults();
-  if(allResults.length>0){
-    // dbFile의 분배일 기준으로 해당 기간 결과 찾기
-    const attendFile=getLatest('attend');
-    const cancelFile=getLatest('cancel');
-    if(attendFile&&cancelFile){
-      const members=getMembers(attendFile.data);
-      let maxDist=null;
-      for(let i=1;i<dbFile.data.length;i++){
-        const d=parseDate(dbFile.data[i][COL.distributeDate]);
-        if(d&&(!maxDist||d>maxDist)) maxDist=d;
-      }
-      const sn=maxDist?fmtDateShort(maxDist):fmtDateShort(new Date());
-      const saved=allResults.find(r=>r.sheetName===sn);
-      if(saved){
-        restoreResultFromSync(allResults.filter(r=>r.sheetName<=sn));
-        return;
-      }
-    }
-  }
-
-  // 저장된 결과 없으면 기존대로 재계산
+  // 같은 시점(±1시간)의 계약수 파일 찾기, 없으면 가장 가까운 것
   const contFiles=getFilesByType('cont');
   let bestCont=contFiles[0];
   let bestDiff=Infinity;
