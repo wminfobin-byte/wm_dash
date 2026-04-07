@@ -1463,14 +1463,19 @@ async function generate(dbFileId, contFileId){
     }
 
     const savedPeriod=await getResultBySheet(sheetName);
+    console.log('[N그룹] sheetName:', sheetName, '| savedPeriod:', savedPeriod ? savedPeriod.rows.length+'행' : 'null');
     if(savedPeriod){
       const savedGroups={};
       savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
+      let restored=0;
       for(const name of members){
         if(savedGroups[name] && savedGroups[name]!==groups[name]){
+          console.log('[N그룹] 수동수정 복원:', name, groups[name], '→', savedGroups[name]);
           groups[name]=savedGroups[name];
+          restored++;
         }
       }
+      console.log('[N그룹] 수동수정 복원 건수:', restored);
     }
 
     // 수동 수정으로 그룹 변경된 경우 streak 재조정
