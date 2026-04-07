@@ -12,7 +12,7 @@
       "Bash(gh auth:*)",
       "Bash(gh repo:*)",
       "Bash(gh api:*)",
-      "Bash(rm \"C:/Users/weaversmind/OneDrive/Desktop/VS Code/n_group/sync_check.json\")",
+      "Bash(rm \"C:/Users/weaversmind/OneDrive/Desktop/VS Code/wm_dash/sync_check.json\")",
       "Bash(rm sync_check.json)",
       "Bash(npm list:*)",
       "Bash(npx pm2:*)",
@@ -20,7 +20,9 @@
       "Bash(schtasks:*)",
       "Bash(MSYS_NO_PATHCONV=1 schtasks:*)",
       "Bash(powershell.exe:*)",
-      "Bash(pm2 start:*)"
+      "Bash(pm2 start:*)",
+      "Bash(pm2 stop:*)",
+      "Bash(mv wm_dash:*)"
     ]
   }
 }
