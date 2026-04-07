@@ -758,7 +758,7 @@ const SYNC_TOKEN_KEY='wm_sync_token';
 function syncData(){
   const token=localStorage.getItem(SYNC_TOKEN_KEY);
   if(!token){showSyncModal();return;}
-  showSyncActions(token);
+  doSyncUpload(token);
 }
 
 function showSyncModal(){
@@ -804,11 +804,14 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
 function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.innerHTML=msg;}
 
 async function doSyncUpload(token){
   try{
-    syncLog('<span class="sync-spin">↻</span> 데이터 수집 중...');
+    syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
+    document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -840,9 +843,8 @@ async function doSyncUpload(token){
       method:'PUT',headers:{Authorization:`token ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)
     });
     if(!res.ok){const e=await res.json();throw new Error(e.message||'업로드 실패');}
-    syncLog('업로드 완료!');
-    setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
-  }catch(err){syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);console.error(err);}
+    syncBtnText('완료!');setTimeout(syncBtnReset,2000);
+  }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
 
 async function doSyncDownloadManual(){
