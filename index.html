@@ -746,8 +746,6 @@ async function autoSyncDownload(){
       if(payload.ngResults&&payload.ngResults.length>0){
         for(const r of payload.ngResults) await saveResultToIDB(r);
       }
-      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-      if(ready)generate();
     }
     // 취소율 복원
     if(payload.cd){
@@ -763,10 +761,10 @@ async function autoSyncDownload(){
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
       if(ok)cdGenerate();
     }
-    // localStorage 이력 복원
+    // localStorage 이력 복원 후 N그룹 생성 (한 번만 실행)
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
-    // 이력 복원 후 N그룹 재생성
-    if(payload.ng){const ready2=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);if(ready2)generate();}
+    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+    if(ready)generate();
   }catch(e){console.log('자동 동기화 스킵:',e.message);}
 }
 
