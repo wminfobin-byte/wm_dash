@@ -1,0 +1,111 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+N그룹 성과 대시보드 — WM 뇌새김영어 A그룹 코디네이터의 성과를 분석하고 N_A/N_B/N_C/H 등급을 자동 배정하는 브라우저 전용 SPA. 빌드 없이 `index.html` 하나로 동작하며, 서버/백엔드 없음.
+
+## Running
+
+브라우저에서 `index.html` 직접 열기, 또는:
+```bash
+npx http-server -p 8082
+```
+
+## Architecture
+
+단일 `index.html` 파일 (CSS + HTML + JS 인라인). CDN 의존성:
+- **xlsx-js-style** — 엑셀 읽기/쓰기 + 셀 스타일링
+- **html2canvas** — 대시보드 PNG 캡처
+- **JSZip** — xlsx 내부 XML 패치 (눈금선 제거)
+
+## Data Flow
+
+### 4종 파일 업로드
+| 타입 | 파일 | 보관 정책 |
+|---|---|---|
+| `db` | WM_고객관리 (DB수) | 누적 (전체 유지) |
+| `cont` | WM_고객관리 (계약수) | 누적 (전체 유지) |
+| `cancel` | WM_고객관리 (취소율) | 최신 1건만 |
+| `attend` | 근태보고/2-8 그룹표기 (명단) | 최신 1건만 |
+
+### 컬럼 매핑 (COL 상수, 0-indexed)
+```
+obName: 7        // OB담당자 (코디명)
+distributeDate: 8 // 분배일자
+dbInfo: 15       // DB정보 (재콜 제외 필터)
+mediaCode: 19    // 매체코드 (talkis 제외 필터)
+lastCallTime: 21
+orderDate: 23
+customerStatus: 29 // 고객상태 → 계약/취소/제외 분류
+```
+
+### 멤버 추출 조건
+명단 파일에서 `담당='뇌새김영어'` AND `그룹='A그룹'`인 이름만 추출.
+
+## Storage
+
+### IndexedDB (`nGroupDashboard` v2)
+- **files** store: 업로드된 엑셀 파일 원본 (type, fileName, uploadTime, data)
+- **results** store: 기간별 계산 결과 (keyPath = sheetName YYMMDD)
+
+### localStorage
+- `ngroup_history` — 등급 이력 `{이름: [현재, 이전, ...]}`
+- `ngroup_history_times` — 이력 타임스탬프
+- `ngroup_last_saved` — 중복 저장 방지용 마지막 sheetName
+- `ngroup_history_start` — 이력 기준점 (2026-04-02)
+
+## Core Business Logic
+
+### KPI 계산
+```
+DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN무매체, talkis 제외)
+실계약수 = 계약 + 취소 모두 포함
+계약률 = 실계약수 / DB수
+기준취소율 = 취소수 / 계약수 (코디별)
+취소율반영계약수 = 실계약수 × (1 - 기준취소율)
+취소율반영계약률 = 취소율반영계약수 / DB수  ← 등급 배정 기준
+```
+
+### 등급 배정 (`assignGroupsSmart`)
+1. 취소율반영계약률 내림차순 정렬
+2. 3등분: 상위 → N_A, 중위 → N_B, 하위 → N_C
+3. 동률 처리: 같은 성과값은 같은 그룹에 배정
+
+### 특수 규칙
+- **H그룹 진입**: N_C 3연속 → H그룹 강등
+- **H그룹 복귀**: 직전 H그룹 + 이번 계약 ≥ 2건 → N_C로 복귀
+- **신규 보호**: 입사 후 3개월간 N_C/H 배정 시 N_B로 상향 보호
+- **수동 수정**: 드롭다운으로 등급 변경 가능 → IndexedDB results에 저장
+
+## Excel Export (`downloadExcel`)
+
+- 기간별 멀티시트 (시트명 = YYMMDD)
+- 그룹별 색상: N_A(파랑 #4361EE), N_B(청록 #2EC4B6), N_C(주황 #F0920E), H(빨강 #D1182B)
+- 헤더/합계 스타일: 배경 #2D3748, 폰트 흰색
+- JSZip으로 xlsx 내부 XML 패치하여 눈금선 제거
+- 타이틀 "WM N그룹 성과" D2:J3 병합
+
+## Key Functions
+
+| 함수 | 역할 |
+|---|---|
+| `getMembers(data)` | 명단에서 N그룹 멤버 추출 |
+| `countDb(data, members)` | 코디별 DB수 카운트 |
+| `countContracts(data, members)` | 코디별 계약수 카운트 |
+| `calcCancelRates(data, members)` | 코디별 취소율 계산 |
+| `assignGroupsSmart(stats)` | 성과 기반 등급 자동 배정 |
+| `renderDashboard()` | UI 전체 갱신 오케스트레이션 |
+| `buildSheet(periodData, isCurrentPeriod)` | 엑셀 시트 1개 생성 |
+| `downloadExcel()` | 전체 기간 엑셀 생성 + 다운로드 |
+| `getAllResults()` | IndexedDB에서 전체 기간 결과 조회 |
+
+## 고객상태 분류 로직
+
+```
+계약: 배송대기, 배송중, 자동구매완료, 구매완료, AS 포함
+취소: 반품입고, 승인요청, 입고대기, 환불요청, 환불완료
+  → 단, lastCallTime == orderDate이면 제외 (시스템 오류 간주)
+제외: 결제보류, 상담취소, 상담요청, 상담대기, 결제요청 등
+```
