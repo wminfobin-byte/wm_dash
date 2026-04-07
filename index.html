@@ -742,6 +742,10 @@ async function autoSyncDownload(){
         allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
       }
       updateStatusDots();updateUploadStatus();
+      // IDB results 복원 (수동 그룹 수정 포함)
+      if(payload.ngResults&&payload.ngResults.length>0){
+        for(const r of payload.ngResults) await saveResultToIDB(r);
+      }
       const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
       if(ready)generate();
     }
@@ -851,11 +855,14 @@ async function doSyncUpload(token){
       return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols};
     });
 
+    // IDB results 데이터 (수동 그룹 수정 포함)
+    const ngResults=await getAllResults();
+
     // localStorage 이력 데이터
     const lsKeys=['ngroup_streak_data','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    const payload=JSON.stringify({v:3,ts:Date.now(),ng:ngFiles,cd:cdFiles,ls:lsData});
+    const payload=JSON.stringify({v:4,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 업로드 중... (${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // GitHub API: get existing file SHA
@@ -928,6 +935,12 @@ async function doSyncDownload(token){
         allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
       }
       updateStatusDots();updateUploadStatus();
+
+      // IDB results 복원 (수동 그룹 수정 포함) — generate() 전에 넣어야 복원됨
+      if(payload.ngResults&&payload.ngResults.length>0){
+        for(const r of payload.ngResults) await saveResultToIDB(r);
+      }
+
       const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
       if(ready)generate();
     }
