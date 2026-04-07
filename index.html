@@ -1467,7 +1467,6 @@ async function generate(dbFileId, contFileId){
       dbFileId:dbFile.id, contFileId:contFile.id};
 
     // 같은 날 중복 저장 방지
-    const lastSaved=localStorage.getItem('ngroup_last_saved');
     if(lastSaved!==sheetName){
       saveHistory(groups);
       localStorage.setItem('ngroup_last_saved',sheetName);
