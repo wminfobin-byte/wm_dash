@@ -696,14 +696,49 @@ function doLogin(){
 
 function applyAuth(){
   document.getElementById('loginOverlay').style.display='none';
-  // 탭 표시/숨김
   document.querySelectorAll('.tab-item[data-page]').forEach(tab=>{
     const page=tab.dataset.page;
     if(authUser.tabs.includes(page)){tab.style.display='';}
     else{tab.style.display='none';}
   });
-  // 첫 번째 허용 탭으로 이동
   switchPage(authUser.tabs[0]);
+  // 로컬 데이터 없으면 자동 다운로드
+  autoSyncDownload();
+}
+
+async function autoSyncDownload(){
+  const hasLocal=allFiles.length>0||cdAllFiles.length>0;
+  if(hasLocal)return; // 로컬 데이터 있으면 스킵
+  try{
+    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
+    if(!res.ok)return;
+    const payload=await res.json();
+
+    // N그룹 복원
+    if(payload.ng){
+      for(const f of payload.ng){
+        const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
+        allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
+      }
+      updateStatusDots();updateUploadStatus();
+      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+      if(ready)generate();
+    }
+    // 취소율 복원
+    if(payload.cd){
+      for(const f of payload.cd){
+        let data=f.data;
+        if(f.cols&&data.length>1){
+          data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});
+        }
+        const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
+        cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
+      }
+      cdUpdateStatusDots();cdUpdateUploadStatus();
+      const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
+      if(ok)cdGenerate();
+    }
+  }catch(e){console.log('자동 동기화 스킵:',e.message);}
 }
 
 function doLogout(){
@@ -754,9 +789,10 @@ function showSyncActions(token){
   const html=`<div class="sync-modal" id="syncModal" onclick="if(event.target===this)this.remove()">
     <div class="sync-box">
       <h3>데이터 동기화</h3>
+      <p style="font-size:12px;color:#666;margin-bottom:14px">다른 브라우저에서 로그인하면 자동으로 데이터가 불러와집니다</p>
       <div class="sync-btns">
-        <button class="btn btn-primary btn-sm" onclick="doSyncUpload('${token}')">업로드 (이 브라우저 → 서버)</button>
-        <button class="btn btn-success btn-sm" onclick="doSyncDownload('${token}')">다운로드 (서버 → 이 브라우저)</button>
+        <button class="btn btn-primary btn-sm" onclick="doSyncUpload('${token}')">업로드 (현재 데이터 → 서버)</button>
+        <button class="btn btn-success btn-sm" onclick="doSyncDownloadManual()">강제 다운로드 (서버 → 현재)</button>
       </div>
       <div style="margin-top:12px">
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('syncModal').remove()">닫기</button>
@@ -805,6 +841,34 @@ async function doSyncUpload(token){
     });
     if(!res.ok){const e=await res.json();throw new Error(e.message||'업로드 실패');}
     syncLog('업로드 완료!');
+    setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
+  }catch(err){syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);console.error(err);}
+}
+
+async function doSyncDownloadManual(){
+  try{
+    syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
+    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
+    if(!res.ok)throw new Error('동기화 데이터가 없습니다. 먼저 업로드하세요.');
+    const payload=await res.json();
+
+    // 기존 데이터 삭제 후 복원
+    for(const f of allFiles)await idbDelete(f.id);allFiles=[];
+    for(const f of cdAllFiles)await cdIdbDelete(f.id);cdAllFiles=[];
+
+    if(payload.ng){for(const f of payload.ng){const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});allFiles.push({id,...f});}}
+    updateStatusDots();updateUploadStatus();
+    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+    if(ready)generate();
+
+    if(payload.cd){for(const f of payload.cd){let data=f.data;
+      if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+      const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}}
+    cdUpdateStatusDots();cdUpdateUploadStatus();
+    const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
+    if(ok)cdGenerate();
+
+    syncLog('다운로드 완료!');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
   }catch(err){syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);console.error(err);}
 }
