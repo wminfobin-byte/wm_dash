@@ -728,12 +728,16 @@ function applyAuth(){
 }
 
 async function autoSyncDownload(){
+  console.log('[Sync] autoSyncDownload 시작, allFiles:', allFiles.length, 'cdAllFiles:', cdAllFiles.length);
   const hasLocal=allFiles.length>0||cdAllFiles.length>0;
-  if(hasLocal)return; // 로컬 데이터 있으면 스킵
+  if(hasLocal){console.log('[Sync] 로컬 데이터 있어서 스킵');return;}
   try{
-    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
-    if(!res.ok)return;
+    const url=`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`;
+    console.log('[Sync] fetch:', url);
+    const res=await fetch(url);
+    if(!res.ok){console.log('[Sync] fetch 실패:', res.status);return;}
     const payload=await res.json();
+    console.log('[Sync] payload v:', payload.v, 'ng:', payload.ng?.length, 'ngResults:', payload.ngResults?.length);
 
     // N그룹 복원
     if(payload.ng){
@@ -765,7 +769,8 @@ async function autoSyncDownload(){
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
     const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
     if(ready)generate();
-  }catch(e){console.log('자동 동기화 스킵:',e.message);}
+  }catch(e){console.log('[Sync] 오류:',e.message,e);}
+  console.log('[Sync] autoSyncDownload 완료');
 }
 
 function doLogout(){
