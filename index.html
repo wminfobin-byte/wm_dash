@@ -23,7 +23,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 .header{background:linear-gradient(135deg,#0a0e1a 0%,#141b2d 40%,#1e293b 100%);color:#fff;padding:0 32px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 24px rgba(0,0,0,.25);position:relative;height:64px;border-bottom:1px solid rgba(255,255,255,.06)}
 .header::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(67,97,238,.08) 0%,transparent 50%,rgba(46,196,182,.06) 100%);pointer-events:none}
 .header-brand{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
-.header-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#4361ee,#6c83f0);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;letter-spacing:-1px;box-shadow:0 2px 8px rgba(67,97,238,.4)}
+.header-logo{width:auto;height:32px;border-radius:0;background:none;display:flex;align-items:center;justify-content:center;box-shadow:none}
 .header h1{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,#fff 0%,#cbd5e1 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;position:relative;z-index:1}
 .header h1 span{font-size:11px;font-weight:500;-webkit-text-fill-color:rgba(255,255,255,.45);margin-left:8px;letter-spacing:0}
 .header-right{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
@@ -305,8 +305,8 @@ tr.row-h td{background:var(--gh-light)}
 
 <div class="header">
   <div class="header-brand">
-    <div class="header-logo">WM</div>
-    <h1>통합 대시보드<span>Analytics</span></h1>
+    <div class="header-logo"><img src="위버스마이드_세로형_화이트.png" alt="위버스마인드" style="height:32px"></div>
+    <h1>통합 대시보드</h1>
   </div>
   <div class="header-right" id="headerRight-ngroup">
     <div class="status-dots" id="statusDots" title="파일 상태: DB수 / 계약수 / 취소율 / 명단">
