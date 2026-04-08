@@ -1715,20 +1715,15 @@ function calcCancelRates(data, members){
     const lastCall=str(row[COL.lastCallTime]);
     const orderDt=str(row[COL.orderDate]);
     const orderDate=parseDate(orderDt);
-    const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
     if(!obName) continue;
     if(!set.has(obName)) continue;
-    // 1차 필터: 오더일 없으면 제외
+    // 오더일 없으면 계약 자체가 없는 건 → 제외
     if(!orderDate) continue;
-    // 주말/공휴일 제외
-    if(isHoliday(orderDate)) continue;
     // OB명 필터: 군자, 관리자, 삭제요청
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
-    // 매체코드에 talkis 포함 시 제외
+    // talkis 제외 (주말/공휴일 포함, in+공란 포함)
     if(mediaCode.toLowerCase().includes('talkis')) continue;
-    // DB정보에 in 포함 + 매체코드 공란이면 제외
-    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
     // 고객상태 분류
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status==='계약'){ contCnt[obName]++; }
