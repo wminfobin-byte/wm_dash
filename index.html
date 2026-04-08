@@ -874,7 +874,9 @@ async function doSyncUpload(token){
     const zip=new JSZip();
     zip.file('data.json',payload);
     const compressed=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:9}});
-    const compressedB64=btoa(String.fromCharCode(...compressed));
+    // 청크 단위 base64 변환 (spread 연산자 스택 초과 방지)
+    let bin='';for(let i=0;i<compressed.length;i+=8192){bin+=String.fromCharCode.apply(null,compressed.subarray(i,i+8192));}
+    const compressedB64=btoa(bin);
     syncLog(`<span class="sync-spin">↻</span> 업로드 중... (압축 ${(compressed.length/1024/1024).toFixed(1)}MB)`);
 
     // Git Blobs API로 업로드
