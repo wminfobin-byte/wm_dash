@@ -733,9 +733,7 @@ async function autoSyncDownload(){
   const cdReady=cdAllFiles.length>0;
   if(ngReady&&cdReady)return;
   try{
-    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
-    if(!res.ok)return;
-    const payload=await res.json();
+    const payload=await fetchSyncPayload();
 
     // N그룹 복원 (이미 있으면 스킵)
     if(!ngReady&&payload.ng){
@@ -788,7 +786,7 @@ function doLogout(){
 //  Cloud Sync (GitHub API)
 // ═══════════════════════════════════════════
 const SYNC_REPO='wminfobin-byte/wm_dash';
-const SYNC_FILE='sync_data.json';
+const SYNC_FILE='sync_data.json.gz';
 const SYNC_TOKEN_KEY='wm_sync_token';
 
 function syncData(){
@@ -870,15 +868,21 @@ async function doSyncUpload(token){
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     const payload=JSON.stringify({v:4,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ls:lsData});
-    syncLog(`<span class="sync-spin">↻</span> 업로드 중... (${(payload.length/1024/1024).toFixed(1)}MB)`);
+    syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
-    // Git Blobs API로 업로드 (Contents API는 대용량 파일 제한 있음)
+    // JSZip으로 gzip 압축 → base64
+    const zip=new JSZip();
+    zip.file('data.json',payload);
+    const compressed=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:9}});
+    const compressedB64=btoa(String.fromCharCode(...compressed));
+    syncLog(`<span class="sync-spin">↻</span> 업로드 중... (압축 ${(compressed.length/1024/1024).toFixed(1)}MB)`);
+
+    // Git Blobs API로 업로드
     const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
     const apiBase=`https://api.github.com/repos/${SYNC_REPO}`;
 
     // 1) Blob 생성 (base64)
-    syncLog(`<span class="sync-spin">↻</span> Blob 생성 중...`);
-    const blobRes=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:btoa(unescape(encodeURIComponent(payload))),encoding:'base64'})});
+    const blobRes=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:compressedB64,encoding:'base64'})});
     if(!blobRes.ok){const e=await blobRes.json();throw new Error(e.message||'Blob 생성 실패');}
     const blobSha=(await blobRes.json()).sha;
 
@@ -905,12 +909,20 @@ async function doSyncUpload(token){
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
 
+async function fetchSyncPayload(){
+  // .gz 파일 다운로드 → JSZip 해제 → JSON 파싱
+  const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
+  if(!res.ok)throw new Error('동기화 데이터가 없습니다. 먼저 업로드하세요.');
+  const buf=await res.arrayBuffer();
+  const zip=await JSZip.loadAsync(buf);
+  const jsonStr=await zip.file('data.json').async('string');
+  return JSON.parse(jsonStr);
+}
+
 async function doSyncDownloadManual(){
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
-    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
-    if(!res.ok)throw new Error('동기화 데이터가 없습니다. 먼저 업로드하세요.');
-    const payload=await res.json();
+    const payload=await fetchSyncPayload();
 
     // 기존 데이터 삭제 후 복원
     for(const f of allFiles)await idbDelete(f.id);allFiles=[];
@@ -948,10 +960,7 @@ async function doSyncDownloadManual(){
 async function doSyncDownload(token){
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
-    // raw.githubusercontent.com으로 직접 다운로드 (Contents API는 1MB+ 파일 content 비어있음)
-    const res=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`);
-    if(!res.ok)throw new Error('파일을 찾을 수 없습니다. 먼저 업로드하세요.');
-    const payload=await res.json();
+    const payload=await fetchSyncPayload();
 
     syncLog('<span class="sync-spin">↻</span> N그룹 데이터 복원 중...');
     // N그룹 IDB 복원
