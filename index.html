@@ -2014,6 +2014,7 @@ function applyGroupEdit(){
 }
 
 function adjustStreak(name,delta){
+  if(!confirm(`${name}의 N_C 연속 횟수를 -1 하시겠습니까?`)) return;
   const adj=JSON.parse(localStorage.getItem('ngroup_streak_adj')||'{}');
   adj[name]=(adj[name]||0)+delta;
   if(adj[name]===0) delete adj[name];
