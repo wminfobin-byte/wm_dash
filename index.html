@@ -736,8 +736,8 @@ async function autoSyncDownload(){
     if(!res.ok)return;
     const payload=await res.json();
 
-    // N그룹 복원
-    if(payload.ng){
+    // N그룹 복원 (이미 있으면 스킵)
+    if(!ngReady&&payload.ng){
       for(const f of payload.ng){
         const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
         allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
@@ -748,8 +748,8 @@ async function autoSyncDownload(){
         for(const r of payload.ngResults) await saveResultToIDB(r);
       }
     }
-    // 취소율 복원
-    if(payload.cd){
+    // 취소율 복원 (이미 있으면 스킵)
+    if(!cdReady&&payload.cd){
       for(const f of payload.cd){
         let data=f.data;
         if(f.cols&&data.length>1){
@@ -764,12 +764,14 @@ async function autoSyncDownload(){
     }
     // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
-    // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
-    if(payload.ngResults&&payload.ngResults.length>0){
-      restoreResultFromSync(payload.ngResults);
-    } else {
-      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-      if(ready)generate();
+    // N그룹 결과 표시 (새로 복원한 경우만)
+    if(!ngReady){
+      if(payload.ngResults&&payload.ngResults.length>0){
+        restoreResultFromSync(payload.ngResults);
+      } else {
+        const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+        if(ready)generate();
+      }
     }
   }catch(e){console.log('자동 동기화 스킵:',e.message);}
 }
@@ -1459,7 +1461,19 @@ async function generate(dbFileId, contFileId){
     // 시트명 = DB파일 분배일 마지막 날
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // N_C 연속 횟수 — IDB 이전 기간 결과 기반 (현재 기간 제외, 읽기 전용)
+    // IDB에 저장된 수동 그룹 수정 복원
+    const savedPeriod=await getResultBySheet(sheetName);
+    if(savedPeriod){
+      const savedGroups={};
+      savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
+      for(const name of members){
+        if(savedGroups[name]){
+          groups[name]=savedGroups[name];
+        }
+      }
+    }
+
+    // N_C 연속 횟수 — IDB 이전 기간 결과 기반 (수동 수정 복원 후 계산)
     // 260402가 카운팅 시작점 → 그 이전 기간은 무시
     const STREAK_START='260402';
     const allStoredResults=await getAllResults();
@@ -1477,22 +1491,6 @@ async function generate(dbFileId, contFileId){
       }
       streaks[name]=count;
       if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
-    }
-
-    const savedPeriod=await getResultBySheet(sheetName);
-    if(savedPeriod){
-      const savedGroups={};
-      savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
-      for(const name of members){
-        if(savedGroups[name]){
-          groups[name]=savedGroups[name];
-        }
-      }
-    }
-
-    // 수동 수정으로 그룹 변경된 경우 streak 재조정
-    for(const name of members){
-      if(groups[name]!=='N_C그룹'&&groups[name]!=='H그룹') streaks[name]=0;
     }
 
     result={members,stats,groups,streaks,cutlines,protectedMembers,minDistDate,maxDistDate,
@@ -1680,12 +1678,23 @@ function countContracts(data, members){
     const lastCall=str(row[COL.lastCallTime]);
     const orderDt=str(row[COL.orderDate]);
     const orderDate=parseDate(orderDt);
+    const dbInfo=str(row[COL.dbInfo]);
+    const mediaCode=str(row[COL.mediaCode]);
     if(!obName) continue;
-    if(obName.includes('군자')||obName.includes('관리자')) continue;
     if(!set.has(obName)) continue;
-    if(orderDate&&isHoliday(orderDate)) continue;
+    // 1차 필터: 오더일 없으면 제외
+    if(!orderDate) continue;
+    // 주말/공휴일 제외
+    if(isHoliday(orderDate)) continue;
+    // OB명 필터: 군자, 관리자, 삭제요청
+    if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
+    // 매체코드에 talkis 포함 시 제외
+    if(mediaCode.toLowerCase().includes('talkis')) continue;
+    // DB정보에 in 포함 + 매체코드 공란이면 제외
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
+    // 고객상태 분류
     const status=classifyStatus(custStatus,lastCall,orderDt);
-    // 실계약수 = 계약 + 취소 (한번이라도 계약된 건은 모두 포함)
+    // 실계약수 = 계약 + 취소
     if(status==='계약'||status==='취소') counts[obName]++;
   }
   return counts;
@@ -1705,10 +1714,22 @@ function calcCancelRates(data, members){
     const custStatus=str(row[COL.customerStatus]);
     const lastCall=str(row[COL.lastCallTime]);
     const orderDt=str(row[COL.orderDate]);
+    const orderDate=parseDate(orderDt);
+    const dbInfo=str(row[COL.dbInfo]);
+    const mediaCode=str(row[COL.mediaCode]);
     if(!obName) continue;
-    if(obName.includes('군자')||obName.includes('관리자')) continue;
     if(!set.has(obName)) continue;
-
+    // 1차 필터: 오더일 없으면 제외
+    if(!orderDate) continue;
+    // 주말/공휴일 제외
+    if(isHoliday(orderDate)) continue;
+    // OB명 필터: 군자, 관리자, 삭제요청
+    if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
+    // 매체코드에 talkis 포함 시 제외
+    if(mediaCode.toLowerCase().includes('talkis')) continue;
+    // DB정보에 in 포함 + 매체코드 공란이면 제외
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
+    // 고객상태 분류
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status==='계약'){ contCnt[obName]++; }
     else if(status==='취소'){ contCnt[obName]++; cancelCnt[obName]++; }
@@ -2192,14 +2213,14 @@ function fmtDateTime(d){
     updateStatusDots();
     updateUploadStatus();
 
-    // IDB에 저장된 결과가 있으면 재계산 없이 직접 표시 (수동 수정 보존)
-    const savedResults=await getAllResults();
-    if(savedResults.length>0){
-      restoreResultFromSync(savedResults);
+    // 파일 4종이 모두 있으면 항상 재계산 (수동 그룹 수정은 generate 내에서 IDB에서 복원됨)
+    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+    if(ready){
+      generate();
     } else {
-      // 저장된 결과 없으면 파일에서 계산
-      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-      if(ready) generate();
+      // 파일 부족 시 IDB 저장 결과로 표시
+      const savedResults=await getAllResults();
+      if(savedResults.length>0) restoreResultFromSync(savedResults);
     }
   } catch(err){
     console.error('IndexedDB 초기화 오류:', err);
