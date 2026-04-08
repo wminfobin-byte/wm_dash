@@ -872,20 +872,35 @@ async function doSyncUpload(token){
     const payload=JSON.stringify({v:4,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 업로드 중... (${(payload.length/1024/1024).toFixed(1)}MB)`);
 
-    // GitHub API: get existing file SHA
-    let sha=null;
-    try{
-      const res=await fetch(`https://api.github.com/repos/${SYNC_REPO}/contents/${SYNC_FILE}`,{headers:{Authorization:`token ${token}`}});
-      if(res.ok){const j=await res.json();sha=j.sha;}
-    }catch{}
+    // Git Blobs API로 업로드 (Contents API는 대용량 파일 제한 있음)
+    const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
+    const apiBase=`https://api.github.com/repos/${SYNC_REPO}`;
 
-    // PUT file
-    const body={message:`sync: ${new Date().toISOString()}`,content:btoa(unescape(encodeURIComponent(payload)))};
-    if(sha)body.sha=sha;
-    const res=await fetch(`https://api.github.com/repos/${SYNC_REPO}/contents/${SYNC_FILE}`,{
-      method:'PUT',headers:{Authorization:`token ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)
-    });
-    if(!res.ok){const e=await res.json();throw new Error(e.message||'업로드 실패');}
+    // 1) Blob 생성 (base64)
+    syncLog(`<span class="sync-spin">↻</span> Blob 생성 중...`);
+    const blobRes=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:btoa(unescape(encodeURIComponent(payload))),encoding:'base64'})});
+    if(!blobRes.ok){const e=await blobRes.json();throw new Error(e.message||'Blob 생성 실패');}
+    const blobSha=(await blobRes.json()).sha;
+
+    // 2) 현재 main 브랜치의 최신 커밋 SHA
+    const refRes=await fetch(`${apiBase}/git/ref/heads/main`,{headers});
+    if(!refRes.ok) throw new Error('브랜치 정보 조회 실패');
+    const latestCommitSha=(await refRes.json()).object.sha;
+
+    // 3) 새 Tree 생성 (sync_data.json만 교체)
+    syncLog(`<span class="sync-spin">↻</span> 커밋 생성 중...`);
+    const treeRes=await fetch(`${apiBase}/git/trees`,{method:'POST',headers,body:JSON.stringify({base_tree:latestCommitSha,tree:[{path:SYNC_FILE,mode:'100644',type:'blob',sha:blobSha}]})});
+    if(!treeRes.ok) throw new Error('Tree 생성 실패');
+    const treeSha=(await treeRes.json()).sha;
+
+    // 4) 커밋 생성
+    const commitRes=await fetch(`${apiBase}/git/commits`,{method:'POST',headers,body:JSON.stringify({message:`sync: ${new Date().toISOString()}`,tree:treeSha,parents:[latestCommitSha]})});
+    if(!commitRes.ok) throw new Error('커밋 생성 실패');
+    const newCommitSha=(await commitRes.json()).sha;
+
+    // 5) main 브랜치 포인터 업데이트
+    const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha})});
+    if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
     syncBtnText('완료!');setTimeout(syncBtnReset,2000);
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
