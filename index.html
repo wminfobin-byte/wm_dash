@@ -864,7 +864,7 @@ async function doSyncUpload(token){
     const ngResults=await getAllResults();
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     const payload=JSON.stringify({v:4,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ls:lsData});
@@ -1504,6 +1504,7 @@ async function generate(dbFileId, contFileId){
     const STREAK_START='260402';
     const allStoredResults=await getAllResults();
     const olderResults=allStoredResults.filter(r=>r.sheetName<sheetName&&r.sheetName>=STREAK_START);
+    const streakAdj=JSON.parse(localStorage.getItem('ngroup_streak_adj')||'{}');
     const streaks={};
     for(const name of members){
       let count=0;
@@ -1515,6 +1516,8 @@ async function generate(dbFileId, contFileId){
           else break;
         }
       }
+      // 수동 streak 조정 반영
+      if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
       if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
     }
@@ -1580,6 +1583,7 @@ function restoreResultFromSync(ngResults){
 
   // streak 계산 (IDB results 기반)
   const STREAK_START='260402';
+  const streakAdj=JSON.parse(localStorage.getItem('ngroup_streak_adj')||'{}');
   const olderResults=sorted.filter(r=>r.sheetName<latest.sheetName&&r.sheetName>=STREAK_START);
   for(const name of members){
     let count=0;
@@ -1591,6 +1595,7 @@ function restoreResultFromSync(ngResults){
         else break;
       }
     }
+    if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
     streaks[name]=count;
   }
 
@@ -1929,7 +1934,7 @@ function renderTable(){
       <td>${r.db}</td><td>${r.contract}</td><td>${pct(r.contractRate)}</td>
       <td>${pct2(r.refCancelRate)}</td><td>${r.refAdjContract.toFixed(1)}</td>
       <td style="font-weight:800">${pct2(r.refAdjRate)}</td>
-      <td><span class="streak ${sc}">${r.streak}</span></td></tr>`;
+      <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: -1" onclick="adjustStreak('${r.name}',-1)">${r.streak}</span></td></tr>`;
   });
 
   if(groupEditMode){
@@ -2005,6 +2010,17 @@ function applyGroupEdit(){
     const endStr2=result.maxDistDate?_fd2(result.maxDistDate):'';
     saveResultToIDB({sheetName, startStr:startStr2, endStr:endStr2, rows:periodRows});
   }
+  renderDashboard();
+}
+
+function adjustStreak(name,delta){
+  const adj=JSON.parse(localStorage.getItem('ngroup_streak_adj')||'{}');
+  adj[name]=(adj[name]||0)+delta;
+  if(adj[name]===0) delete adj[name];
+  localStorage.setItem('ngroup_streak_adj',JSON.stringify(adj));
+  // streak 즉시 반영
+  const newStreak=Math.max(0,(result.streaks[name]||0)+delta);
+  result.streaks[name]=newStreak;
   renderDashboard();
 }
 
