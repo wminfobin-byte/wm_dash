@@ -296,23 +296,23 @@ tr.row-h td{background:var(--gh-light)}
 .cd-navbar .cd-nav-est:hover{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.5);box-shadow:0 0 12px rgba(245,158,11,.1)}
 .cd-navbar .cd-nav-est.est-active{background:linear-gradient(135deg,#f59e0b,#d97706)!important;border-color:transparent!important;color:#fff!important;box-shadow:0 0 16px rgba(245,158,11,.4)!important;animation:est-pulse 2s infinite}
 
-/* Insight Panel */
-.cd-insight-panel{background:var(--card);border-radius:14px;padding:20px 24px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:24px;border:1px solid var(--border)}
-.cd-insight-header{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:15px;font-weight:700;color:var(--dark)}
-.cd-insight-header .cd-insight-icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex-shrink:0}
-.cd-insight-list{display:flex;flex-direction:column;gap:10px}
-.cd-insight-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.6;color:#334155}
-.cd-insight-item .cd-ins-badge{flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px}
+/* Insight Panel — 한줄 로테이션 */
+.cd-insight-panel{background:var(--card);border-radius:14px;padding:14px 20px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:24px;border:1px solid var(--border);display:flex;align-items:center;gap:12px;overflow:hidden;cursor:pointer}
+.cd-insight-icon{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0}
+.cd-insight-body{flex:1;position:relative;height:22px;overflow:hidden}
+.cd-insight-slide{position:absolute;left:0;right:0;display:flex;align-items:center;gap:10px;font-size:13px;line-height:22px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .4s cubic-bezier(.4,0,.2,1)}
+.cd-insight-slide.out-up{transform:translateY(-100%);opacity:0}
+.cd-insight-slide.in-down{transform:translateY(100%);opacity:0}
+.cd-insight-slide .cd-ins-badge{flex-shrink:0;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
 .cd-ins-badge.danger{background:#fef2f2;color:var(--danger)}
 .cd-ins-badge.warning{background:#fffbeb;color:#b45309}
 .cd-ins-badge.success{background:#f0fdf4;color:#15803d}
 .cd-ins-badge.info{background:#eff6ff;color:#1d4ed8}
-.cd-insight-item.danger{background:#fef2f2;border:1px solid #fecaca}
-.cd-insight-item.warning{background:#fffbeb;border:1px solid #fed7aa}
-.cd-insight-item.success{background:#f0fdf4;border:1px solid #bbf7d0}
-.cd-insight-item.info{background:#eff6ff;border:1px solid #bfdbfe}
-.cd-insight-item b{font-weight:700;color:var(--dark)}
-.cd-ins-label{display:inline-block;min-width:90px;color:var(--dark)!important}
+.cd-insight-slide b{font-weight:700;color:var(--dark)}
+.cd-ins-label{color:var(--dark)!important;font-weight:700}
+.cd-insight-dots{display:flex;gap:4px;flex-shrink:0}
+.cd-insight-dots span{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .3s}
+.cd-insight-dots span.active{background:var(--primary);transform:scale(1.3)}
 
 /* TOP button — Premium */
 .cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.1);font-size:11px;font-weight:800;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.25),0 2px 8px rgba(0,0,0,.15);transition:all .35s cubic-bezier(.4,0,.2,1);opacity:0;pointer-events:none;transform:translateY(16px) scale(.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;letter-spacing:.5px;backdrop-filter:blur(8px)}
@@ -2783,13 +2783,50 @@ function cdRenderInsights(data, targetId){
   const lateRatio=cx>0?late/cx:0;
   if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`});
 
-  // 렌더
+  // 렌더 — 한줄 로테이션
   if(!insights.length){el.innerHTML='';return;}
   const icons={danger:'!',warning:'!',success:'&#10003;',info:'i'};
-  let html=`<div class="cd-insight-panel"><div class="cd-insight-header"><div class="cd-insight-icon">AI</div>데이터 인사이트</div><div class="cd-insight-list">`;
-  for(const ins of insights) html+=`<div class="cd-insight-item ${ins.type}"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;
-  html+='</div></div>';
-  el.innerHTML=html;
+  const uid=targetId||'cdInsightPanel';
+  let dots='';for(let i=0;i<insights.length;i++)dots+=`<span${i===0?' class="active"':''}></span>`;
+  el.innerHTML=`<div class="cd-insight-panel" onclick="cdInsightNext('${uid}')">
+    <div class="cd-insight-icon">AI</div>
+    <div class="cd-insight-body" id="${uid}-body"></div>
+    <div class="cd-insight-dots" id="${uid}-dots">${dots}</div>
+  </div>`;
+  // 데이터 저장 & 시작
+  if(!window._cdIns)window._cdIns={};
+  if(window._cdIns[uid])clearInterval(window._cdIns[uid].timer);
+  window._cdIns[uid]={items:insights,icons,idx:0};
+  cdInsightShow(uid,0,false);
+  window._cdIns[uid].timer=setInterval(()=>cdInsightNext(uid),4000);
+}
+
+function cdInsightShow(uid,idx,animate){
+  const state=window._cdIns[uid];if(!state)return;
+  const body=document.getElementById(`${uid}-body`);
+  const dotsEl=document.getElementById(`${uid}-dots`);
+  if(!body)return;
+  const ins=state.items[idx];
+  const icon=state.icons[ins.type];
+  const content=`<span class="cd-ins-badge ${ins.type}">${icon}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span>`;
+  if(!animate){body.innerHTML=`<div class="cd-insight-slide">${content}</div>`;
+  }else{
+    const old=body.querySelector('.cd-insight-slide');
+    if(old){old.classList.add('out-up');}
+    const nw=document.createElement('div');nw.className='cd-insight-slide in-down';nw.innerHTML=content;body.appendChild(nw);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{nw.classList.remove('in-down');}));
+    if(old)setTimeout(()=>old.remove(),400);
+  }
+  if(dotsEl){dotsEl.querySelectorAll('span').forEach((d,i)=>d.classList.toggle('active',i===idx));}
+}
+
+function cdInsightNext(uid){
+  const state=window._cdIns[uid];if(!state||state.items.length<=1)return;
+  state.idx=(state.idx+1)%state.items.length;
+  cdInsightShow(uid,state.idx,true);
+  // 클릭 시 타이머 리셋
+  clearInterval(state.timer);
+  state.timer=setInterval(()=>cdInsightNext(uid),4000);
 }
 
 // ── 공통 테이블 헤더/행 ──
