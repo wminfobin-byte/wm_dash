@@ -282,21 +282,27 @@ tr.row-h td{background:var(--gh-light)}
 .est-banner{background:linear-gradient(90deg,#fef3c7,#fde68a);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;color:#92400e;margin-bottom:16px;align-items:center;gap:8px}
 .est-banner:not(.hidden){display:flex}
 
-/* Cancel Dashboard Navbar */
-.cd-navbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:8px;margin:-28px -28px 20px;box-shadow:0 2px 8px rgba(0,0,0,.06);flex-wrap:wrap}
-.cd-navbar .cd-nav-item{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;color:var(--gray);cursor:pointer;transition:.15s;border:1.5px solid transparent;white-space:nowrap}
-.cd-navbar .cd-nav-item:hover{color:var(--primary);background:var(--primary-light);border-color:var(--primary)}
-.cd-navbar .cd-nav-item.active{color:var(--primary);background:var(--primary-light);border-color:var(--primary)}
-.cd-navbar .cd-nav-sep{width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0}
-.cd-navbar .cd-nav-est{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--dark);transition:.15s;font-family:inherit;white-space:nowrap}
-.cd-navbar .cd-nav-est:hover{border-color:#f59e0b;color:#f59e0b;background:#fffbeb}
-.cd-navbar .cd-nav-est.est-active{background:#f59e0b!important;border-color:#f59e0b!important;color:#fff!important;animation:est-pulse 2s infinite}
+/* Cancel Dashboard Navbar — Premium */
+.cd-navbar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:0 28px;display:flex;align-items:center;gap:0;margin:-28px -28px 24px;height:48px;box-shadow:0 4px 20px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.1);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.cd-navbar::-webkit-scrollbar{display:none}
+.cd-navbar .cd-nav-item{position:relative;padding:0 18px;height:48px;display:flex;align-items:center;font-size:13px;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;transition:all .2s;white-space:nowrap;letter-spacing:.2px}
+.cd-navbar .cd-nav-item::after{content:'';position:absolute;bottom:0;left:50%;width:0;height:2.5px;background:linear-gradient(90deg,#60a5fa,#818cf8);border-radius:2px 2px 0 0;transform:translateX(-50%);transition:width .25s cubic-bezier(.4,0,.2,1)}
+.cd-navbar .cd-nav-item:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.06)}
+.cd-navbar .cd-nav-item:hover::after{width:60%}
+.cd-navbar .cd-nav-item.active{color:#fff;font-weight:700}
+.cd-navbar .cd-nav-item.active::after{width:100%;background:linear-gradient(90deg,#3b82f6,#6366f1)}
+.cd-navbar .cd-nav-sep{width:1px;height:20px;background:rgba(255,255,255,.1);margin:0 6px;flex-shrink:0}
+.cd-navbar .cd-nav-est{margin-left:auto;padding:6px 16px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.08);color:#fbbf24;transition:all .2s;font-family:inherit;white-space:nowrap;letter-spacing:.3px;text-transform:uppercase}
+.cd-navbar .cd-nav-est:hover{background:rgba(251,191,36,.18);border-color:rgba(251,191,36,.6);box-shadow:0 0 12px rgba(251,191,36,.15)}
+.cd-navbar .cd-nav-est.est-active{background:linear-gradient(135deg,#f59e0b,#d97706)!important;border-color:transparent!important;color:#fff!important;box-shadow:0 0 16px rgba(245,158,11,.4)!important;animation:est-pulse 2s infinite}
 
-/* TOP button */
-.cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:44px;height:44px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(67,97,238,.35);transition:all .25s;opacity:0;pointer-events:none;transform:translateY(10px)}
-.cd-top-btn.visible{opacity:1;pointer-events:all;transform:translateY(0)}
-.cd-top-btn:hover{background:#3451d1;transform:translateY(-2px);box-shadow:0 6px 20px rgba(67,97,238,.45)}
-.cd-top-btn:active{transform:translateY(0)}
+/* TOP button — Premium */
+.cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.1);font-size:11px;font-weight:800;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.25),0 2px 8px rgba(0,0,0,.15);transition:all .35s cubic-bezier(.4,0,.2,1);opacity:0;pointer-events:none;transform:translateY(16px) scale(.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;letter-spacing:.5px;backdrop-filter:blur(8px)}
+.cd-top-btn .cd-top-arrow{font-size:14px;line-height:1;transition:transform .25s}
+.cd-top-btn.visible{opacity:1;pointer-events:all;transform:translateY(0) scale(1)}
+.cd-top-btn:hover{background:linear-gradient(135deg,#3b82f6,#6366f1);border-color:transparent;color:#fff;transform:translateY(-3px) scale(1.05);box-shadow:0 12px 40px rgba(59,130,246,.35),0 4px 12px rgba(0,0,0,.15)}
+.cd-top-btn:hover .cd-top-arrow{transform:translateY(-2px)}
+.cd-top-btn:active{transform:translateY(-1px) scale(1);transition-duration:.1s}
 
 @media(max-width:768px){
   .group-summary{grid-template-columns:repeat(2,1fr)}
@@ -723,7 +729,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
   </div>
   <!-- TOP 버튼 -->
-  <button class="cd-top-btn" id="cdTopBtn" onclick="cdScrollToTop()" title="맨 위로">TOP</button>
+  <button class="cd-top-btn" id="cdTopBtn" onclick="cdScrollToTop()" title="맨 위로"><span class="cd-top-arrow">&#9650;</span><span>TOP</span></button>
 </div>
 </div><!-- /page-cancel-dash -->
 
@@ -2780,19 +2786,19 @@ function cdRenderPersonTable(data){
   const totalPr=cdNewBucket();data.forEach(c=>cdAddToBucket(totalPr,c));
   const tn=totalPr.initial,tpx=totalPr.preCx,tcx=totalPr.cancel,tmt=tn-tpx-tcx;
   html+=`<tr style="font-weight:800;background:#f8f9fc"><td class="text-left" style="padding-left:14px">전체</td><td></td><td></td><td></td>
-    <td>${tn.toLocaleString()}</td><td class="cd-sep">${tpx.toLocaleString()}</td><td>${pct2(tn>0?tpx/tn:0)}</td>
-    <td class="cd-sep">${tcx.toLocaleString()}</td><td style="color:${cdRateColor(tn>0?tcx/tn:0)};font-weight:700">${pct2(tn>0?tcx/tn:0)}</td>`;
-  CD_PERIODS.forEach((p,i)=>{const v=totalPr.periods[p.key]||0;const r=tn>0?v/tn:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${v}</td><td>${pct2(r)}</td>`;});
-  html+=`<td class="cd-sep">${tmt.toLocaleString()}</td><td>${pct2(tn>0?tmt/tn:0)}</td></tr>`;
+    <td>${cdNum(tn)}</td><td class="cd-sep">${cdNum(tpx)}</td><td>${pct2(tn>0?tpx/tn:0)}</td>
+    <td class="cd-sep">${cdNum(tcx)}</td><td style="color:${cdRateColor(tn>0?tcx/tn:0)};font-weight:700">${pct2(tn>0?tcx/tn:0)}</td>`;
+  CD_PERIODS.forEach((p,i)=>{const v=totalPr.periods[p.key]||0;const r=tn>0?v/tn:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
+  html+=`<td class="cd-sep">${cdNum(tmt)}</td><td>${pct2(tn>0?tmt/tn:0)}</td></tr>`;
   for(const[name,b]of sorted){
     const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx;
     const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0;
     const bc=`cd-brand-${b.brand}`;
     html+=`<tr class="${bc}"><td class="text-left" style="font-weight:700;padding-left:14px">${name}</td><td>${b.brand}</td><td>${b.center}</td><td>${b.group}</td>
-      <td>${n.toLocaleString()}</td><td class="cd-sep">${px.toLocaleString()}</td><td>${pct2(pxR)}</td>
-      <td class="cd-sep">${cx.toLocaleString()}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
-    CD_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${v}</td><td>${pct2(r)}</td>`;});
-    html+=`<td class="cd-sep">${mt.toLocaleString()}</td><td>${pct2(mtR)}</td></tr>`;
+      <td>${cdNum(n)}</td><td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
+      <td class="cd-sep">${cdNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
+    CD_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
+    html+=`<td class="cd-sep">${cdNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;
   }
   html+='</tbody></table>';document.getElementById('cdPersonTable').innerHTML=html;
 }
@@ -2875,18 +2881,18 @@ function cdRenderBkView(viewKey,filtered){
   pHtml+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
   // 개인별 합계
   pHtml+=`<tr style="font-weight:800;background:#f8f9fc"><td class="text-left" style="padding-left:14px">전체</td><td></td><td></td><td></td>
-    <td>${bkTotalM.initial.toLocaleString()}</td><td class="cd-sep">${bkTotalM.preCx.toLocaleString()}</td><td>${pct2(bkTotalM.initial>0?bkTotalM.preCx/bkTotalM.initial:0)}</td>
-    <td class="cd-sep">${bkTotalM.cancel.toLocaleString()}</td><td style="color:${cdRateColor(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)};font-weight:700">${pct2(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)}</td>`;
-  CD_PERIODS.forEach((p,i)=>{const v=bkTotalM.periods[p.key]||0;const r=bkTotalM.initial>0?v/bkTotalM.initial:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${v}</td><td>${pct2(r)}</td>`;});
+    <td>${cdNum(bkTotalM.initial)}</td><td class="cd-sep">${cdNum(bkTotalM.preCx)}</td><td>${pct2(bkTotalM.initial>0?bkTotalM.preCx/bkTotalM.initial:0)}</td>
+    <td class="cd-sep">${cdNum(bkTotalM.cancel)}</td><td style="color:${cdRateColor(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)};font-weight:700">${pct2(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)}</td>`;
+  CD_PERIODS.forEach((p,i)=>{const v=bkTotalM.periods[p.key]||0;const r=bkTotalM.initial>0?v/bkTotalM.initial:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
   const bkMt=bkTotalM.initial-bkTotalM.preCx-bkTotalM.cancel;
-  pHtml+=`<td class="cd-sep">${bkMt.toLocaleString()}</td><td>${pct2(bkTotalM.initial>0?bkMt/bkTotalM.initial:0)}</td></tr>`;
+  pHtml+=`<td class="cd-sep">${cdNum(bkMt)}</td><td>${pct2(bkTotalM.initial>0?bkMt/bkTotalM.initial:0)}</td></tr>`;
   for(const[name,d]of sorted){const n=d.initial,px=d.preCx,cx=d.cancel,mt2=n-px-cx;
     const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt2/n:0;const bc=`cd-brand-${d.brand}`;
     pHtml+=`<tr class="${bc}"><td class="text-left" style="font-weight:700;padding-left:14px">${name}</td><td>${d.brand}</td><td>${d.center}</td><td>${d.group}</td>
-      <td>${n.toLocaleString()}</td><td class="cd-sep">${px.toLocaleString()}</td><td>${pct2(pxR)}</td>
-      <td class="cd-sep">${cx.toLocaleString()}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
-    CD_PERIODS.forEach((p,i)=>{const v=d.periods[p.key]||0;const r=n>0?v/n:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${v}</td><td>${pct2(r)}</td>`;});
-    pHtml+=`<td class="cd-sep">${mt2.toLocaleString()}</td><td>${pct2(mtR)}</td></tr>`;}
+      <td>${cdNum(n)}</td><td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
+      <td class="cd-sep">${cdNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
+    CD_PERIODS.forEach((p,i)=>{const v=d.periods[p.key]||0;const r=n>0?v/n:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
+    pHtml+=`<td class="cd-sep">${cdNum(mt2)}</td><td>${pct2(mtR)}</td></tr>`;}
   pHtml+='</tbody></table>';document.getElementById(`cdPerson-${viewKey}`).innerHTML=pHtml;
 }
 
