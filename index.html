@@ -3208,8 +3208,8 @@ function cdNavResolve(navId){
   if(cdCurrentView==='all')return document.getElementById(m.all);
   const id=m.sub(cdCurrentView);
   const el=document.getElementById(id);
-  // 개인별은 부모 table-section으로 스크롤
-  if(el&&navId==='cdNavPerson'){return el.closest('.table-section')||el;}
+  // 하위뷰에서는 부모 table-section으로 스크롤 (h3 헤더가 보이도록)
+  if(el){return el.closest('.table-section')||el;}
   return el;
 }
 
@@ -3217,7 +3217,7 @@ function cdNavTo(targetId){
   const el=cdNavResolve(targetId);
   if(!el)return;
   const navbar=document.getElementById('cdNavbar');
-  const offset=navbar?navbar.offsetHeight+8:60;
+  const offset=navbar?navbar.offsetHeight+16:60;
   const top=el.getBoundingClientRect().top+window.pageYOffset-offset;
   window.scrollTo({top,behavior:'smooth'});
 }
