@@ -2788,7 +2788,7 @@ function cdRenderInsights(data, targetId){
   const icons={danger:'!',warning:'!',success:'&#10003;',info:'i'};
   const uid=targetId||'cdInsightPanel';
   let dots='';for(let i=0;i<insights.length;i++)dots+=`<span${i===0?' class="active"':''}></span>`;
-  el.innerHTML=`<div class="cd-insight-panel" onclick="cdInsightNext('${uid}')">
+  el.innerHTML=`<div class="cd-insight-panel" onclick="cdInsightNext('${uid}')" onmouseenter="cdInsightPause('${uid}')" onmouseleave="cdInsightResume('${uid}')">
     <div class="cd-insight-icon">AI</div>
     <div class="cd-insight-body" id="${uid}-body"></div>
     <div class="cd-insight-dots" id="${uid}-dots">${dots}</div>
@@ -2824,7 +2824,17 @@ function cdInsightNext(uid){
   const state=window._cdIns[uid];if(!state||state.items.length<=1)return;
   state.idx=(state.idx+1)%state.items.length;
   cdInsightShow(uid,state.idx,true);
-  // 클릭 시 타이머 리셋
+  if(!state.paused){clearInterval(state.timer);state.timer=setInterval(()=>cdInsightNext(uid),4000);}
+}
+
+function cdInsightPause(uid){
+  const state=window._cdIns[uid];if(!state)return;
+  state.paused=true;clearInterval(state.timer);
+}
+
+function cdInsightResume(uid){
+  const state=window._cdIns[uid];if(!state)return;
+  state.paused=false;
   clearInterval(state.timer);
   state.timer=setInterval(()=>cdInsightNext(uid),4000);
 }
