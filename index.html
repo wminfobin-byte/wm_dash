@@ -312,6 +312,7 @@ tr.row-h td{background:var(--gh-light)}
 .cd-insight-item.success{background:#f0fdf4;border:1px solid #bbf7d0}
 .cd-insight-item.info{background:#eff6ff;border:1px solid #bfdbfe}
 .cd-insight-item b{font-weight:700;color:var(--dark)}
+.cd-ins-label{display:inline-block;min-width:90px;color:var(--dark)!important}
 
 /* TOP button — Premium */
 .cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.1);font-size:11px;font-weight:800;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.25),0 2px 8px rgba(0,0,0,.15);transition:all .35s cubic-bezier(.4,0,.2,1);opacity:0;pointer-events:none;transform:translateY(16px) scale(.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;letter-spacing:.5px;backdrop-filter:blur(8px)}
@@ -675,6 +676,7 @@ tr.row-h td{background:var(--gh-light)}
     <!-- 브레인키 뷰 (4개 동일 구조) -->
     <div id="cdView-bk-provide" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-bk-provide"></div>
+      <div id="cdInsight-bk-provide"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-bk-provide"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-bk-provide"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-bk-provide"></div></div>
@@ -683,6 +685,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-bk-noprovide" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-bk-noprovide"></div>
+      <div id="cdInsight-bk-noprovide"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-bk-noprovide"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-bk-noprovide"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-bk-noprovide"></div></div>
@@ -691,6 +694,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-bk-join" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-bk-join"></div>
+      <div id="cdInsight-bk-join"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-bk-join"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-bk-join"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-bk-join"></div></div>
@@ -699,6 +703,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-bk-nojoin" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-bk-nojoin"></div>
+      <div id="cdInsight-bk-nojoin"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-bk-nojoin"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-bk-nojoin"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-bk-nojoin"></div></div>
@@ -707,6 +712,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-kim" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-kim"></div>
+      <div id="cdInsight-kim"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-kim"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-kim"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-kim"></div></div>
@@ -715,6 +721,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-hwalryuk" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-hwalryuk"></div>
+      <div id="cdInsight-hwalryuk"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-hwalryuk"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-hwalryuk"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-hwalryuk"></div></div>
@@ -723,6 +730,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-hyuldang" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-hyuldang"></div>
+      <div id="cdInsight-hyuldang"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-hyuldang"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-hyuldang"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-hyuldang"></div></div>
@@ -731,6 +739,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-health" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-health"></div>
+      <div id="cdInsight-health"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-health"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-health"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-health"></div></div>
@@ -739,6 +748,7 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div id="cdView-no-health" class="cd-view hidden">
       <div class="kpi-grid" id="cdKpi-no-health"></div>
+      <div id="cdInsight-no-health"></div>
       <div class="table-section"><h3>월별 취소율</h3><div class="cd-wide-table" id="cdMonthly-no-health"></div></div>
       <div class="table-section"><h3>주차별 취소율</h3><div class="cd-wide-table" id="cdWeekly-no-health"></div></div>
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-no-health"></div></div>
@@ -2694,8 +2704,8 @@ function cdRenderKPI(data){
 }
 
 // ── AI 인사이트 ──
-function cdRenderInsights(data){
-  const el=document.getElementById('cdInsightPanel');
+function cdRenderInsights(data, targetId){
+  const el=document.getElementById(targetId||'cdInsightPanel');
   if(!data.length){el.innerHTML='';return;}
   const insights=[];
   const pctF=(v)=>(v*100).toFixed(1)+'%';
@@ -2718,24 +2728,24 @@ function cdRenderInsights(data){
     const curLabel=months[months.length-1].replace(/^\d{4}-0?/,'').replace(/$/,'월');
     const prevLabel=months[months.length-2].replace(/^\d{4}-0?/,'').replace(/$/,'월');
     if(Math.abs(diff)>0.01){
-      if(diff>0) insights.push({type:'danger',text:`<b>${curLabel}</b> 취소율이 <b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.`});
-      else insights.push({type:'success',text:`<b>${curLabel}</b> 취소율이 <b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.`});
+      if(diff>0) insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.`});
+      else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.`});
     }
   }
 
   // 4. 배송전 취소 비중
-  if(pxRate>0.05) insights.push({type:'warning',text:`배송전 취소가 전체의 <b>${pctF(pxRate)}</b>를 차지합니다. 총 <b>${Math.round(px)}건</b> — 초기 이탈 방지 대응이 필요합니다.`});
+  if(pxRate>0.05) insights.push({type:'warning',label:'배송전 취소',text:`전체의 <b>${pctF(pxRate)}</b> (${Math.round(px)}건). 초기 이탈 방지 대응이 필요합니다.`});
 
   // 5. 취소 집중 구간
   const nonCumul=CD_PERIODS.filter(p=>!p.cumul);
   let maxP=null,maxPRate=0;
   for(const p of nonCumul){const v=total.periods[p.key]||0;const r=n>0?v/n:0;if(r>maxPRate){maxPRate=r;maxP=p;}}
-  if(maxP&&maxPRate>0.02) insights.push({type:'info',text:`취소가 <b>${maxP.key}</b> 구간에 가장 집중됩니다 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어를 강화하면 효과적입니다.`});
+  if(maxP&&maxPRate>0.02) insights.push({type:'info',label:'취소 집중 구간',text:`<b>${maxP.key}</b>에 가장 집중 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어 강화 권장.`});
 
   // 6. 14일 이내 조기 취소 비중
   const early14=total.periods['14일이내']||0;
   const earlyRatio=cx>0?early14/cx:0;
-  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',text:`취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 조기 취소입니다. 초기 온보딩 프로세스 점검을 권장합니다.`});
+  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',label:'조기 취소',text:`취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 프로세스 점검을 권장합니다.`});
 
   // 7. 구분(brand)별 취소율 차이
   const byBrand={};
@@ -2743,7 +2753,7 @@ function cdRenderInsights(data){
   let worstBrand=null,worstRate=0,bestBrand=null,bestRate=1;
   for(const[k,b]of Object.entries(byBrand)){if(b.initial<5)continue;const r=b.cancel/b.initial;if(r>worstRate){worstRate=r;worstBrand=k;}if(r<bestRate){bestRate=r;bestBrand=k;}}
   if(worstBrand&&bestBrand&&worstBrand!==bestBrand&&(worstRate-bestRate)>0.05){
-    insights.push({type:'danger',text:`구분별 취소율 편차가 큽니다. <b>${worstBrand}</b>(${pctF(worstRate)})이 가장 높고, <b>${bestBrand}</b>(${pctF(bestRate)})이 가장 낮습니다.`});
+    insights.push({type:'danger',label:'구분별 편차',text:`<b>${worstBrand}</b>(${pctF(worstRate)}) 최고 / <b>${bestBrand}</b>(${pctF(bestRate)}) 최저. 편차 ${pctF(worstRate-bestRate)}.`});
   }
 
   // 8. 센터별 취소율 이상치
@@ -2755,7 +2765,7 @@ function cdRenderInsights(data){
     const outliers=centerRates.filter(x=>x.r>avgCR*1.3).sort((a,b)=>b.r-a.r);
     if(outliers.length>0){
       const names=outliers.map(x=>`<b>${x.k}</b>(${pctF(x.r)})`).join(', ');
-      insights.push({type:'warning',text:`센터 평균 취소율(${pctF(avgCR)}) 대비 높은 센터: ${names} — 센터별 원인 분석이 필요합니다.`});
+      insights.push({type:'warning',label:'센터별 이상치',text:`평균(${pctF(avgCR)}) 대비 높은 센터: ${names}.`});
     }
   }
 
@@ -2765,19 +2775,19 @@ function cdRenderInsights(data){
   const personRates=Object.entries(byPerson).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:b.cancel/b.initial,n:b.initial})).sort((a,b)=>b.r-a.r);
   if(personRates.length>=3&&personRates[0].r>cxRate*1.3){
     const top3=personRates.slice(0,3).map(x=>`<b>${x.k}</b>(${pctF(x.r)}, ${x.n}건)`).join(', ');
-    insights.push({type:'info',text:`개인별 취소율 상위: ${top3} — 개별 코칭 포인트로 활용하세요.`});
+    insights.push({type:'info',label:'개인별 상위',text:`${top3} — 개별 코칭 포인트로 활용하세요.`});
   }
 
   // 10. 30일 이후 장기 취소
   const late=total.periods['30일이후']||0;
   const lateRatio=cx>0?late/cx:0;
-  if(lateRatio>0.15&&late>=3) insights.push({type:'info',text:`30일 이후 장기 취소가 <b>${Math.round(late)}건</b>(취소 중 ${pctF(lateRatio)})입니다. 장기 고객 이탈 패턴 분석이 필요합니다.`});
+  if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`});
 
   // 렌더
   if(!insights.length){el.innerHTML='';return;}
   const icons={danger:'!',warning:'!',success:'&#10003;',info:'i'};
   let html=`<div class="cd-insight-panel"><div class="cd-insight-header"><div class="cd-insight-icon">AI</div>데이터 인사이트</div><div class="cd-insight-list">`;
-  for(const ins of insights) html+=`<div class="cd-insight-item ${ins.type}"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span>${ins.text}</span></div>`;
+  for(const ins of insights) html+=`<div class="cd-insight-item ${ins.type}"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;
   html+='</div></div>';
   el.innerHTML=html;
 }
@@ -2932,6 +2942,8 @@ function cdRenderBkView(viewKey,filtered){
     <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송전 취소</div><div class="kv">${_px.toLocaleString()} / ${_n>0?pct2(_px/_n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${_cx.toLocaleString()} / ${_n>0?pct2(_cx/_n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약유지</div><div class="kv">${_mt.toLocaleString()} / ${_n>0?pct2(_mt/_n):'-'}</div></div>`;
+
+  cdRenderInsights(filtered,`cdInsight-${viewKey}`);
 
   // 월별
   const byBM={};
