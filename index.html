@@ -3148,8 +3148,27 @@ function cdComputeEstimation(){
 async function cdDownloadExcel(){if(!cdResult)return;alert('Excel 다운로드는 다음 업데이트에서 구현됩니다.');}
 
 // ── 네비게이션바 & TOP 버튼 ──
+// 네비게이션 — 현재 뷰에 맞는 섹션 ID 매핑
+const CD_NAV_MAP={
+  cdNavKpi:    {all:'cdNavKpi',    sub:v=>`cdKpi-${v}`},
+  cdNavMonthly:{all:'cdNavMonthly',sub:v=>`cdMonthly-${v}`},
+  cdNavWeekly: {all:'cdNavWeekly', sub:v=>`cdWeekly-${v}`},
+  cdNavCenter: {all:'cdNavCenter', sub:v=>`cdCenter-${v}`},
+  cdNavProduct:{all:'cdNavProduct',sub:v=>`cdProduct-${v}`},
+  cdNavPerson: {all:'cdNavPerson', sub:v=>`cdPerson-${v}`},
+};
+function cdNavResolve(navId){
+  const m=CD_NAV_MAP[navId];if(!m)return null;
+  if(cdCurrentView==='all')return document.getElementById(m.all);
+  const id=m.sub(cdCurrentView);
+  const el=document.getElementById(id);
+  // 개인별은 부모 table-section으로 스크롤
+  if(el&&navId==='cdNavPerson'){return el.closest('.table-section')||el;}
+  return el;
+}
+
 function cdNavTo(targetId){
-  const el=document.getElementById(targetId);
+  const el=cdNavResolve(targetId);
   if(!el)return;
   const navbar=document.getElementById('cdNavbar');
   const offset=navbar?navbar.offsetHeight+8:60;
@@ -3165,7 +3184,7 @@ function cdScrollToTop(){
   const topBtn=document.getElementById('cdTopBtn');
   const navbar=document.getElementById('cdNavbar');
   const navItems=navbar?navbar.querySelectorAll('.cd-nav-item[data-target]'):[];
-  const sectionIds=['cdNavKpi','cdNavMonthly','cdNavWeekly','cdNavCenter','cdNavProduct','cdNavPerson'];
+  const navKeys=Object.keys(CD_NAV_MAP);
 
   window.addEventListener('scroll',function(){
     // TOP 버튼 표시/숨김
@@ -3178,13 +3197,13 @@ function cdScrollToTop(){
     // 네비게이션 active 상태 갱신
     if(!navbar||navbar.offsetParent===null)return;
     const offset=navbar.offsetHeight+20;
-    let activeId=sectionIds[0];
-    for(const id of sectionIds){
-      const el=document.getElementById(id);
-      if(el&&el.getBoundingClientRect().top<=offset+10) activeId=id;
+    let activeKey=navKeys[0];
+    for(const key of navKeys){
+      const el=cdNavResolve(key);
+      if(el&&el.getBoundingClientRect().top<=offset+10) activeKey=key;
     }
     navItems.forEach(item=>{
-      item.classList.toggle('active',item.dataset.target===activeId);
+      item.classList.toggle('active',item.dataset.target===activeKey);
     });
   },{passive:true});
 })();
