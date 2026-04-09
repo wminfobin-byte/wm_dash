@@ -282,6 +282,22 @@ tr.row-h td{background:var(--gh-light)}
 .est-banner{background:linear-gradient(90deg,#fef3c7,#fde68a);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;color:#92400e;margin-bottom:16px;align-items:center;gap:8px}
 .est-banner:not(.hidden){display:flex}
 
+/* Cancel Dashboard Navbar */
+.cd-navbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:8px;margin:-28px -28px 20px;box-shadow:0 2px 8px rgba(0,0,0,.06);flex-wrap:wrap}
+.cd-navbar .cd-nav-item{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;color:var(--gray);cursor:pointer;transition:.15s;border:1.5px solid transparent;white-space:nowrap}
+.cd-navbar .cd-nav-item:hover{color:var(--primary);background:var(--primary-light);border-color:var(--primary)}
+.cd-navbar .cd-nav-item.active{color:var(--primary);background:var(--primary-light);border-color:var(--primary)}
+.cd-navbar .cd-nav-sep{width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0}
+.cd-navbar .cd-nav-est{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--dark);transition:.15s;font-family:inherit;white-space:nowrap}
+.cd-navbar .cd-nav-est:hover{border-color:#f59e0b;color:#f59e0b;background:#fffbeb}
+.cd-navbar .cd-nav-est.est-active{background:#f59e0b!important;border-color:#f59e0b!important;color:#fff!important;animation:est-pulse 2s infinite}
+
+/* TOP button */
+.cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:44px;height:44px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(67,97,238,.35);transition:all .25s;opacity:0;pointer-events:none;transform:translateY(10px)}
+.cd-top-btn.visible{opacity:1;pointer-events:all;transform:translateY(0)}
+.cd-top-btn:hover{background:#3451d1;transform:translateY(-2px);box-shadow:0 6px 20px rgba(67,97,238,.45)}
+.cd-top-btn:active{transform:translateY(0)}
+
 @media(max-width:768px){
   .group-summary{grid-template-columns:repeat(2,1fr)}
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
@@ -538,6 +554,18 @@ tr.row-h td{background:var(--gh-light)}
   </div>
 
   <div id="cdDashboard" class="hidden">
+    <!-- 네비게이션바 -->
+    <div class="cd-navbar" id="cdNavbar">
+      <span class="cd-nav-item active" data-target="cdNavKpi" onclick="cdNavTo('cdNavKpi')">KPI</span>
+      <span class="cd-nav-item" data-target="cdNavMonthly" onclick="cdNavTo('cdNavMonthly')">월별</span>
+      <span class="cd-nav-item" data-target="cdNavWeekly" onclick="cdNavTo('cdNavWeekly')">주차별</span>
+      <span class="cd-nav-item" data-target="cdNavCenter" onclick="cdNavTo('cdNavCenter')">센터별</span>
+      <span class="cd-nav-item" data-target="cdNavProduct" onclick="cdNavTo('cdNavProduct')">종류별</span>
+      <span class="cd-nav-item" data-target="cdNavPerson" onclick="cdNavTo('cdNavPerson')">개인별</span>
+      <span class="cd-nav-sep"></span>
+      <button class="cd-nav-est" id="cdNavEstBtn" onclick="cdToggleEst()">동일기간추정</button>
+    </div>
+
     <!-- 날짜 필터 -->
     <div class="cd-filter-bar">
       <div class="cd-date-wrap">
@@ -589,29 +617,30 @@ tr.row-h td{background:var(--gh-light)}
 
     <!-- 전체 뷰 -->
     <div id="cdViewAll">
+      <div id="cdNavKpi"></div>
       <div class="kpi-grid" id="cdKpiGrid"></div>
 
-      <div class="table-section">
+      <div id="cdNavMonthly" class="table-section">
         <h3>월별 취소율 <span class="table-sub">구분별</span></h3>
         <div class="cd-wide-table" id="cdMonthlyTable"></div>
       </div>
 
-      <div class="table-section">
+      <div id="cdNavWeekly" class="table-section">
         <h3>주차별 취소율 <span class="table-sub">구분별</span></h3>
         <div class="cd-wide-table" id="cdWeeklyTable"></div>
       </div>
 
-      <div class="table-section">
+      <div id="cdNavCenter" class="table-section">
         <h3>센터별 취소율</h3>
         <div class="cd-wide-table" id="cdCenterTable"></div>
       </div>
 
-      <div class="table-section">
+      <div id="cdNavProduct" class="table-section">
         <h3>종류별 취소율</h3>
         <div class="cd-wide-table" id="cdProductTable"></div>
       </div>
 
-      <div class="table-section">
+      <div id="cdNavPerson" class="table-section">
         <h3 style="cursor:pointer;user-select:none" onclick="cdTogglePerson()">
           <span><span id="cdPersonArrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율 <span class="table-sub">구분 &gt; 센터 &gt; 그룹 순</span></span>
         </h3>
@@ -693,6 +722,8 @@ tr.row-h td{background:var(--gh-light)}
       <div class="table-section"><h3 style="cursor:pointer;user-select:none" onclick="cdToggleBkPerson('no-health')"><span><span class="cd-bk-arrow" id="cdArrow-no-health" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율</span></h3><div class="cd-wide-table hidden" id="cdPerson-no-health"></div></div>
     </div>
   </div>
+  <!-- TOP 버튼 -->
+  <button class="cd-top-btn" id="cdTopBtn" onclick="cdScrollToTop()" title="맨 위로">TOP</button>
 </div>
 </div><!-- /page-cancel-dash -->
 
@@ -2200,10 +2231,10 @@ async function downloadExcel(){
     for(const path of Object.keys(zip.files)){
       if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
         const xml=await zip.file(path).async('string');
-        zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));
+        zip.file(path,xml.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));
       }
     }
-    const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
     a.download=excelName;
@@ -2883,14 +2914,17 @@ function cdToggleEst(){
   if(!cdResult||!cdResult.contracts.length){alert('데이터가 없습니다.');return;}
   cdEstMode=!cdEstMode;
   const btn=document.getElementById('cdEstBtn');
+  const navBtn=document.getElementById('cdNavEstBtn');
   const banner=document.getElementById('cdEstBanner');
   if(cdEstMode){
     const ok=cdComputeEstimation();
     if(!ok){cdEstMode=false;return;}
     btn.classList.add('est-active');btn.textContent='추정모드 ON';
+    navBtn.classList.add('est-active');navBtn.textContent='추정모드 ON';
     banner.classList.remove('hidden');
   }else{
     btn.classList.remove('est-active');btn.textContent='동일기간추정';
+    navBtn.classList.remove('est-active');navBtn.textContent='동일기간추정';
     banner.classList.add('hidden');
     // 추정 데이터 초기화
     cdResult.contracts.forEach(c=>{c.estCancelProb=0;c.estPeriods={};});
@@ -2950,6 +2984,48 @@ function cdComputeEstimation(){
 
 // ── Excel (placeholder) ──
 async function cdDownloadExcel(){if(!cdResult)return;alert('Excel 다운로드는 다음 업데이트에서 구현됩니다.');}
+
+// ── 네비게이션바 & TOP 버튼 ──
+function cdNavTo(targetId){
+  const el=document.getElementById(targetId);
+  if(!el)return;
+  const navbar=document.getElementById('cdNavbar');
+  const offset=navbar?navbar.offsetHeight+8:60;
+  const top=el.getBoundingClientRect().top+window.pageYOffset-offset;
+  window.scrollTo({top,behavior:'smooth'});
+}
+
+function cdScrollToTop(){
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+(function cdInitNavScroll(){
+  const topBtn=document.getElementById('cdTopBtn');
+  const navbar=document.getElementById('cdNavbar');
+  const navItems=navbar?navbar.querySelectorAll('.cd-nav-item[data-target]'):[];
+  const sectionIds=['cdNavKpi','cdNavMonthly','cdNavWeekly','cdNavCenter','cdNavProduct','cdNavPerson'];
+
+  window.addEventListener('scroll',function(){
+    // TOP 버튼 표시/숨김
+    if(topBtn){
+      const page=document.getElementById('page-cancel-dash');
+      const isCancel=page&&!page.classList.contains('hidden');
+      if(isCancel&&window.scrollY>300) topBtn.classList.add('visible');
+      else topBtn.classList.remove('visible');
+    }
+    // 네비게이션 active 상태 갱신
+    if(!navbar||navbar.offsetParent===null)return;
+    const offset=navbar.offsetHeight+20;
+    let activeId=sectionIds[0];
+    for(const id of sectionIds){
+      const el=document.getElementById(id);
+      if(el&&el.getBoundingClientRect().top<=offset+10) activeId=id;
+    }
+    navItems.forEach(item=>{
+      item.classList.toggle('active',item.dataset.target===activeId);
+    });
+  },{passive:true});
+})();
 
 // ── Init ──
 (async function cdInit(){
