@@ -313,6 +313,19 @@ tr.row-h td{background:var(--gh-light)}
 .cd-insight-dots{display:flex;gap:4px;flex-shrink:0}
 .cd-insight-dots span{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .3s}
 .cd-insight-dots span.active{background:var(--primary);transform:scale(1.3)}
+.cd-insight-expand{flex-shrink:0;width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:var(--gray);transition:all .2s}
+.cd-insight-expand:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.cd-insight-panel.expanded{flex-wrap:wrap}
+.cd-insight-panel.expanded .cd-insight-body{display:none}
+.cd-insight-panel.expanded .cd-insight-dots{display:none}
+.cd-insight-all{display:none;width:100%;flex-direction:column;gap:8px;margin-top:4px}
+.cd-insight-panel.expanded .cd-insight-all{display:flex}
+.cd-insight-all-item{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:8px;font-size:13px;line-height:1.6;color:#334155}
+.cd-insight-all-item.danger{background:#fef2f2;border:1px solid #fecaca}
+.cd-insight-all-item.warning{background:#fffbeb;border:1px solid #fed7aa}
+.cd-insight-all-item.success{background:#f0fdf4;border:1px solid #bbf7d0}
+.cd-insight-all-item.info{background:#eff6ff;border:1px solid #bfdbfe}
+.cd-insight-all-item b{font-weight:700;color:var(--dark)}
 
 /* TOP button — Premium */
 .cd-top-btn{position:fixed;bottom:32px;right:32px;z-index:200;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1e293b,#0f172a);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.1);font-size:11px;font-weight:800;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.25),0 2px 8px rgba(0,0,0,.15);transition:all .35s cubic-bezier(.4,0,.2,1);opacity:0;pointer-events:none;transform:translateY(16px) scale(.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;letter-spacing:.5px;backdrop-filter:blur(8px)}
@@ -2788,10 +2801,14 @@ function cdRenderInsights(data, targetId){
   const icons={danger:'!',warning:'!',success:'&#10003;',info:'i'};
   const uid=targetId||'cdInsightPanel';
   let dots='';for(let i=0;i<insights.length;i++)dots+=`<span${i===0?' class="active"':''}></span>`;
-  el.innerHTML=`<div class="cd-insight-panel" onclick="cdInsightNext('${uid}')" onmouseenter="cdInsightPause('${uid}')" onmouseleave="cdInsightResume('${uid}')">
+  let allHtml='';
+  for(const ins of insights) allHtml+=`<div class="cd-insight-all-item ${ins.type}"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;
+  el.innerHTML=`<div class="cd-insight-panel" id="${uid}-panel" onclick="cdInsightNext('${uid}')" onmouseenter="cdInsightPause('${uid}')" onmouseleave="cdInsightResume('${uid}')">
     <div class="cd-insight-icon">AI</div>
     <div class="cd-insight-body" id="${uid}-body"></div>
     <div class="cd-insight-dots" id="${uid}-dots">${dots}</div>
+    <div class="cd-insight-expand" id="${uid}-expbtn" onclick="event.stopPropagation();cdInsightToggleExpand('${uid}')" title="전체 보기">&#9660;</div>
+    <div class="cd-insight-all" id="${uid}-all">${allHtml}</div>
   </div>`;
   // 데이터 저장 & 시작
   if(!window._cdIns)window._cdIns={};
@@ -2833,10 +2850,23 @@ function cdInsightPause(uid){
 }
 
 function cdInsightResume(uid){
-  const state=window._cdIns[uid];if(!state)return;
+  const state=window._cdIns[uid];if(!state||state.expanded)return;
   state.paused=false;
   clearInterval(state.timer);
   state.timer=setInterval(()=>cdInsightNext(uid),4000);
+}
+
+function cdInsightToggleExpand(uid){
+  const state=window._cdIns[uid];if(!state)return;
+  const panel=document.getElementById(`${uid}-panel`);
+  const btn=document.getElementById(`${uid}-expbtn`);
+  if(!panel)return;
+  state.expanded=!state.expanded;
+  panel.classList.toggle('expanded',state.expanded);
+  btn.innerHTML=state.expanded?'&#9650;':'&#9660;';
+  btn.title=state.expanded?'접기':'전체 보기';
+  if(state.expanded){clearInterval(state.timer);state.paused=true;}
+  else{state.paused=false;clearInterval(state.timer);state.timer=setInterval(()=>cdInsightNext(uid),4000);}
 }
 
 // ── 공통 테이블 헤더/행 ──
