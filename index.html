@@ -2370,7 +2370,7 @@ let cdCalYear,cdCalMonth,cdCalPhase='start',cdCalTempStart=null,cdCalTempEnd=nul
 
 const CD_APP={customerKey:3,manager:13,applicationDate:15,classification:16,gift:22,returnDate:42,brand:71};
 // 고객관리 컬럼 (보조열 없는 CMS 원본, 0-indexed)
-const CD_CUST={customerKey:6,bkPhone:32,bkSubscribe:33}; // AG=32 브레인키전화번호, AH=33 브레인키구독여부
+const CD_CUST={customerKey:6,bkPhone:32,bkAccount:34}; // AG=32 브레인키전화번호, AI=34 브레인키계정
 let cdCurrentView='all';
 const CD_KIM_DATES=new Set(['2026-02-20','2026-02-23','2026-02-24','2026-03-24','2026-03-25','2026-03-26']);
 function cdFmtISO(d){return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';}
@@ -2654,8 +2654,8 @@ async function cdGenerate(){
         const ck=str(row[CD_CUST.customerKey]);
         if(!ck)continue;
         const phone=str(row[CD_CUST.bkPhone]);
-        const sub=str(row[CD_CUST.bkSubscribe]).toUpperCase();
-        bkMap[ck]={provide:!!phone, subscribe:sub==='Y'};
+        const account=str(row[CD_CUST.bkAccount]);
+        bkMap[ck]={provide:!!phone, subscribe:!!account};
       }
     }
     for(const c of contracts){
