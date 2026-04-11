@@ -1557,14 +1557,14 @@ async function generate(dbFileId, contFileId){
       }
     }
 
-    // 신규 입사자 보호: 입사 후 두 번째 달까지 최소 N_B그룹
-    // (예: 2월 입사 → 4월 말까지 N_C 이하로 안 내려감, 본인 능력 N_A는 유지)
+    // 신규 입사자 보호: 입사월 +1개월 말일까지 최소 N_B그룹
+    // (예: 3월 입사 → 4월 말까지, 4월 입사 → 5월 말까지)
     const now=new Date();
     const protectedMembers=new Set(); // 보호 대상자 (N_B 최하단 정렬용)
     for(const name of members){
       const hireDate=memberHireDates[name];
       if(!hireDate) continue;
-      const protectEnd=new Date(hireDate.getFullYear(), hireDate.getMonth()+3, 0, 23,59,59);
+      const protectEnd=new Date(hireDate.getFullYear(), hireDate.getMonth()+2, 0, 23,59,59);
       if(now<=protectEnd){
         if(groups[name]==='N_C그룹'||groups[name]==='H그룹'){
           groups[name]='N_B그룹';
