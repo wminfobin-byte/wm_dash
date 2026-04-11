@@ -1575,14 +1575,12 @@ async function generate(dbFileId, contFileId){
     // 시트명 = DB파일 분배일 마지막 날
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // IDB에 저장된 수동 그룹 수정 복원
+    // IDB에 저장된 수동 그룹 수정 복원 (manualGroup 플래그가 있는 것만)
     const savedPeriod=await getResultBySheet(sheetName);
     if(savedPeriod){
-      const savedGroups={};
-      savedPeriod.rows.forEach(r=>{ savedGroups[r.name]=r.group; });
-      for(const name of members){
-        if(savedGroups[name]){
-          groups[name]=savedGroups[name];
+      for(const r of savedPeriod.rows){
+        if(r.manualGroup && members.includes(r.name)){
+          groups[r.name]=r.group;
         }
       }
     }
@@ -1616,8 +1614,15 @@ async function generate(dbFileId, contFileId){
       dbFileId:dbFile.id, contFileId:contFile.id};
 
     // (streak은 IDB results에서 자동 계산되므로 별도 저장 불필요)
+    // 수동 수정 플래그 보존: IDB에서 복원된 수동 수정 멤버 추적
+    const manualNames=new Set();
+    if(savedPeriod){
+      for(const r of savedPeriod.rows){
+        if(r.manualGroup && members.includes(r.name)) manualNames.add(r.name);
+      }
+    }
     const allPeriodRows=Object.entries(stats).map(([name,s])=>({
-      group:groups[name], name, isProtected:protectedMembers.has(name),
+      group:groups[name], name, isProtected:protectedMembers.has(name), manualGroup:manualNames.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:0, cancelRate:0,
       adjContract:s.contract, adjContractRate:s.contractRate,
@@ -2060,7 +2065,7 @@ function toggleGroupEdit(){
   renderTable();
 }
 
-function applyGroupEdit(){
+async function applyGroupEdit(){
   const selects=document.querySelectorAll('.group-select');
   const changes={};
   selects.forEach(sel=>{
@@ -2079,12 +2084,22 @@ function applyGroupEdit(){
     const sheetName=result.maxDistDate?fmtDateShort(result.maxDistDate):fmtDateShort(new Date());
     const prot=result.protectedMembers||new Set();
     const allRows=Object.entries(result.stats).map(([name,s])=>({
-      group:result.groups[name], name, isProtected:prot.has(name),
+      group:result.groups[name], name, isProtected:prot.has(name), manualGroup:!!changes[name],
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:0, cancelRate:0,
       adjContract:s.contract, adjContractRate:s.contractRate,
       refCancelRate:s.refCancelRate, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
     }));
+    // 기존 저장된 manualGroup 플래그 보존 (이번에 변경하지 않은 수동 수정 포함)
+    const prevPeriod=await getResultBySheet(sheetName);
+    if(prevPeriod){
+      for(const pr of prevPeriod.rows){
+        if(pr.manualGroup && !changes[pr.name]){
+          const row=allRows.find(r=>r.name===pr.name);
+          if(row) row.manualGroup=true;
+        }
+      }
+    }
     const nml=allRows.filter(r=>!r.isProtected);
     const prt=allRows.filter(r=>r.isProtected);
     const sf=(a,b)=>b.refAdjRate-a.refAdjRate;
