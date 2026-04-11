@@ -391,6 +391,7 @@ tr.row-h td{background:var(--gh-light)}
       <div class="status-dot" id="cd-dot-cust"></div>
       <div class="status-dot" id="cd-dot-attend"></div>
     </div>
+    <span id="cdLastUpdate" style="font-size:12px;color:var(--gray);white-space:nowrap"></span>
     <button class="btn-header" onclick="cdOpenModal('upload')">파일 업로드</button>
     <button class="btn-header" onclick="cdOpenModal('manage')">파일 관리</button>
     <div class="header-sep"></div>
@@ -2610,8 +2611,9 @@ async function cdGenerate(){
 
     // 일마감 → customerKey map
     const dailyByKey={};
+    let cdMaxAppDate=null;
     const sortedDaily=[...dailyFiles].sort((a,b)=>a.uploadTime-b.uploadTime);
-    for(const f of sortedDaily){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck)dailyByKey[ck]=r;}}
+    for(const f of sortedDaily){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck){dailyByKey[ck]=r;const ad=parseDate(r[CD_APP.applicationDate]);if(ad&&(!cdMaxAppDate||ad>cdMaxAppDate))cdMaxAppDate=ad;}}}
 
     // 전체 → customerKey map
     const fullByKey={};
@@ -2698,6 +2700,12 @@ async function cdGenerate(){
     }
 
     cdResult={contracts,members};
+    // 최종업데이트일자 표시 (일마감 파일 신청일 기준 최신)
+    const _dw=['일','월','화','수','목','금','토'];
+    if(cdMaxAppDate){
+      const y=cdMaxAppDate.getFullYear(), m=String(cdMaxAppDate.getMonth()+1).padStart(2,'0'), d=String(cdMaxAppDate.getDate()).padStart(2,'0');
+      document.getElementById('cdLastUpdate').textContent=`최종업데이트일자 : ${y}-${m}-${d}(${_dw[cdMaxAppDate.getDay()]})`;
+    } else { document.getElementById('cdLastUpdate').textContent=''; }
     if(!cdDateStart&&!cdDateEnd){const now=new Date();cdDateStart=new Date(now.getFullYear(),now.getMonth()-2,1);cdDateEnd=now;
       document.getElementById('cdDateDisplay').textContent=`${cdFmtDate(cdDateStart)} ~ ${cdFmtDate(cdDateEnd)}`;}
     cdFilterAndRender();
