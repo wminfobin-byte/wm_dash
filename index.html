@@ -1628,15 +1628,18 @@ async function generate(dbFileId, contFileId){
       adjContract:s.contract, adjContractRate:s.contractRate,
       refCancelRate:s.refCancelRate, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
     }));
-    // renderTable과 동일한 정렬: 신규 보호자를 B그룹 마지막에 배치
-    const normalRows=allPeriodRows.filter(r=>!r.isProtected);
-    const protectRows=allPeriodRows.filter(r=>r.isProtected);
+    // renderTable과 동일한 정렬: H그룹 최하단, 신규 보호자를 B그룹 마지막에 배치
+    const hPeriodRows=allPeriodRows.filter(r=>r.group==='H그룹');
+    const nonHPeriodRows=allPeriodRows.filter(r=>r.group!=='H그룹');
+    const normalRows=nonHPeriodRows.filter(r=>!r.isProtected);
+    const protectRows=nonHPeriodRows.filter(r=>r.isProtected);
     const sortFn=(a,b)=>b.refAdjRate-a.refAdjRate;
     normalRows.sort(sortFn);
     protectRows.sort(sortFn);
+    hPeriodRows.sort(sortFn);
     let lastBI=normalRows.reduce((last,r,i)=>r.group==='N_B그룹'?i:last,-1);
     if(lastBI===-1) lastBI=normalRows.reduce((last,r,i)=>r.group==='N_A그룹'?i:last,-1);
-    const periodRows=[...normalRows.slice(0,lastBI+1),...protectRows,...normalRows.slice(lastBI+1)];
+    const periodRows=[...normalRows.slice(0,lastBI+1),...protectRows,...normalRows.slice(lastBI+1),...hPeriodRows];
     const _day=['일','월','화','수','목','금','토'];
     const _fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
     const startStr=minDistDate?_fd(minDistDate):'';
@@ -1992,19 +1995,22 @@ function renderTable(){
   let rows=Object.entries(result.stats).map(([name,s])=>({
     name,group:result.groups[name]||'N_C그룹',streak:result.streaks[name]||0,isProtected:prot.has(name),...s
   }));
-  // 일반 멤버와 보호 대상자(신규) 분리
-  const normal=rows.filter(r=>!r.isProtected);
-  const protect=rows.filter(r=>r.isProtected);
+  // 일반 멤버와 보호 대상자(신규) 분리, H그룹은 별도 최하단
+  const hRows=rows.filter(r=>r.group==='H그룹');
+  const nonH=rows.filter(r=>r.group!=='H그룹');
+  const normal=nonH.filter(r=>!r.isProtected);
+  const protect=nonH.filter(r=>r.isProtected);
   // 각각 취소율반영 계약수 내림차순 → 계약률 내림차순
   const sortFn=(a,b)=> b.refAdjRate-a.refAdjRate;
   normal.sort(sortFn);
   protect.sort(sortFn);
+  hRows.sort(sortFn);
   // 신규 입사자를 B그룹 마지막 위치에 삽입
   let lastBIdx=normal.reduce((last,r,i)=>r.group==='N_B그룹'?i:last,-1);
   // B그룹 없으면 A그룹 마지막 뒤에
   if(lastBIdx===-1) lastBIdx=normal.reduce((last,r,i)=>r.group==='N_A그룹'?i:last,-1);
   const insertAt=lastBIdx+1;
-  rows=[...normal.slice(0,insertAt),...protect,...normal.slice(insertAt)];
+  rows=[...normal.slice(0,insertAt),...protect,...normal.slice(insertAt),...hRows];
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,adj:a.adj+r.refAdjContract}),{db:0,cont:0,adj:0});
   let html=`<tr class="row-total"><td></td><td style="text-align:left;padding-left:16px">합계</td>
     <td>${t.db}</td><td>${t.cont}</td><td>${t.db>0?pct(t.cont/t.db):'-'}</td>
@@ -2100,13 +2106,15 @@ async function applyGroupEdit(){
         }
       }
     }
-    const nml=allRows.filter(r=>!r.isProtected);
-    const prt=allRows.filter(r=>r.isProtected);
+    const hml=allRows.filter(r=>r.group==='H그룹');
+    const nonH=allRows.filter(r=>r.group!=='H그룹');
+    const nml=nonH.filter(r=>!r.isProtected);
+    const prt=nonH.filter(r=>r.isProtected);
     const sf=(a,b)=>b.refAdjRate-a.refAdjRate;
-    nml.sort(sf); prt.sort(sf);
+    nml.sort(sf); prt.sort(sf); hml.sort(sf);
     let lb=nml.reduce((last,r,i)=>r.group==='N_B그룹'?i:last,-1);
     if(lb===-1) lb=nml.reduce((last,r,i)=>r.group==='N_A그룹'?i:last,-1);
-    const periodRows=[...nml.slice(0,lb+1),...prt,...nml.slice(lb+1)];
+    const periodRows=[...nml.slice(0,lb+1),...prt,...nml.slice(lb+1),...hml];
     const _day2=['일','월','화','수','목','금','토'];
     const _fd2=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day2[d.getDay()]})`;
     const startStr2=result.minDistDate?_fd2(result.minDistDate):'';
@@ -2202,15 +2210,18 @@ async function downloadExcel(){
       const streak = result && result.streaks ? (result.streaks[r.name]||0) : 0;
       return {...r, group, contractRate:cr, refAdjRate:ar, isProtected:!!isProt, streak};
     });
-    // 신규 보호자를 B그룹 마지막에 배치 (테이블과 동일 로직)
-    const normal=rows.filter(r=>!r.isProtected);
-    const protect=rows.filter(r=>r.isProtected);
+    // H그룹 최하단, 신규 보호자를 B그룹 마지막에 배치 (테이블과 동일 로직)
+    const hExcel=rows.filter(r=>r.group==='H그룹');
+    const nonHExcel=rows.filter(r=>r.group!=='H그룹');
+    const normal=nonHExcel.filter(r=>!r.isProtected);
+    const protect=nonHExcel.filter(r=>r.isProtected);
     const sortFn=(a,b)=> b.refAdjRate-a.refAdjRate;
     normal.sort(sortFn);
     protect.sort(sortFn);
+    hExcel.sort(sortFn);
     let lastBIdx=normal.reduce((last,r,i)=>r.group==='N_B그룹'?i:last,-1);
     if(lastBIdx===-1) lastBIdx=normal.reduce((last,r,i)=>r.group==='N_A그룹'?i:last,-1);
-    sortedRows=[...normal.slice(0,lastBIdx+1),...protect,...normal.slice(lastBIdx+1)];
+    sortedRows=[...normal.slice(0,lastBIdx+1),...protect,...normal.slice(lastBIdx+1),...hExcel];
     }
     const t=sortedRows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,adj:a.adj+r.refAdjContract}),{db:0,cont:0,adj:0});
 
