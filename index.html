@@ -1534,7 +1534,7 @@ async function generate(dbFileId, contFileId){
     members.forEach(name=>{
       const db=dbCounts[name]||0, cont=contCounts[name]||0;
       const contractRate=db>0?cont/db:0;
-      const personalCancelRate=cancelRates[name]||0;
+      const personalCancelRate=Math.min(cancelRates[name]||0, 0.4);
       const refAdjContract=cont*(1-personalCancelRate);
       const refAdjRate=db>0?refAdjContract/db:0;
       stats[name]={db,contract:cont,contractRate,refCancelRate:personalCancelRate,refAdjContract,refAdjRate};
@@ -1605,7 +1605,7 @@ async function generate(dbFileId, contFileId){
       // 수동 streak 조정 반영
       if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
-      if(groups[name]==='N_C그룹'&&count>=3) groups[name]='H그룹';
+      if(groups[name]==='N_C그룹'&&count>=4) groups[name]='H그룹';
     }
 
     result={members,stats,groups,streaks,cutlines,protectedMembers,minDistDate,maxDistDate,
