@@ -2914,18 +2914,21 @@ function cdInsightToggleExpand(uid){
 
 // ── 공통 테이블 헤더/행 ──
 function cdTH(){
-  let h='<th>구분</th><th>최초<br>계약수</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">취소수</th><th>취소율</th>';
+  let h='<th>구분</th><th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>';
   CD_PERIODS.forEach((p,i)=>{h+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   h+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th>';return h;
 }
 function cdNum(v){return Math.round(v).toLocaleString();}
 function cdTR(label,b,bold,indent,brand){
   const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx;
-  const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0;
+  const tc=px+cx;
+  const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
   const bc=brand?`cd-brand-${brand}${bold?' bold-row':''}`:''
   let h=`<tr class="${bc}" style="${bold&&!brand?'font-weight:800;background:#f8f9fc':bold?'font-weight:800':''}">
     <td class="text-left" style="padding-left:${indent||14}px;white-space:nowrap">${label}</td>
-    <td>${cdNum(n)}</td><td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
+    <td>${cdNum(n)}</td>
+    <td class="cd-sep">${cdNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
+    <td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
     <td class="cd-sep">${cdNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
   CD_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;h+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
   h+=`<td class="cd-sep">${cdNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
@@ -3016,23 +3019,27 @@ function cdRenderPersonTable(data){
   const gi=k=>{for(let i=0;i<CD_GROUP_ORDER.length;i++)if(k&&k.includes(CD_GROUP_ORDER[i]))return i;return 99;};
   const sorted=Object.entries(byP).filter(([,d])=>d.initial>0).sort((a,b)=>{let d=bi(a[1].brand)-bi(b[1].brand);if(d)return d;d=ci(a[1].center)-ci(b[1].center);if(d)return d;return gi(a[1].group)-gi(b[1].group);});
   let html=`<table><thead><tr><th>코디명</th><th>구분</th><th>센터</th><th>그룹</th>
-    <th>최초<br>계약수</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">취소수</th><th>취소율</th>`;
+    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>`;
   CD_PERIODS.forEach((p,i)=>{html+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   html+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
   // 전체 합계
   const totalPr=cdNewBucket();data.forEach(c=>cdAddToBucket(totalPr,c));
-  const tn=totalPr.initial,tpx=totalPr.preCx,tcx=totalPr.cancel,tmt=tn-tpx-tcx;
+  const tn=totalPr.initial,tpx=totalPr.preCx,tcx=totalPr.cancel,tmt=tn-tpx-tcx,ttc=tpx+tcx;
   html+=`<tr style="font-weight:800;background:#f8f9fc"><td class="text-left" style="padding-left:14px">전체</td><td></td><td></td><td></td>
-    <td>${cdNum(tn)}</td><td class="cd-sep">${cdNum(tpx)}</td><td>${pct2(tn>0?tpx/tn:0)}</td>
+    <td>${cdNum(tn)}</td>
+    <td class="cd-sep">${cdNum(ttc)}</td><td style="color:${cdRateColor(tn>0?ttc/tn:0)};font-weight:700">${pct2(tn>0?ttc/tn:0)}</td>
+    <td class="cd-sep">${cdNum(tpx)}</td><td>${pct2(tn>0?tpx/tn:0)}</td>
     <td class="cd-sep">${cdNum(tcx)}</td><td style="color:${cdRateColor(tn>0?tcx/tn:0)};font-weight:700">${pct2(tn>0?tcx/tn:0)}</td>`;
   CD_PERIODS.forEach((p,i)=>{const v=totalPr.periods[p.key]||0;const r=tn>0?v/tn:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
   html+=`<td class="cd-sep">${cdNum(tmt)}</td><td>${pct2(tn>0?tmt/tn:0)}</td></tr>`;
   for(const[name,b]of sorted){
-    const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx;
-    const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0;
+    const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx,tc=px+cx;
+    const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
     const bc=`cd-brand-${b.brand}`;
     html+=`<tr class="${bc}"><td class="text-left" style="font-weight:700;padding-left:14px">${name}</td><td>${b.brand}</td><td>${b.center}</td><td>${b.group}</td>
-      <td>${cdNum(n)}</td><td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
+      <td>${cdNum(n)}</td>
+      <td class="cd-sep">${cdNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
+      <td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
       <td class="cd-sep">${cdNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
     CD_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;html+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
     html+=`<td class="cd-sep">${cdNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;
@@ -3115,20 +3122,25 @@ function cdRenderBkView(viewKey,filtered){
   const gi=k=>{for(let i=0;i<CD_GROUP_ORDER.length;i++)if(k&&k.includes(CD_GROUP_ORDER[i]))return i;return 99;};
   const sorted=Object.entries(byPr).filter(([,d])=>d.initial>0).sort((a,b)=>{let d=bi(a[1].brand)-bi(b[1].brand);if(d)return d;d=ci(a[1].center)-ci(b[1].center);if(d)return d;return gi(a[1].group)-gi(b[1].group);});
   let pHtml=`<table><thead><tr><th>코디명</th><th>구분</th><th>센터</th><th>그룹</th>
-    <th>최초<br>계약수</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">취소수</th><th>취소율</th>`;
+    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>`;
   CD_PERIODS.forEach((p,i)=>{pHtml+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   pHtml+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
   // 개인별 합계
+  const bkTc=bkTotalM.preCx+bkTotalM.cancel;
   pHtml+=`<tr style="font-weight:800;background:#f8f9fc"><td class="text-left" style="padding-left:14px">전체</td><td></td><td></td><td></td>
-    <td>${cdNum(bkTotalM.initial)}</td><td class="cd-sep">${cdNum(bkTotalM.preCx)}</td><td>${pct2(bkTotalM.initial>0?bkTotalM.preCx/bkTotalM.initial:0)}</td>
+    <td>${cdNum(bkTotalM.initial)}</td>
+    <td class="cd-sep">${cdNum(bkTc)}</td><td style="color:${cdRateColor(bkTotalM.initial>0?bkTc/bkTotalM.initial:0)};font-weight:700">${pct2(bkTotalM.initial>0?bkTc/bkTotalM.initial:0)}</td>
+    <td class="cd-sep">${cdNum(bkTotalM.preCx)}</td><td>${pct2(bkTotalM.initial>0?bkTotalM.preCx/bkTotalM.initial:0)}</td>
     <td class="cd-sep">${cdNum(bkTotalM.cancel)}</td><td style="color:${cdRateColor(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)};font-weight:700">${pct2(bkTotalM.initial>0?bkTotalM.cancel/bkTotalM.initial:0)}</td>`;
   CD_PERIODS.forEach((p,i)=>{const v=bkTotalM.periods[p.key]||0;const r=bkTotalM.initial>0?v/bkTotalM.initial:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
   const bkMt=bkTotalM.initial-bkTotalM.preCx-bkTotalM.cancel;
   pHtml+=`<td class="cd-sep">${cdNum(bkMt)}</td><td>${pct2(bkTotalM.initial>0?bkMt/bkTotalM.initial:0)}</td></tr>`;
-  for(const[name,d]of sorted){const n=d.initial,px=d.preCx,cx=d.cancel,mt2=n-px-cx;
-    const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt2/n:0;const bc=`cd-brand-${d.brand}`;
+  for(const[name,d]of sorted){const n=d.initial,px=d.preCx,cx=d.cancel,mt2=n-px-cx,tc=px+cx;
+    const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt2/n:0,tcR=n>0?tc/n:0;const bc=`cd-brand-${d.brand}`;
     pHtml+=`<tr class="${bc}"><td class="text-left" style="font-weight:700;padding-left:14px">${name}</td><td>${d.brand}</td><td>${d.center}</td><td>${d.group}</td>
-      <td>${cdNum(n)}</td><td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
+      <td>${cdNum(n)}</td>
+      <td class="cd-sep">${cdNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
+      <td class="cd-sep">${cdNum(px)}</td><td>${pct2(pxR)}</td>
       <td class="cd-sep">${cdNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
     CD_PERIODS.forEach((p,i)=>{const v=d.periods[p.key]||0;const r=n>0?v/n:0;pHtml+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${cdNum(v)}</td><td>${pct2(r)}</td>`;});
     pHtml+=`<td class="cd-sep">${cdNum(mt2)}</td><td>${pct2(mtR)}</td></tr>`;}
