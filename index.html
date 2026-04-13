@@ -2752,11 +2752,12 @@ function cdRateColor(r){return r>0.2?'var(--danger)':r>0.15?'var(--warning)':'in
 
 function cdRenderKPI(data){
   const b=cdNewBucket();data.forEach(c=>cdAddToBucket(b,c));const mt=b.initial-b.preCx-b.cancel;
-  const n=Math.round(b.initial),px=Math.round(b.preCx),cx=Math.round(b.cancel),m=Math.round(mt);
+  const n=Math.round(b.initial),px=Math.round(b.preCx),cx=Math.round(b.cancel),m=Math.round(mt),tc=px+cx;
   document.getElementById('cdKpiGrid').innerHTML=`
     <div class="kpi-card"><div class="kl">최초 계약수</div><div class="kv">${n.toLocaleString()}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${tc.toLocaleString()} / ${n>0?pct2(tc/n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송전 취소</div><div class="kv">${px.toLocaleString()} / ${n>0?pct2(px/n):'-'}</div></div>
-    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${cx.toLocaleString()} / ${n>0?pct2(cx/n):'-'}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송후 취소</div><div class="kv">${cx.toLocaleString()} / ${n>0?pct2(cx/n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약유지</div><div class="kv">${m.toLocaleString()} / ${n>0?pct2(m/n):'-'}</div></div>`;
 }
 
@@ -2914,7 +2915,7 @@ function cdInsightToggleExpand(uid){
 
 // ── 공통 테이블 헤더/행 ──
 function cdTH(){
-  let h='<th>구분</th><th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>';
+  let h='<th>구분</th><th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>';
   CD_PERIODS.forEach((p,i)=>{h+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   h+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th>';return h;
 }
@@ -3019,7 +3020,7 @@ function cdRenderPersonTable(data){
   const gi=k=>{for(let i=0;i<CD_GROUP_ORDER.length;i++)if(k&&k.includes(CD_GROUP_ORDER[i]))return i;return 99;};
   const sorted=Object.entries(byP).filter(([,d])=>d.initial>0).sort((a,b)=>{let d=bi(a[1].brand)-bi(b[1].brand);if(d)return d;d=ci(a[1].center)-ci(b[1].center);if(d)return d;return gi(a[1].group)-gi(b[1].group);});
   let html=`<table><thead><tr><th>코디명</th><th>구분</th><th>센터</th><th>그룹</th>
-    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>`;
+    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>`;
   CD_PERIODS.forEach((p,i)=>{html+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   html+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
   // 전체 합계
@@ -3063,11 +3064,12 @@ function cdRenderBkView(viewKey,filtered){
 
   // KPI
   const b=cdNewBucket();filtered.forEach(c=>cdAddToBucket(b,c));const mt=b.initial-b.preCx-b.cancel;
-  const _n=Math.round(b.initial),_px=Math.round(b.preCx),_cx=Math.round(b.cancel),_mt=Math.round(mt);
+  const _n=Math.round(b.initial),_px=Math.round(b.preCx),_cx=Math.round(b.cancel),_mt=Math.round(mt),_tc=_px+_cx;
   document.getElementById(`cdKpi-${viewKey}`).innerHTML=`
     <div class="kpi-card"><div class="kl">최초 계약수</div><div class="kv">${_n.toLocaleString()}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${_tc.toLocaleString()} / ${_n>0?pct2(_tc/_n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송전 취소</div><div class="kv">${_px.toLocaleString()} / ${_n>0?pct2(_px/_n):'-'}</div></div>
-    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${_cx.toLocaleString()} / ${_n>0?pct2(_cx/_n):'-'}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송후 취소</div><div class="kv">${_cx.toLocaleString()} / ${_n>0?pct2(_cx/_n):'-'}</div></div>
     <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약유지</div><div class="kv">${_mt.toLocaleString()} / ${_n>0?pct2(_mt/_n):'-'}</div></div>`;
 
   cdRenderInsights(filtered,`cdInsight-${viewKey}`);
@@ -3122,7 +3124,7 @@ function cdRenderBkView(viewKey,filtered){
   const gi=k=>{for(let i=0;i<CD_GROUP_ORDER.length;i++)if(k&&k.includes(CD_GROUP_ORDER[i]))return i;return 99;};
   const sorted=Object.entries(byPr).filter(([,d])=>d.initial>0).sort((a,b)=>{let d=bi(a[1].brand)-bi(b[1].brand);if(d)return d;d=ci(a[1].center)-ci(b[1].center);if(d)return d;return gi(a[1].group)-gi(b[1].group);});
   let pHtml=`<table><thead><tr><th>코디명</th><th>구분</th><th>센터</th><th>그룹</th>
-    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송 후<br>취소수</th><th>배송 후<br>취소율</th>`;
+    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>`;
   CD_PERIODS.forEach((p,i)=>{pHtml+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   pHtml+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
   // 개인별 합계
