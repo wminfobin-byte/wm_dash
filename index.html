@@ -1078,7 +1078,8 @@ async function autoSyncDownload(){
     // 일자별 성과 prefs 복원 (info_bin)
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||dpAdCost;
-      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost}));
+      dpSnapshot=payload.dp.snapshot||dpSnapshot;
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,snapshot:dpSnapshot}));
     }
     // 유입분석 복원 (info_bin 권한 + 아직 안 불러온 경우만)
     if(!iaLoaded&&payload.ia){
@@ -1299,7 +1300,8 @@ async function doSyncDownloadManual(){
     // 일자별 성과 prefs 복원 (info_bin 전용)
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||{};
-      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost}));
+      dpSnapshot=payload.dp.snapshot||{};
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,snapshot:dpSnapshot}));
     }
     // 유입분석 복원 (info_bin 접근권한 사용자만)
     if(payload.ia&&authUser&&authUser.tabs.includes('inflow')){
@@ -4108,6 +4110,7 @@ function iaSwitchHourView(v){
 // ═══════════════════════════════════════════════════════════════
 let dpResult=null, dpCat='뇌새김영어', dpSelectedDates=null;
 let dpAdCost={}; // {'YYYY-MM-DD': {뇌새김영어: number, 제2외국어: number}}
+let dpSnapshot={}; // {'YYYY-MM-DD': {뇌새김영어: bucket, 제2외국어: bucket}} — 이전 일자 고정값
 
 const DP_DOW=['일','월','화','수','목','금','토'];
 function dpFmtDateWd(ymd){
@@ -4222,6 +4225,23 @@ function dpCompute(){
     if(hasRecall) b.recallDb++;
     else b.newDb++;
   }
+
+  // 이전 일자는 스냅샷 고정 — 명단 변경 후에도 과거 수치가 바뀌지 않도록
+  const today=dpFmtYmd(new Date());
+  const allKeys=new Set([...Object.keys(byDate),...Object.keys(dpSnapshot)]);
+  let snapshotDirty=false;
+  for(const k of allKeys){
+    if(k<today){
+      // 이전 일자
+      if(dpSnapshot[k]){
+        byDate[k]=dpSnapshot[k]; // 고정값 사용
+      }else if(byDate[k]){
+        dpSnapshot[k]=byDate[k]; // 신규 고정
+        snapshotDirty=true;
+      }
+    }
+  }
+  if(snapshotDirty) dpSavePrefs();
 
   const dates=Object.keys(byDate).sort();
   dpResult={byDate,dates};
@@ -4394,11 +4414,12 @@ function dpLoadPrefs(){
     if(s){
       const o=JSON.parse(s);
       if(o.adCost)dpAdCost=o.adCost;
+      if(o.snapshot)dpSnapshot=o.snapshot;
     }
   }catch{}
 }
 function dpSavePrefs(){
-  localStorage.setItem(DP_LS_KEY,JSON.stringify({adCost:dpAdCost}));
+  localStorage.setItem(DP_LS_KEY,JSON.stringify({adCost:dpAdCost,snapshot:dpSnapshot}));
 }
 </script>
 </body>
