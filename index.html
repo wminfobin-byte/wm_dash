@@ -246,8 +246,9 @@ tr.row-h td{background:var(--gh-light)}
 .dp-date-list label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border-radius:4px}
 .dp-date-list label:hover{background:#f8fafc}
 .dp-date-list input[type=checkbox]{margin:0}
-.dp-table{min-width:1100px;font-size:12px}
-.dp-table th{background:#2D3748;color:#fff;font-weight:600}
+.dp-table{min-width:1100px;font-size:11px}
+.dp-table th,.dp-table td{padding:5px 4px;white-space:nowrap}
+.dp-table th{background:#2D3748;color:#fff;font-weight:600;font-size:11px}
 .dp-table th.dp-grp-brain{background:#4361EE}
 .dp-table th.dp-grp-foreign{background:#2EC4B6}
 .dp-table th.dp-grp-cost{background:#F0920E}
@@ -983,9 +984,8 @@ tr.row-h td{background:var(--gh-light)}
         <button class="dp-filter-btn" id="dpDateBtn" onclick="dpToggleDatePanel(event)">📅 날짜 선택 <span id="dpDateCount"></span></button>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <div class="ia-view-tabs" style="margin:0;gap:6px">
-          <button class="ia-view-btn active" data-dpview="total" onclick="dpSwitchView('total')">실계약수</button>
-          <button class="ia-view-btn" data-dpview="today_prev" onclick="dpSwitchView('today_prev')">일/이전 분리</button>
-          <button class="ia-view-btn" data-dpview="new_recall" onclick="dpSwitchView('new_recall')">신규/재콜 분리</button>
+          <button class="ia-view-btn active" data-dpcat="뇌새김영어" onclick="dpSwitchCat('뇌새김영어')">뇌새김영어</button>
+          <button class="ia-view-btn" data-dpcat="제2외국어" onclick="dpSwitchCat('제2외국어')">제2외국어</button>
         </div>
       </div>
       <div class="dp-date-panel hidden" id="dpDatePanel">
@@ -4106,7 +4106,7 @@ function iaSwitchHourView(v){
 // ═══════════════════════════════════════════════════════════════
 //  Daily Perf Tab (일자별 성과) — info_bin 전용, 유입분석 데이터 재활용
 // ═══════════════════════════════════════════════════════════════
-let dpResult=null, dpView='total', dpSelectedDates=null;
+let dpResult=null, dpCat='뇌새김영어', dpSelectedDates=null;
 let dpAdCost={}; // {'YYYY-MM-DD': {뇌새김영어: number, 제2외국어: number}}
 
 const DP_DOW=['일','월','화','수','목','금','토'];
@@ -4128,33 +4128,20 @@ function dpPassObName(name){
   return false;
 }
 
-function dpClassifyByMedia(mediaCode){
-  const m=String(mediaCode||'').toLowerCase();
-  if(!m) return 'NEED_GIFT';
-  if(m.includes('talkis')) return 'EXCLUDE';
-  if(m.includes('callback')||m.includes('tv_b')) return 'NEED_GIFT';
-  if(m.includes('jhp_in')||m.includes('japer')||/\bjp\b/.test(m)) return '일본어';
-  if(m.includes('chp_in')||m.includes('cnper')||m.includes('chn')) return '중국어';
-  if(m.includes('shp_in')||m.includes('esper')) return '스페인어';
-  if(m.includes('fhp_in')||m.includes('frper')) return '프랑스어';
-  if(m.includes('tw')) return '더위크';
-  return '결합';
+function dpBuildNameToBrand(){
+  const map={};
+  if(!iaFiles||!iaFiles.attend)return map;
+  for(const r of iaFiles.attend.data){
+    const name=String(r['이름']||'').trim();
+    const brand=String(r['담당']||'').trim();
+    if(name&&brand) map[name]=brand;
+  }
+  return map;
 }
-function dpClassifyByGift(gift){
-  const g=String(gift||'');
-  if(g.includes('일본어'))return '일본어';
-  if(g.includes('중국어'))return '중국어';
-  if(g.includes('스페인어'))return '스페인어';
-  if(g.includes('프랑스어'))return '프랑스어';
-  if(g.includes('L_'))return '결합';
-  if(g.includes('더위크'))return '더위크';
-  return '더위크'; // 공란이면 더위크
-}
-const DP_BRAIN=new Set(['더위크','결합']);
-const DP_FOREIGN=new Set(['일본어','중국어','스페인어','프랑스어']);
-function dpCategoryOf(pkg){
-  if(DP_BRAIN.has(pkg))return '뇌새김영어';
-  if(DP_FOREIGN.has(pkg))return '제2외국어';
+function dpCategoryByName(nameToBrand,obName){
+  const key=String(obName||'').trim();
+  const brand=nameToBrand[key];
+  if(brand==='뇌새김영어'||brand==='제2외국어') return brand;
   return null;
 }
 
@@ -4170,6 +4157,7 @@ function dpCompute(){
   if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont){
     dpResult=null;return;
   }
+  const nameToBrand=dpBuildNameToBrand();
   const byDate={};
   // DB수 집계 (유입분석 db 파일 재활용, customerKey 중복 제거)
   const seen=new Set();
@@ -4188,9 +4176,8 @@ function dpCompute(){
       if(dbInfo.includes('재콜'))continue;
       if(dbInfo.toLowerCase().includes('in')&&!media)continue;
       if(media.includes('callback')||media.includes('tv_b'))continue;
-      const pkg=dpClassifyByMedia(media);
-      if(pkg==='EXCLUDE'||pkg==='NEED_GIFT')continue;
-      const cat=dpCategoryOf(pkg);
+      // 카테고리: 명단의 담당 기준
+      const cat=dpCategoryByName(nameToBrand,row[7]);
       if(!cat)continue;
       const dist=parseDate(row[8]);
       if(!dist)continue;
@@ -4213,19 +4200,8 @@ function dpCompute(){
     const orderDt=String(row[23]||'');
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status!=='계약'&&status!=='취소')continue;
-    // 패키지 분류 (media 우선, 예외 케이스는 gift)
-    const dbInfo=String(row[15]||'');
-    const isInEmpty=dbInfo.toLowerCase().includes('in')&&!media;
-    const isCallback=media.includes('callback')||media.includes('tv_b');
-    let pkg;
-    if(isInEmpty||isCallback){
-      pkg=dpClassifyByGift(row[27]); // AB열
-    }else{
-      pkg=dpClassifyByMedia(media);
-      if(pkg==='NEED_GIFT') pkg=dpClassifyByGift(row[27]);
-    }
-    if(pkg==='EXCLUDE')continue;
-    const cat=dpCategoryOf(pkg);
+    // 카테고리: 명단의 담당 기준
+    const cat=dpCategoryByName(nameToBrand,row[7]);
     if(!cat)continue;
     // 계약수는 '계약일(오더일)' 기준으로 집계
     const orderDate=parseDate(orderDt);
@@ -4236,6 +4212,7 @@ function dpCompute(){
     b.contract++;
     // 일계약: 재콜 없음 AND 분배일==오더일
     const distDate=parseDate(row[8]);
+    const dbInfo=String(row[15]||'');
     const hasRecall=dbInfo.includes('재콜');
     if(!hasRecall&&distDate&&dpFmtYmd(distDate)===key) b.today++;
     else b.prev++;
@@ -4295,9 +4272,9 @@ function dpToggleDatePanel(evt){
   document.getElementById('dpDatePanel').classList.toggle('hidden');
 }
 
-function dpSwitchView(v){
-  dpView=v;
-  document.querySelectorAll('#page-daily-perf .ia-view-btn[data-dpview]').forEach(b=>b.classList.toggle('active',b.dataset.dpview===v));
+function dpSwitchCat(c){
+  dpCat=c;
+  document.querySelectorAll('#page-daily-perf .ia-view-btn[data-dpcat]').forEach(b=>b.classList.toggle('active',b.dataset.dpcat===c));
   dpRender();
 }
 
@@ -4312,89 +4289,65 @@ function dpFmtCPA(costManwon,cnt){
 function dpRender(){
   if(!dpResult)return;
   const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
-  const cats=['뇌새김영어','제2외국어'];
-  const view=dpView;
+  const cat=dpCat;
+  const groupCls=cat==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
 
   // Header 2 rows
-  const contCols=(view==='total')?1:2;
-  const contLabels=view==='today_prev'?['일계약','이전계약']:(view==='new_recall'?['신규DB','재콜DB']:['계약수']);
-  const rateLabels=view==='today_prev'?['일계약률','이전계약률']:(view==='new_recall'?['신규DB률','재콜DB률']:['계약률']);
-
   let html='<thead>';
-  html+='<tr><th rowspan="2">분배일</th>';
-  for(const c of cats){
-    const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
-    html+=`<th class="${groupCls}" colspan="${1+contCols*2}">${c}</th>`;
-  }
-  html+='<th class="dp-grp-cost" colspan="4">광고비(만원) / CPA</th>';
+  html+='<tr>';
+  html+='<th rowspan="2">분배일</th>';
+  html+=`<th class="${groupCls}" colspan="11">${cat}</th>`;
+  html+='<th class="dp-grp-cost" colspan="2">광고비(만원) / CPA</th>';
   html+='</tr><tr>';
-  for(const c of cats){
-    const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
-    html+=`<th class="${groupCls}">DB수</th>`;
-    for(const l of contLabels) html+=`<th class="${groupCls}">${l}</th>`;
-    for(const l of rateLabels) html+=`<th class="${groupCls}">${l}</th>`;
-  }
-  html+='<th class="dp-grp-cost">뇌새김 광고비(만원)</th>';
-  html+='<th class="dp-grp-cost">제2외국어 광고비(만원)</th>';
-  html+='<th class="dp-grp-cost">뇌새김 CPA</th>';
-  html+='<th class="dp-grp-cost">제2외국어 CPA</th>';
-  html+='</tr></thead>';
+  const subs=['DB수','계약수','계약률','일계약','일계약률','이전계약','이전계약률','신규DB계약','신규계약률','재콜DB계약','재콜계약률'];
+  for(const s of subs) html+=`<th class="${groupCls}">${s}</th>`;
+  html+='<th class="dp-grp-cost">광고비(만원)</th>';
+  html+='<th class="dp-grp-cost">CPA</th>';
+  html+='</tr></thead><tbody>';
 
   // Body
-  html+='<tbody>';
-  const tot={뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket()};
-  let totCostB=0, totCostF=0;
+  const tot=dpNewBucket();
+  let totCost=0;
   for(const d of dates){
     const e=dpResult.byDate[d]||dpInitDateEntry();
+    const b=e[cat];
+    tot.db+=b.db; tot.contract+=b.contract;
+    tot.today+=b.today; tot.prev+=b.prev;
+    tot.newDb+=b.newDb; tot.recallDb+=b.recallDb;
     html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}</td>`;
-    for(const c of cats){
-      const b=e[c];
-      tot[c].db+=b.db; tot[c].contract+=b.contract;
-      tot[c].today+=b.today; tot[c].prev+=b.prev;
-      tot[c].newDb+=b.newDb; tot[c].recallDb+=b.recallDb;
-      html+=`<td>${dpFmtNum(b.db)}</td>`;
-      if(view==='total'){
-        html+=`<td>${dpFmtNum(b.contract)}</td>`;
-        html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
-      }else if(view==='today_prev'){
-        html+=`<td>${dpFmtNum(b.today)}</td><td>${dpFmtNum(b.prev)}</td>`;
-        html+=`<td>${dpFmtPct(b.today,b.db)}</td><td>${dpFmtPct(b.prev,b.db)}</td>`;
-      }else{
-        html+=`<td>${dpFmtNum(b.newDb)}</td><td>${dpFmtNum(b.recallDb)}</td>`;
-        html+=`<td>${dpFmtPct(b.newDb,b.db)}</td><td>${dpFmtPct(b.recallDb,b.db)}</td>`;
-      }
-    }
+    html+=`<td>${dpFmtNum(b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.contract)}</td>`;
+    html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.today)}</td>`;
+    html+=`<td>${dpFmtPct(b.today,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.prev)}</td>`;
+    html+=`<td>${dpFmtPct(b.prev,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.newDb)}</td>`;
+    html+=`<td>${dpFmtPct(b.newDb,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.recallDb)}</td>`;
+    html+=`<td>${dpFmtPct(b.recallDb,b.db)}</td>`;
     const cost=dpAdCost[d]||{};
-    const costB=Number(cost['뇌새김영어']||0);
-    const costF=Number(cost['제2외국어']||0);
-    totCostB+=costB; totCostF+=costF;
-    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="뇌새김영어" value="${costB||''}" oninput="dpCostChange(this)"></td>`;
-    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="제2외국어" value="${costF||''}" oninput="dpCostChange(this)"></td>`;
-    html+=`<td data-cpa="brain">${dpFmtCPA(costB,e['뇌새김영어'].contract)}</td>`;
-    html+=`<td data-cpa="foreign">${dpFmtCPA(costF,e['제2외국어'].contract)}</td>`;
+    const cv=Number(cost[cat]||0);
+    totCost+=cv;
+    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="${cat}" value="${cv||''}" oninput="dpCostChange(this)"></td>`;
+    html+=`<td data-cpa="cat">${dpFmtCPA(cv,b.contract)}</td>`;
     html+='</tr>';
   }
 
-  // Total row
   html+='<tr class="dp-total-row"><td>합계</td>';
-  for(const c of cats){
-    const b=tot[c];
-    html+=`<td>${dpFmtNum(b.db)}</td>`;
-    if(view==='total'){
-      html+=`<td>${dpFmtNum(b.contract)}</td>`;
-      html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
-    }else if(view==='today_prev'){
-      html+=`<td>${dpFmtNum(b.today)}</td><td>${dpFmtNum(b.prev)}</td>`;
-      html+=`<td>${dpFmtPct(b.today,b.db)}</td><td>${dpFmtPct(b.prev,b.db)}</td>`;
-    }else{
-      html+=`<td>${dpFmtNum(b.newDb)}</td><td>${dpFmtNum(b.recallDb)}</td>`;
-      html+=`<td>${dpFmtPct(b.newDb,b.db)}</td><td>${dpFmtPct(b.recallDb,b.db)}</td>`;
-    }
-  }
-  html+=`<td data-total="cost-brain">${dpFmtNum(totCostB)}</td>`;
-  html+=`<td data-total="cost-foreign">${dpFmtNum(totCostF)}</td>`;
-  html+=`<td data-total="cpa-brain">${dpFmtCPA(totCostB,tot['뇌새김영어'].contract)}</td>`;
-  html+=`<td data-total="cpa-foreign">${dpFmtCPA(totCostF,tot['제2외국어'].contract)}</td>`;
+  html+=`<td>${dpFmtNum(tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.contract)}</td>`;
+  html+=`<td>${dpFmtPct(tot.contract,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.today)}</td>`;
+  html+=`<td>${dpFmtPct(tot.today,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.prev)}</td>`;
+  html+=`<td>${dpFmtPct(tot.prev,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.newDb)}</td>`;
+  html+=`<td>${dpFmtPct(tot.newDb,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.recallDb)}</td>`;
+  html+=`<td>${dpFmtPct(tot.recallDb,tot.db)}</td>`;
+  html+=`<td data-total="cost">${dpFmtNum(totCost)}</td>`;
+  html+=`<td data-total="cpa">${dpFmtCPA(totCost,tot.contract)}</td>`;
   html+='</tr></tbody>';
 
   document.getElementById('dpTable').innerHTML=html;
@@ -4411,31 +4364,24 @@ function dpCostChange(el){
 
 function dpUpdateCostCells(){
   if(!dpResult)return;
-  let totCostB=0,totCostF=0,totCntB=0,totCntF=0;
+  const cat=dpCat;
+  let totCost=0, totCnt=0;
   document.querySelectorAll('#dpTable tbody tr[data-date]').forEach(row=>{
     const d=row.dataset.date;
     const e=dpResult.byDate[d]||dpInitDateEntry();
     const cost=dpAdCost[d]||{};
-    const cB=Number(cost['뇌새김영어']||0);
-    const cF=Number(cost['제2외국어']||0);
-    totCostB+=cB; totCostF+=cF;
-    totCntB+=e['뇌새김영어'].contract;
-    totCntF+=e['제2외국어'].contract;
-    const cpaB=row.querySelector('td[data-cpa="brain"]');
-    const cpaF=row.querySelector('td[data-cpa="foreign"]');
-    if(cpaB) cpaB.textContent=dpFmtCPA(cB,e['뇌새김영어'].contract);
-    if(cpaF) cpaF.textContent=dpFmtCPA(cF,e['제2외국어'].contract);
+    const cv=Number(cost[cat]||0);
+    totCost+=cv;
+    totCnt+=e[cat].contract;
+    const cpa=row.querySelector('td[data-cpa="cat"]');
+    if(cpa) cpa.textContent=dpFmtCPA(cv,e[cat].contract);
   });
   const totalRow=document.querySelector('#dpTable .dp-total-row');
   if(totalRow){
-    const cB=totalRow.querySelector('td[data-total="cost-brain"]');
-    const cF=totalRow.querySelector('td[data-total="cost-foreign"]');
-    const pB=totalRow.querySelector('td[data-total="cpa-brain"]');
-    const pF=totalRow.querySelector('td[data-total="cpa-foreign"]');
-    if(cB) cB.textContent=dpFmtNum(totCostB);
-    if(cF) cF.textContent=dpFmtNum(totCostF);
-    if(pB) pB.textContent=dpFmtCPA(totCostB,totCntB);
-    if(pF) pF.textContent=dpFmtCPA(totCostF,totCntF);
+    const c=totalRow.querySelector('td[data-total="cost"]');
+    const p=totalRow.querySelector('td[data-total="cpa"]');
+    if(c) c.textContent=dpFmtNum(totCost);
+    if(p) p.textContent=dpFmtCPA(totCost,totCnt);
   }
 }
 
