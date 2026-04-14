@@ -230,7 +230,7 @@ tr.row-h td{background:var(--gh-light)}
 .ia-table{width:100%;border-collapse:collapse;font-size:12px}
 .ia-table th,.ia-table td{padding:7px 6px;border:1px solid #e2e8f0;text-align:center;white-space:nowrap}
 .ia-table th{background:#f8fafc;font-weight:600;color:#475569}
-.ia-table td:first-child,.ia-table th:first-child{font-weight:600;background:#f8fafc;text-align:left;position:sticky;left:0}
+.ia-table td:first-child,.ia-table th:first-child{font-weight:600;background:#f8fafc;position:sticky;left:0}
 .ia-view-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
 .ia-view-btn{padding:6px 14px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;color:#475569}
 .ia-view-btn:hover{background:#f8fafc}
@@ -3864,6 +3864,7 @@ const IA_WD_ORDER=[1,2,3,4,5,6,0];
 
 function iaRenderWeekday(){
   if(!iaResult)return;
+  const nf=n=>Number(n).toLocaleString('ko-KR');
   const pIdx=iaWdView==='all'?0:(iaWdView==='am'?1:2);
   const wdDb=iaResult.wdDb[pIdx], wdCont=iaResult.wdCont[pIdx];
   let html='<thead><tr><th>구분</th>';
@@ -3871,11 +3872,11 @@ function iaRenderWeekday(){
   html+='<th>합계</th></tr></thead><tbody>';
   let tDb=0,tCt=0;
   html+='<tr><td>DB수</td>';
-  IA_WD_ORDER.forEach(d=>{html+=`<td>${wdDb[d]}</td>`;tDb+=wdDb[d];});
-  html+=`<td><b>${tDb}</b></td></tr>`;
+  IA_WD_ORDER.forEach(d=>{html+=`<td>${nf(wdDb[d])}</td>`;tDb+=wdDb[d];});
+  html+=`<td><b>${nf(tDb)}</b></td></tr>`;
   html+='<tr><td>계약수</td>';
-  IA_WD_ORDER.forEach(d=>{html+=`<td>${wdCont[d]}</td>`;tCt+=wdCont[d];});
-  html+=`<td><b>${tCt}</b></td></tr>`;
+  IA_WD_ORDER.forEach(d=>{html+=`<td>${nf(wdCont[d])}</td>`;tCt+=wdCont[d];});
+  html+=`<td><b>${nf(tCt)}</b></td></tr>`;
   html+='<tr><td>계약률</td>';
   IA_WD_ORDER.forEach(d=>{const r=wdDb[d]?(wdCont[d]/wdDb[d]*100).toFixed(1)+'%':'-';html+=`<td>${r}</td>`;});
   html+=`<td><b>${tDb?(tCt/tDb*100).toFixed(1)+'%':'-'}</b></td></tr>`;
@@ -3901,6 +3902,7 @@ function iaRenderWeekday(){
 
 function iaRenderHour(){
   if(!iaResult)return;
+  const nf=n=>Number(n).toLocaleString('ko-KR');
   let db,ct;
   if(iaHourView==='all'){db=iaResult.hrAllDb;ct=iaResult.hrAllCont;}
   else {const d=+iaHourView;db=iaResult.hrByDayDb[d];ct=iaResult.hrByDayCont[d];}
@@ -3910,11 +3912,11 @@ function iaRenderHour(){
   html+='<th>합계</th></tr></thead><tbody>';
   let tDb=0,tCt=0;
   html+='<tr><td>DB수</td>';
-  for(let h=0;h<24;h++){html+=`<td>${db[h]}</td>`;tDb+=db[h];}
-  html+=`<td><b>${tDb}</b></td></tr>`;
+  for(let h=0;h<24;h++){html+=`<td>${nf(db[h])}</td>`;tDb+=db[h];}
+  html+=`<td><b>${nf(tDb)}</b></td></tr>`;
   html+='<tr><td>계약수</td>';
-  for(let h=0;h<24;h++){html+=`<td>${ct[h]}</td>`;tCt+=ct[h];}
-  html+=`<td><b>${tCt}</b></td></tr>`;
+  for(let h=0;h<24;h++){html+=`<td>${nf(ct[h])}</td>`;tCt+=ct[h];}
+  html+=`<td><b>${nf(tCt)}</b></td></tr>`;
   html+='<tr><td>계약률</td>';
   for(let h=0;h<24;h++){const r=db[h]?(ct[h]/db[h]*100).toFixed(1)+'%':'-';html+=`<td>${r}</td>`;}
   html+=`<td><b>${tDb?(tCt/tDb*100).toFixed(1)+'%':'-'}</b></td></tr>`;
