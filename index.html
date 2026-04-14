@@ -929,7 +929,7 @@ tr.row-h td{background:var(--gh-light)}
       </div>
 
       <div class="ia-section">
-        <h3>① 유입 요일별 → 같은 주(월~일) 내 계약 전환</h3>
+        <h3>① 유입 요일별 → 7일 이내 계약 전환</h3>
         <div class="ia-view-tabs">
           <button class="ia-view-btn active" data-period="all" onclick="iaSwitchWdView('all')">전체</button>
           <button class="ia-view-btn" data-period="am" onclick="iaSwitchWdView('am')">오전 유입 (00~11시)</button>
@@ -3961,15 +3961,15 @@ function iaGenerate(){
     const ck=String(row[6]||'');
     const contOd=contMap[ck];
     if(contOd){
-      if(iaSameWeek(inflow,contOd)){
+      // 유입일로부터 0~6일(7일 이내) 계약만 섹션① 카운트
+      const inflowMid=new Date(inflow.getFullYear(),inflow.getMonth(),inflow.getDate());
+      const orderMid=new Date(contOd.getFullYear(),contOd.getMonth(),contOd.getDate());
+      const diff=Math.round((orderMid-inflowMid)/86400000);
+      if(diff>=0&&diff<=6){
         wdCont[0][wd]++; wdCont[periodIdx][wd]++;
       }
       hrAllCont[hr]++;
       hrByDayCont[wd][hr]++;
-      // 유입 당일~6일 후 집계 (자정 기준 일수 차이)
-      const inflowMid=new Date(inflow.getFullYear(),inflow.getMonth(),inflow.getDate());
-      const orderMid=new Date(contOd.getFullYear(),contOd.getMonth(),contOd.getDate());
-      const diff=Math.round((orderMid-inflowMid)/86400000);
       if(diff>=0&&diff<=6) offsetCont[wd][diff]++;
     }
   }
