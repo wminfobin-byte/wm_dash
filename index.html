@@ -4302,7 +4302,11 @@ function dpSwitchView(v){
 
 function dpFmtNum(n){return Number(n||0).toLocaleString('ko-KR');}
 function dpFmtPct(num,den){return den>0?(num/den*100).toFixed(1)+'%':'-';}
-function dpFmtCPA(cost,cnt){return cnt>0&&cost>0?Math.round(cost/cnt).toLocaleString('ko-KR')+'원':'-';}
+// 광고비는 만원 단위로 저장, CPA는 원 단위로 표시
+function dpFmtCPA(costManwon,cnt){
+  if(!(cnt>0&&costManwon>0))return '-';
+  return Math.round(costManwon*10000/cnt).toLocaleString('ko-KR')+'원';
+}
 
 function dpRender(){
   if(!dpResult)return;
@@ -4321,7 +4325,7 @@ function dpRender(){
     const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
     html+=`<th class="${groupCls}" colspan="${1+contCols*2}">${c}</th>`;
   }
-  html+='<th class="dp-grp-cost" colspan="4">광고비 / CPA</th>';
+  html+='<th class="dp-grp-cost" colspan="4">광고비(만원) / CPA</th>';
   html+='</tr><tr>';
   for(const c of cats){
     const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
@@ -4329,8 +4333,8 @@ function dpRender(){
     for(const l of contLabels) html+=`<th class="${groupCls}">${l}</th>`;
     for(const l of rateLabels) html+=`<th class="${groupCls}">${l}</th>`;
   }
-  html+='<th class="dp-grp-cost">뇌새김 광고비</th>';
-  html+='<th class="dp-grp-cost">제2외국어 광고비</th>';
+  html+='<th class="dp-grp-cost">뇌새김 광고비(만원)</th>';
+  html+='<th class="dp-grp-cost">제2외국어 광고비(만원)</th>';
   html+='<th class="dp-grp-cost">뇌새김 CPA</th>';
   html+='<th class="dp-grp-cost">제2외국어 CPA</th>';
   html+='</tr></thead>';
@@ -4341,7 +4345,7 @@ function dpRender(){
   let totCostB=0, totCostF=0;
   for(const d of dates){
     const e=dpResult.byDate[d]||dpInitDateEntry();
-    html+=`<tr><td>${dpFmtDateWd(d)}</td>`;
+    html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}</td>`;
     for(const c of cats){
       const b=e[c];
       tot[c].db+=b.db; tot[c].contract+=b.contract;
@@ -4365,8 +4369,8 @@ function dpRender(){
     totCostB+=costB; totCostF+=costF;
     html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="뇌새김영어" value="${costB||''}" oninput="dpCostChange(this)"></td>`;
     html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="제2외국어" value="${costF||''}" oninput="dpCostChange(this)"></td>`;
-    html+=`<td>${dpFmtCPA(costB,e['뇌새김영어'].contract)}</td>`;
-    html+=`<td>${dpFmtCPA(costF,e['제2외국어'].contract)}</td>`;
+    html+=`<td data-cpa="brain">${dpFmtCPA(costB,e['뇌새김영어'].contract)}</td>`;
+    html+=`<td data-cpa="foreign">${dpFmtCPA(costF,e['제2외국어'].contract)}</td>`;
     html+='</tr>';
   }
 
@@ -4386,10 +4390,10 @@ function dpRender(){
       html+=`<td>${dpFmtPct(b.newDb,b.db)}</td><td>${dpFmtPct(b.recallDb,b.db)}</td>`;
     }
   }
-  html+=`<td>${dpFmtNum(totCostB)}</td>`;
-  html+=`<td>${dpFmtNum(totCostF)}</td>`;
-  html+=`<td>${dpFmtCPA(totCostB,tot['뇌새김영어'].contract)}</td>`;
-  html+=`<td>${dpFmtCPA(totCostF,tot['제2외국어'].contract)}</td>`;
+  html+=`<td data-total="cost-brain">${dpFmtNum(totCostB)}</td>`;
+  html+=`<td data-total="cost-foreign">${dpFmtNum(totCostF)}</td>`;
+  html+=`<td data-total="cpa-brain">${dpFmtCPA(totCostB,tot['뇌새김영어'].contract)}</td>`;
+  html+=`<td data-total="cpa-foreign">${dpFmtCPA(totCostF,tot['제2외국어'].contract)}</td>`;
   html+='</tr></tbody>';
 
   document.getElementById('dpTable').innerHTML=html;
@@ -4401,8 +4405,37 @@ function dpCostChange(el){
   if(!dpAdCost[date]) dpAdCost[date]={};
   dpAdCost[date][cat]=v;
   dpSavePrefs();
-  // 해당 행의 CPA/ROAS 셀만 재계산하면 좋지만 단순하게 전체 렌더
-  dpRender();
+  dpUpdateCostCells();
+}
+
+function dpUpdateCostCells(){
+  if(!dpResult)return;
+  let totCostB=0,totCostF=0,totCntB=0,totCntF=0;
+  document.querySelectorAll('#dpTable tbody tr[data-date]').forEach(row=>{
+    const d=row.dataset.date;
+    const e=dpResult.byDate[d]||dpInitDateEntry();
+    const cost=dpAdCost[d]||{};
+    const cB=Number(cost['뇌새김영어']||0);
+    const cF=Number(cost['제2외국어']||0);
+    totCostB+=cB; totCostF+=cF;
+    totCntB+=e['뇌새김영어'].contract;
+    totCntF+=e['제2외국어'].contract;
+    const cpaB=row.querySelector('td[data-cpa="brain"]');
+    const cpaF=row.querySelector('td[data-cpa="foreign"]');
+    if(cpaB) cpaB.textContent=dpFmtCPA(cB,e['뇌새김영어'].contract);
+    if(cpaF) cpaF.textContent=dpFmtCPA(cF,e['제2외국어'].contract);
+  });
+  const totalRow=document.querySelector('#dpTable .dp-total-row');
+  if(totalRow){
+    const cB=totalRow.querySelector('td[data-total="cost-brain"]');
+    const cF=totalRow.querySelector('td[data-total="cost-foreign"]');
+    const pB=totalRow.querySelector('td[data-total="cpa-brain"]');
+    const pF=totalRow.querySelector('td[data-total="cpa-foreign"]');
+    if(cB) cB.textContent=dpFmtNum(totCostB);
+    if(cF) cF.textContent=dpFmtNum(totCostF);
+    if(pB) pB.textContent=dpFmtCPA(totCostB,totCntB);
+    if(pF) pF.textContent=dpFmtCPA(totCostF,totCntF);
+  }
 }
 
 const DP_LS_KEY='dp_prefs';
