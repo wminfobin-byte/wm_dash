@@ -237,6 +237,24 @@ tr.row-h td{background:var(--gh-light)}
 .ia-view-btn.active{background:#4361EE;color:#fff;border-color:#4361EE}
 .ia-empty{text-align:center;padding:60px 20px;color:#94a3b8;font-size:14px;background:#fff;border-radius:12px}
 
+/* Daily Perf Tab */
+#page-daily-perf .container{max-width:100%;padding:28px 40px}
+.dp-dashboard{display:flex;flex-direction:column;gap:20px}
+.dp-date-panel{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.dp-date-panel-header{display:flex;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e2e8f0}
+.dp-date-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;max-height:260px;overflow-y:auto}
+.dp-date-list label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border-radius:4px}
+.dp-date-list label:hover{background:#f8fafc}
+.dp-date-list input[type=checkbox]{margin:0}
+.dp-table{min-width:1100px;font-size:12px}
+.dp-table th{background:#2D3748;color:#fff;font-weight:600}
+.dp-table th.dp-grp-brain{background:#4361EE}
+.dp-table th.dp-grp-foreign{background:#2EC4B6}
+.dp-table th.dp-grp-cost{background:#F0920E}
+.dp-table tbody tr:hover{background:#f8fafc}
+.dp-table input.dp-cost{width:90px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit;font-size:12px;text-align:right}
+.dp-total-row{background:#f1f5f9;font-weight:700}
+
 /* Cancel Dashboard — Wide table */
 .cd-wide-table{overflow-x:auto}
 .cd-wide-table table{width:100%;min-width:1800px}
@@ -426,6 +444,12 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn2">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-daily-perf" style="display:none">
+    <span style="font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap">유입분석 데이터 사용</span>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn4">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
   <div class="header-right" id="headerRight-inflow" style="display:none">
     <div class="status-dots" title="파일 상태: DB수 / 계약수 / 명단">
       <div class="status-dot" id="ia-dot-db"></div>
@@ -445,6 +469,7 @@ tr.row-h td{background:var(--gh-light)}
   <div class="tab-item active" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
   <div class="tab-item" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
+  <div class="tab-item" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
@@ -942,12 +967,50 @@ tr.row-h td{background:var(--gh-light)}
   </div>
 </div><!-- /page-inflow -->
 
+<div class="page" id="page-daily-perf">
+  <div class="container">
+    <div id="dpEmpty" style="text-align:center;padding:80px 20px;color:var(--gray)">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">📅</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">유입분석 탭에 DB수/계약수 파일을 업로드하세요</div>
+      <div style="font-size:14px">이 탭은 유입분석의 업로드 데이터를 재활용합니다</div>
+    </div>
+    <div class="dp-dashboard hidden" id="dpDashboard">
+      <div class="ia-control-bar" style="flex-wrap:wrap;gap:10px">
+        <label>날짜 필터:</label>
+        <button class="btn-header" id="dpDateBtn" onclick="dpToggleDatePanel(event)">전체 <span id="dpDateCount"></span></button>
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <label>객단가(뇌새김영어):</label>
+        <input type="number" id="dpUnitBrain" min="0" step="1000" style="width:110px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px" oninput="dpUnitPriceChange()">
+        <label>제2외국어:</label>
+        <input type="number" id="dpUnitForeign" min="0" step="1000" style="width:110px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px" oninput="dpUnitPriceChange()">
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <div class="ia-view-tabs" style="margin:0;gap:6px">
+          <button class="ia-view-btn active" data-dpview="total" onclick="dpSwitchView('total')">실계약수</button>
+          <button class="ia-view-btn" data-dpview="today_prev" onclick="dpSwitchView('today_prev')">일/이전 분리</button>
+          <button class="ia-view-btn" data-dpview="new_recall" onclick="dpSwitchView('new_recall')">신규/재콜 분리</button>
+        </div>
+      </div>
+      <div class="dp-date-panel hidden" id="dpDatePanel">
+        <div class="dp-date-panel-header">
+          <button class="ia-view-btn" onclick="dpDateSelectAll(true)">전체 선택</button>
+          <button class="ia-view-btn" onclick="dpDateSelectAll(false)">전체 해제</button>
+          <button class="ia-view-btn" onclick="dpToggleDatePanel()">닫기</button>
+        </div>
+        <div class="dp-date-list" id="dpDateList"></div>
+      </div>
+      <div class="ia-section" style="overflow-x:auto">
+        <div class="dp-table-wrap"><table class="ia-table dp-table" id="dpTable"></table></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-daily-perf -->
+
 <script>
 // ═══════════════════════════════════════════
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['ngroup','cancel-dash','inflow']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['ngroup','cancel-dash','inflow','daily-perf']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -1013,6 +1076,12 @@ async function autoSyncDownload(){
       cdUpdateStatusDots();cdUpdateUploadStatus();
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
       if(ok)cdGenerate();
+    }
+    // 일자별 성과 prefs 복원 (info_bin)
+    if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
+      dpAdCost=payload.dp.adCost||dpAdCost;
+      dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},payload.dp.unit||dpUnit);
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
     }
     // 유입분석 복원 (info_bin 권한 + 아직 안 불러온 경우만)
     if(!iaLoaded&&payload.ia){
@@ -1108,14 +1177,14 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
 function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.innerHTML=msg;}
 
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -1153,7 +1222,9 @@ async function doSyncUpload(token){
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    const payload=JSON.stringify({v:5,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,ls:lsData});
+    // 일자별 성과: 광고비 + 객단가
+    const dpPrefs={adCost:dpAdCost||{},unit:dpUnit||{뇌새김영어:0,제2외국어:0}};
+    const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -1228,6 +1299,12 @@ async function doSyncDownloadManual(){
       const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}}
     cdUpdateStatusDots();cdUpdateUploadStatus();
 
+    // 일자별 성과 prefs 복원 (info_bin 전용)
+    if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
+      dpAdCost=payload.dp.adCost||{};
+      dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},payload.dp.unit||{});
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
+    }
     // 유입분석 복원 (info_bin 접근권한 사용자만)
     if(payload.ia&&authUser&&authUser.tabs.includes('inflow')){
       if(!iaIdb) await iaOpenIdb();
@@ -1358,6 +1435,9 @@ function switchPage(pageId){
   document.getElementById('headerRight-cancel-dash').style.display = pageId==='cancel-dash' ? 'flex' : 'none';
   const hrIa=document.getElementById('headerRight-inflow');
   if(hrIa) hrIa.style.display = pageId==='inflow' ? 'flex' : 'none';
+  const hrDp=document.getElementById('headerRight-daily-perf');
+  if(hrDp) hrDp.style.display = pageId==='daily-perf' ? 'flex' : 'none';
+  if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
 }
 
 // ═══════════════════════════════════════════
@@ -4025,6 +4105,336 @@ function iaSwitchHourView(v){
   iaHourView=v;
   document.querySelectorAll('#page-inflow .ia-view-btn[data-day]').forEach(b=>b.classList.toggle('active',b.dataset.day===v));
   iaRenderHour();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Daily Perf Tab (일자별 성과) — info_bin 전용, 유입분석 데이터 재활용
+// ═══════════════════════════════════════════════════════════════
+let dpResult=null, dpView='total', dpSelectedDates=null;
+let dpAdCost={}; // {'YYYY-MM-DD': {뇌새김영어: number, 제2외국어: number}}
+let dpUnit={뇌새김영어:0, 제2외국어:0};
+
+const DP_CENTERS=['대전','노원','유성','강동','당산'];
+const DP_EXCLUDE_OB=['군자','관리자','스마트스토어','삭제요청'];
+
+function dpPassObName(name){
+  const n=String(name||'');
+  if(!n)return false;
+  for(const x of DP_EXCLUDE_OB) if(n.includes(x))return false;
+  for(const c of DP_CENTERS) if(n.includes(c))return true;
+  return false;
+}
+
+function dpClassifyByMedia(mediaCode){
+  const m=String(mediaCode||'').toLowerCase();
+  if(!m) return 'NEED_GIFT';
+  if(m.includes('talkis')) return 'EXCLUDE';
+  if(m.includes('callback')||m.includes('tv_b')) return 'NEED_GIFT';
+  if(m.includes('jhp_in')||m.includes('japer')||/\bjp\b/.test(m)) return '일본어';
+  if(m.includes('chp_in')||m.includes('cnper')||m.includes('chn')) return '중국어';
+  if(m.includes('shp_in')||m.includes('esper')) return '스페인어';
+  if(m.includes('fhp_in')||m.includes('frper')) return '프랑스어';
+  if(m.includes('tw')) return '더위크';
+  return '결합';
+}
+function dpClassifyByGift(gift){
+  const g=String(gift||'');
+  if(g.includes('일본어'))return '일본어';
+  if(g.includes('중국어'))return '중국어';
+  if(g.includes('스페인어'))return '스페인어';
+  if(g.includes('프랑스어'))return '프랑스어';
+  if(g.includes('L_'))return '결합';
+  if(g.includes('더위크'))return '더위크';
+  return '더위크'; // 공란이면 더위크
+}
+const DP_BRAIN=new Set(['더위크','결합']);
+const DP_FOREIGN=new Set(['일본어','중국어','스페인어','프랑스어']);
+function dpCategoryOf(pkg){
+  if(DP_BRAIN.has(pkg))return '뇌새김영어';
+  if(DP_FOREIGN.has(pkg))return '제2외국어';
+  return null;
+}
+
+function dpFmtYmd(d){
+  if(!d)return null;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function dpNewBucket(){return {db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0};}
+function dpInitDateEntry(){return {뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket()};}
+
+function dpCompute(){
+  if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont){
+    dpResult=null;return;
+  }
+  const byDate={};
+  // DB수 집계 (유입분석 db 파일 재활용, customerKey 중복 제거)
+  const seen=new Set();
+  const ordered=[...iaFiles.db].sort((a,b)=>b.uploadTime-a.uploadTime);
+  for(const f of ordered){
+    for(let i=1;i<f.data.length;i++){
+      const row=f.data[i];
+      const ck=String(row[6]||'');
+      if(ck&&seen.has(ck))continue;
+      if(ck)seen.add(ck);
+      if(!dpPassObName(row[7]))continue;
+      const media=String(row[19]||'').toLowerCase();
+      if(media.includes('talkis'))continue;
+      const dbInfo=String(row[15]||'');
+      // DB수 filter: IN무매체, callback, tv_b 제외
+      if(dbInfo.toLowerCase().includes('in')&&!media)continue;
+      if(media.includes('callback')||media.includes('tv_b'))continue;
+      const pkg=dpClassifyByMedia(media);
+      if(pkg==='EXCLUDE'||pkg==='NEED_GIFT')continue;
+      const cat=dpCategoryOf(pkg);
+      if(!cat)continue;
+      const dist=parseDate(row[8]);
+      if(!dist)continue;
+      const key=dpFmtYmd(dist);
+      if(!byDate[key]) byDate[key]=dpInitDateEntry();
+      byDate[key][cat].db++;
+    }
+  }
+
+  // 계약수 집계 (유입분석 cont 파일 재활용)
+  const cData=iaFiles.cont.data;
+  for(let i=1;i<cData.length;i++){
+    const row=cData[i];
+    if(!dpPassObName(row[7]))continue;
+    const media=String(row[19]||'').toLowerCase();
+    if(media.includes('talkis'))continue;
+    // 실계약 판정
+    const custStatus=String(row[29]||'');
+    const lastCall=String(row[21]||'');
+    const orderDt=String(row[23]||'');
+    const status=classifyStatus(custStatus,lastCall,orderDt);
+    if(status!=='계약'&&status!=='취소')continue;
+    // 패키지 분류 (media 우선, 예외 케이스는 gift)
+    const dbInfo=String(row[15]||'');
+    const isInEmpty=dbInfo.toLowerCase().includes('in')&&!media;
+    const isCallback=media.includes('callback')||media.includes('tv_b');
+    let pkg;
+    if(isInEmpty||isCallback){
+      pkg=dpClassifyByGift(row[27]); // AB열
+    }else{
+      pkg=dpClassifyByMedia(media);
+      if(pkg==='NEED_GIFT') pkg=dpClassifyByGift(row[27]);
+    }
+    if(pkg==='EXCLUDE')continue;
+    const cat=dpCategoryOf(pkg);
+    if(!cat)continue;
+    const dist=parseDate(row[8]);
+    if(!dist)continue;
+    const key=dpFmtYmd(dist);
+    if(!byDate[key]) byDate[key]=dpInitDateEntry();
+    const b=byDate[key][cat];
+    b.contract++;
+    // 일계약 vs 이전계약
+    const orderDate=parseDate(orderDt);
+    const hasRecall=dbInfo.includes('재콜');
+    if(!hasRecall&&orderDate&&dpFmtYmd(orderDate)===key) b.today++;
+    else b.prev++;
+    // 신규 vs 재콜
+    if(hasRecall) b.recallDb++;
+    else b.newDb++;
+  }
+
+  const dates=Object.keys(byDate).sort();
+  dpResult={byDate,dates};
+
+  // 최초 진입 시 전체 선택
+  if(!dpSelectedDates){
+    dpSelectedDates=new Set(dates);
+  }else{
+    // 기존 선택 유지하되 존재하지 않는 날짜는 제거
+    dpSelectedDates=new Set([...dpSelectedDates].filter(d=>byDate[d]));
+  }
+}
+
+function dpShow(){
+  dpLoadPrefs();
+  dpCompute();
+  if(!dpResult){
+    document.getElementById('dpEmpty').classList.remove('hidden');
+    document.getElementById('dpDashboard').classList.add('hidden');
+    return;
+  }
+  document.getElementById('dpEmpty').classList.add('hidden');
+  document.getElementById('dpDashboard').classList.remove('hidden');
+  dpRenderDateList();
+  dpRender();
+}
+
+function dpRenderDateList(){
+  const list=document.getElementById('dpDateList');
+  list.innerHTML=dpResult.dates.map(d=>{
+    const checked=dpSelectedDates.has(d)?'checked':'';
+    return `<label><input type="checkbox" value="${d}" ${checked} onchange="dpToggleDate('${d}',this.checked)"> ${d}</label>`;
+  }).join('');
+  const cnt=dpSelectedDates.size;
+  document.getElementById('dpDateCount').textContent=`(${cnt}/${dpResult.dates.length})`;
+}
+function dpToggleDate(date,checked){
+  if(checked) dpSelectedDates.add(date);
+  else dpSelectedDates.delete(date);
+  dpRender();
+  document.getElementById('dpDateCount').textContent=`(${dpSelectedDates.size}/${dpResult.dates.length})`;
+}
+function dpDateSelectAll(all){
+  dpSelectedDates=new Set(all?dpResult.dates:[]);
+  dpRenderDateList();
+  dpRender();
+}
+function dpToggleDatePanel(evt){
+  if(evt)evt.stopPropagation();
+  document.getElementById('dpDatePanel').classList.toggle('hidden');
+}
+
+function dpSwitchView(v){
+  dpView=v;
+  document.querySelectorAll('#page-daily-perf .ia-view-btn[data-dpview]').forEach(b=>b.classList.toggle('active',b.dataset.dpview===v));
+  dpRender();
+}
+
+function dpFmtNum(n){return Number(n||0).toLocaleString('ko-KR');}
+function dpFmtPct(num,den){return den>0?(num/den*100).toFixed(1)+'%':'-';}
+function dpFmtCPA(cost,cnt){return cnt>0&&cost>0?Math.round(cost/cnt).toLocaleString('ko-KR')+'원':'-';}
+function dpFmtROAS(cnt,cost,unit){
+  if(!(cnt>0&&cost>0&&unit>0))return '-';
+  return Math.round((cnt*unit/cost)*100).toLocaleString('ko-KR')+'%';
+}
+
+function dpRender(){
+  if(!dpResult)return;
+  const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
+  const cats=['뇌새김영어','제2외국어'];
+  const view=dpView;
+
+  // Header 2 rows
+  const contCols=(view==='total')?1:2;
+  const contLabels=view==='today_prev'?['일계약','이전계약']:(view==='new_recall'?['신규DB','재콜DB']:['계약수']);
+  const rateLabels=view==='today_prev'?['일계약률','이전계약률']:(view==='new_recall'?['신규DB률','재콜DB률']:['계약률']);
+
+  let html='<thead>';
+  html+='<tr><th rowspan="2">분배일</th>';
+  for(const c of cats){
+    const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
+    html+=`<th class="${groupCls}" colspan="${1+contCols*2}">${c}</th>`;
+  }
+  html+='<th class="dp-grp-cost" colspan="6">광고비 / CPA / ROAS</th>';
+  html+='</tr><tr>';
+  for(const c of cats){
+    const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
+    html+=`<th class="${groupCls}">DB수</th>`;
+    for(const l of contLabels) html+=`<th class="${groupCls}">${l}</th>`;
+    for(const l of rateLabels) html+=`<th class="${groupCls}">${l}</th>`;
+  }
+  html+='<th class="dp-grp-cost">뇌새김 광고비</th>';
+  html+='<th class="dp-grp-cost">제2외국어 광고비</th>';
+  html+='<th class="dp-grp-cost">뇌새김 CPA</th>';
+  html+='<th class="dp-grp-cost">제2외국어 CPA</th>';
+  html+='<th class="dp-grp-cost">뇌새김 ROAS</th>';
+  html+='<th class="dp-grp-cost">제2외국어 ROAS</th>';
+  html+='</tr></thead>';
+
+  // Body
+  html+='<tbody>';
+  const tot={뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket()};
+  let totCostB=0, totCostF=0;
+  for(const d of dates){
+    const e=dpResult.byDate[d]||dpInitDateEntry();
+    html+=`<tr><td>${d}</td>`;
+    for(const c of cats){
+      const b=e[c];
+      tot[c].db+=b.db; tot[c].contract+=b.contract;
+      tot[c].today+=b.today; tot[c].prev+=b.prev;
+      tot[c].newDb+=b.newDb; tot[c].recallDb+=b.recallDb;
+      html+=`<td>${dpFmtNum(b.db)}</td>`;
+      if(view==='total'){
+        html+=`<td>${dpFmtNum(b.contract)}</td>`;
+        html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
+      }else if(view==='today_prev'){
+        html+=`<td>${dpFmtNum(b.today)}</td><td>${dpFmtNum(b.prev)}</td>`;
+        html+=`<td>${dpFmtPct(b.today,b.db)}</td><td>${dpFmtPct(b.prev,b.db)}</td>`;
+      }else{
+        html+=`<td>${dpFmtNum(b.newDb)}</td><td>${dpFmtNum(b.recallDb)}</td>`;
+        html+=`<td>${dpFmtPct(b.newDb,b.db)}</td><td>${dpFmtPct(b.recallDb,b.db)}</td>`;
+      }
+    }
+    const cost=dpAdCost[d]||{};
+    const costB=Number(cost['뇌새김영어']||0);
+    const costF=Number(cost['제2외국어']||0);
+    totCostB+=costB; totCostF+=costF;
+    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="뇌새김영어" value="${costB||''}" oninput="dpCostChange(this)"></td>`;
+    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="제2외국어" value="${costF||''}" oninput="dpCostChange(this)"></td>`;
+    html+=`<td>${dpFmtCPA(costB,e['뇌새김영어'].contract)}</td>`;
+    html+=`<td>${dpFmtCPA(costF,e['제2외국어'].contract)}</td>`;
+    html+=`<td>${dpFmtROAS(e['뇌새김영어'].contract,costB,dpUnit['뇌새김영어'])}</td>`;
+    html+=`<td>${dpFmtROAS(e['제2외국어'].contract,costF,dpUnit['제2외국어'])}</td>`;
+    html+='</tr>';
+  }
+
+  // Total row
+  html+='<tr class="dp-total-row"><td>합계</td>';
+  for(const c of cats){
+    const b=tot[c];
+    html+=`<td>${dpFmtNum(b.db)}</td>`;
+    if(view==='total'){
+      html+=`<td>${dpFmtNum(b.contract)}</td>`;
+      html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
+    }else if(view==='today_prev'){
+      html+=`<td>${dpFmtNum(b.today)}</td><td>${dpFmtNum(b.prev)}</td>`;
+      html+=`<td>${dpFmtPct(b.today,b.db)}</td><td>${dpFmtPct(b.prev,b.db)}</td>`;
+    }else{
+      html+=`<td>${dpFmtNum(b.newDb)}</td><td>${dpFmtNum(b.recallDb)}</td>`;
+      html+=`<td>${dpFmtPct(b.newDb,b.db)}</td><td>${dpFmtPct(b.recallDb,b.db)}</td>`;
+    }
+  }
+  html+=`<td>${dpFmtNum(totCostB)}</td>`;
+  html+=`<td>${dpFmtNum(totCostF)}</td>`;
+  html+=`<td>${dpFmtCPA(totCostB,tot['뇌새김영어'].contract)}</td>`;
+  html+=`<td>${dpFmtCPA(totCostF,tot['제2외국어'].contract)}</td>`;
+  html+=`<td>${dpFmtROAS(tot['뇌새김영어'].contract,totCostB,dpUnit['뇌새김영어'])}</td>`;
+  html+=`<td>${dpFmtROAS(tot['제2외국어'].contract,totCostF,dpUnit['제2외국어'])}</td>`;
+  html+='</tr></tbody>';
+
+  document.getElementById('dpTable').innerHTML=html;
+}
+
+function dpCostChange(el){
+  const date=el.dataset.date, cat=el.dataset.cat;
+  const v=Number(el.value)||0;
+  if(!dpAdCost[date]) dpAdCost[date]={};
+  dpAdCost[date][cat]=v;
+  dpSavePrefs();
+  // 해당 행의 CPA/ROAS 셀만 재계산하면 좋지만 단순하게 전체 렌더
+  dpRender();
+}
+
+function dpUnitPriceChange(){
+  dpUnit['뇌새김영어']=Number(document.getElementById('dpUnitBrain').value)||0;
+  dpUnit['제2외국어']=Number(document.getElementById('dpUnitForeign').value)||0;
+  dpSavePrefs();
+  dpRender();
+}
+
+const DP_LS_KEY='dp_prefs';
+function dpLoadPrefs(){
+  try{
+    const s=localStorage.getItem(DP_LS_KEY);
+    if(s){
+      const o=JSON.parse(s);
+      if(o.adCost)dpAdCost=o.adCost;
+      if(o.unit)dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},o.unit);
+    }
+  }catch{}
+  const u1=document.getElementById('dpUnitBrain');
+  const u2=document.getElementById('dpUnitForeign');
+  if(u1&&!u1.value) u1.value=dpUnit['뇌새김영어']||'';
+  if(u2&&!u2.value) u2.value=dpUnit['제2외국어']||'';
+}
+function dpSavePrefs(){
+  localStorage.setItem(DP_LS_KEY,JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
 }
 </script>
 </body>
