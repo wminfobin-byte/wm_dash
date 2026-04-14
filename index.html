@@ -1003,6 +1003,7 @@ tr.row-h td{background:var(--gh-light)}
       <div class="ia-section" style="overflow-x:auto">
         <div class="dp-table-wrap"><table class="ia-table dp-table" id="dpTable"></table></div>
       </div>
+      <div id="dpGroupSections"></div>
     </div>
   </div>
 </div><!-- /page-daily-perf -->
@@ -4137,21 +4138,35 @@ function dpPassObName(name){
 function dpNormName(s){
   return String(s||'').replace(/\([^)]*\)/g,'').replace(/\[[^\]]*\]/g,'').trim();
 }
-function dpBuildNameToBrand(){
+function dpResolveGroup(g){
+  const s=String(g||'').trim();
+  if(!s)return null;
+  if(s.includes('W'))return 'W그룹';
+  if(s.includes('E'))return 'E그룹';
+  if(s.includes('A')||s.includes('B')||s.includes('H'))return 'N그룹';
+  return null;
+}
+function dpBuildNameMap(){
   const map={};
   if(!iaFiles||!iaFiles.attend)return map;
   for(const r of iaFiles.attend.data){
     const name=dpNormName(r['이름']);
     const brand=String(r['담당']||'').trim();
-    if(name&&brand) map[name]=brand;
+    const group=dpResolveGroup(r['그룹']);
+    if(name&&brand) map[name]={brand,group};
   }
   return map;
 }
-function dpCategoryByName(nameToBrand,obName){
+function dpCategoryByName(nameMap,obName){
   const key=dpNormName(obName);
-  const brand=nameToBrand[key];
-  if(brand==='뇌새김영어'||brand==='제2외국어') return brand;
+  const info=nameMap[key];
+  if(!info)return null;
+  if(info.brand==='뇌새김영어'||info.brand==='제2외국어') return info.brand;
   return null;
+}
+function dpGroupByName(nameMap,obName){
+  const info=nameMap[dpNormName(obName)];
+  return info?info.group:null;
 }
 
 function dpFmtYmd(d){
@@ -4160,13 +4175,13 @@ function dpFmtYmd(d){
 }
 
 function dpNewBucket(){return {db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0};}
-function dpInitDateEntry(){return {뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket()};}
+function dpInitDateEntry(){return {뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket(),groups:{W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()}};}
 
 function dpCompute(){
   if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont){
     dpResult=null;return;
   }
-  const nameToBrand=dpBuildNameToBrand();
+  const nameMap=dpBuildNameMap();
   const byDate={};
   // DB수 집계 (유입분석 db 파일 재활용, customerKey 중복 제거)
   const seen=new Set();
@@ -4186,13 +4201,18 @@ function dpCompute(){
       if(dbInfo.toLowerCase().includes('in')&&!media)continue;
       if(media.includes('callback')||media.includes('tv_b'))continue;
       // 카테고리: 명단의 담당 기준
-      const cat=dpCategoryByName(nameToBrand,row[7]);
+      const cat=dpCategoryByName(nameMap,row[7]);
       if(!cat)continue;
       const dist=parseDate(row[8]);
       if(!dist)continue;
       const key=dpFmtYmd(dist);
       if(!byDate[key]) byDate[key]=dpInitDateEntry();
       byDate[key][cat].db++;
+      // 뇌새김영어 그룹 분할
+      if(cat==='뇌새김영어'){
+        const g=dpGroupByName(nameMap,row[7]);
+        if(g&&byDate[key].groups[g]) byDate[key].groups[g].db++;
+      }
     }
   }
 
@@ -4210,7 +4230,7 @@ function dpCompute(){
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status!=='계약'&&status!=='취소')continue;
     // 카테고리: 명단의 담당 기준
-    const cat=dpCategoryByName(nameToBrand,row[7]);
+    const cat=dpCategoryByName(nameMap,row[7]);
     if(!cat)continue;
     // 계약수는 '계약일(오더일)' 기준으로 집계
     const orderDate=parseDate(orderDt);
@@ -4223,11 +4243,21 @@ function dpCompute(){
     const distDate=parseDate(row[8]);
     const dbInfo=String(row[15]||'');
     const hasRecall=dbInfo.includes('재콜');
-    if(!hasRecall&&distDate&&dpFmtYmd(distDate)===key) b.today++;
+    const isToday=!hasRecall&&distDate&&dpFmtYmd(distDate)===key;
+    if(isToday) b.today++;
     else b.prev++;
-    // 신규 vs 재콜
     if(hasRecall) b.recallDb++;
     else b.newDb++;
+    // 뇌새김영어 그룹 분할
+    if(cat==='뇌새김영어'){
+      const g=dpGroupByName(nameMap,row[7]);
+      if(g&&byDate[key].groups[g]){
+        const gb=byDate[key].groups[g];
+        gb.contract++;
+        if(isToday) gb.today++; else gb.prev++;
+        if(hasRecall) gb.recallDb++; else gb.newDb++;
+      }
+    }
   }
 
   // 이전 일자는 스냅샷 고정 — 명단 변경 후에도 과거 수치가 바뀌지 않도록
@@ -4236,11 +4266,12 @@ function dpCompute(){
   let snapshotDirty=false;
   for(const k of allKeys){
     if(k<today){
-      // 이전 일자
       if(dpSnapshot[k]){
-        byDate[k]=dpSnapshot[k]; // 고정값 사용
+        byDate[k]=dpSnapshot[k];
+        // 구 스냅샷(그룹 필드 없음) 호환
+        if(!byDate[k].groups) byDate[k].groups={W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()};
       }else if(byDate[k]){
-        dpSnapshot[k]=byDate[k]; // 신규 고정
+        dpSnapshot[k]=byDate[k];
         snapshotDirty=true;
       }
     }
