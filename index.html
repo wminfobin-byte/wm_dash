@@ -254,6 +254,9 @@ tr.row-h td{background:var(--gh-light)}
 .dp-table tbody tr:hover{background:#f8fafc}
 .dp-table input.dp-cost{width:90px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit;font-size:12px;text-align:right}
 .dp-total-row{background:#f1f5f9;font-weight:700}
+.dp-filter-btn{background:#4361EE;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
+.dp-filter-btn:hover{background:#3451d1;transform:translateY(-1px)}
+.dp-filter-btn span{margin-left:4px;opacity:.85;font-weight:500}
 
 /* Cancel Dashboard — Wide table */
 .cd-wide-table{overflow-x:auto}
@@ -977,12 +980,7 @@ tr.row-h td{background:var(--gh-light)}
     <div class="dp-dashboard hidden" id="dpDashboard">
       <div class="ia-control-bar" style="flex-wrap:wrap;gap:10px">
         <label>날짜 필터:</label>
-        <button class="btn-header" id="dpDateBtn" onclick="dpToggleDatePanel(event)">전체 <span id="dpDateCount"></span></button>
-        <div style="width:1px;height:22px;background:#e2e8f0"></div>
-        <label>객단가(뇌새김영어):</label>
-        <input type="number" id="dpUnitBrain" min="0" step="1000" style="width:110px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px" oninput="dpUnitPriceChange()">
-        <label>제2외국어:</label>
-        <input type="number" id="dpUnitForeign" min="0" step="1000" style="width:110px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px" oninput="dpUnitPriceChange()">
+        <button class="dp-filter-btn" id="dpDateBtn" onclick="dpToggleDatePanel(event)">📅 날짜 선택 <span id="dpDateCount"></span></button>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <div class="ia-view-tabs" style="margin:0;gap:6px">
           <button class="ia-view-btn active" data-dpview="total" onclick="dpSwitchView('total')">실계약수</button>
@@ -1080,8 +1078,7 @@ async function autoSyncDownload(){
     // 일자별 성과 prefs 복원 (info_bin)
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||dpAdCost;
-      dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},payload.dp.unit||dpUnit);
-      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost}));
     }
     // 유입분석 복원 (info_bin 권한 + 아직 안 불러온 경우만)
     if(!iaLoaded&&payload.ia){
@@ -1222,8 +1219,8 @@ async function doSyncUpload(token){
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    // 일자별 성과: 광고비 + 객단가
-    const dpPrefs={adCost:dpAdCost||{},unit:dpUnit||{뇌새김영어:0,제2외국어:0}};
+    // 일자별 성과: 광고비
+    const dpPrefs={adCost:dpAdCost||{}};
     const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
@@ -1302,8 +1299,7 @@ async function doSyncDownloadManual(){
     // 일자별 성과 prefs 복원 (info_bin 전용)
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||{};
-      dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},payload.dp.unit||{});
-      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
+      localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost}));
     }
     // 유입분석 복원 (info_bin 접근권한 사용자만)
     if(payload.ia&&authUser&&authUser.tabs.includes('inflow')){
@@ -4112,7 +4108,14 @@ function iaSwitchHourView(v){
 // ═══════════════════════════════════════════════════════════════
 let dpResult=null, dpView='total', dpSelectedDates=null;
 let dpAdCost={}; // {'YYYY-MM-DD': {뇌새김영어: number, 제2외국어: number}}
-let dpUnit={뇌새김영어:0, 제2외국어:0};
+
+const DP_DOW=['일','월','화','수','목','금','토'];
+function dpFmtDateWd(ymd){
+  if(!ymd)return '';
+  const [y,m,d]=ymd.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  return `${ymd}(${DP_DOW[dt.getDay()]})`;
+}
 
 const DP_CENTERS=['대전','노원','유성','강동','당산'];
 const DP_EXCLUDE_OB=['군자','관리자','스마트스토어','삭제요청'];
@@ -4270,7 +4273,7 @@ function dpRenderDateList(){
   const list=document.getElementById('dpDateList');
   list.innerHTML=dpResult.dates.map(d=>{
     const checked=dpSelectedDates.has(d)?'checked':'';
-    return `<label><input type="checkbox" value="${d}" ${checked} onchange="dpToggleDate('${d}',this.checked)"> ${d}</label>`;
+    return `<label><input type="checkbox" value="${d}" ${checked} onchange="dpToggleDate('${d}',this.checked)"> ${dpFmtDateWd(d)}</label>`;
   }).join('');
   const cnt=dpSelectedDates.size;
   document.getElementById('dpDateCount').textContent=`(${cnt}/${dpResult.dates.length})`;
@@ -4300,10 +4303,6 @@ function dpSwitchView(v){
 function dpFmtNum(n){return Number(n||0).toLocaleString('ko-KR');}
 function dpFmtPct(num,den){return den>0?(num/den*100).toFixed(1)+'%':'-';}
 function dpFmtCPA(cost,cnt){return cnt>0&&cost>0?Math.round(cost/cnt).toLocaleString('ko-KR')+'원':'-';}
-function dpFmtROAS(cnt,cost,unit){
-  if(!(cnt>0&&cost>0&&unit>0))return '-';
-  return Math.round((cnt*unit/cost)*100).toLocaleString('ko-KR')+'%';
-}
 
 function dpRender(){
   if(!dpResult)return;
@@ -4322,7 +4321,7 @@ function dpRender(){
     const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
     html+=`<th class="${groupCls}" colspan="${1+contCols*2}">${c}</th>`;
   }
-  html+='<th class="dp-grp-cost" colspan="6">광고비 / CPA / ROAS</th>';
+  html+='<th class="dp-grp-cost" colspan="4">광고비 / CPA</th>';
   html+='</tr><tr>';
   for(const c of cats){
     const groupCls=c==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
@@ -4334,8 +4333,6 @@ function dpRender(){
   html+='<th class="dp-grp-cost">제2외국어 광고비</th>';
   html+='<th class="dp-grp-cost">뇌새김 CPA</th>';
   html+='<th class="dp-grp-cost">제2외국어 CPA</th>';
-  html+='<th class="dp-grp-cost">뇌새김 ROAS</th>';
-  html+='<th class="dp-grp-cost">제2외국어 ROAS</th>';
   html+='</tr></thead>';
 
   // Body
@@ -4344,7 +4341,7 @@ function dpRender(){
   let totCostB=0, totCostF=0;
   for(const d of dates){
     const e=dpResult.byDate[d]||dpInitDateEntry();
-    html+=`<tr><td>${d}</td>`;
+    html+=`<tr><td>${dpFmtDateWd(d)}</td>`;
     for(const c of cats){
       const b=e[c];
       tot[c].db+=b.db; tot[c].contract+=b.contract;
@@ -4370,8 +4367,6 @@ function dpRender(){
     html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="제2외국어" value="${costF||''}" oninput="dpCostChange(this)"></td>`;
     html+=`<td>${dpFmtCPA(costB,e['뇌새김영어'].contract)}</td>`;
     html+=`<td>${dpFmtCPA(costF,e['제2외국어'].contract)}</td>`;
-    html+=`<td>${dpFmtROAS(e['뇌새김영어'].contract,costB,dpUnit['뇌새김영어'])}</td>`;
-    html+=`<td>${dpFmtROAS(e['제2외국어'].contract,costF,dpUnit['제2외국어'])}</td>`;
     html+='</tr>';
   }
 
@@ -4395,8 +4390,6 @@ function dpRender(){
   html+=`<td>${dpFmtNum(totCostF)}</td>`;
   html+=`<td>${dpFmtCPA(totCostB,tot['뇌새김영어'].contract)}</td>`;
   html+=`<td>${dpFmtCPA(totCostF,tot['제2외국어'].contract)}</td>`;
-  html+=`<td>${dpFmtROAS(tot['뇌새김영어'].contract,totCostB,dpUnit['뇌새김영어'])}</td>`;
-  html+=`<td>${dpFmtROAS(tot['제2외국어'].contract,totCostF,dpUnit['제2외국어'])}</td>`;
   html+='</tr></tbody>';
 
   document.getElementById('dpTable').innerHTML=html;
@@ -4412,13 +4405,6 @@ function dpCostChange(el){
   dpRender();
 }
 
-function dpUnitPriceChange(){
-  dpUnit['뇌새김영어']=Number(document.getElementById('dpUnitBrain').value)||0;
-  dpUnit['제2외국어']=Number(document.getElementById('dpUnitForeign').value)||0;
-  dpSavePrefs();
-  dpRender();
-}
-
 const DP_LS_KEY='dp_prefs';
 function dpLoadPrefs(){
   try{
@@ -4426,16 +4412,11 @@ function dpLoadPrefs(){
     if(s){
       const o=JSON.parse(s);
       if(o.adCost)dpAdCost=o.adCost;
-      if(o.unit)dpUnit=Object.assign({뇌새김영어:0,제2외국어:0},o.unit);
     }
   }catch{}
-  const u1=document.getElementById('dpUnitBrain');
-  const u2=document.getElementById('dpUnitForeign');
-  if(u1&&!u1.value) u1.value=dpUnit['뇌새김영어']||'';
-  if(u2&&!u2.value) u2.value=dpUnit['제2외국어']||'';
 }
 function dpSavePrefs(){
-  localStorage.setItem(DP_LS_KEY,JSON.stringify({adCost:dpAdCost,unit:dpUnit}));
+  localStorage.setItem(DP_LS_KEY,JSON.stringify({adCost:dpAdCost}));
 }
 </script>
 </body>
