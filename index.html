@@ -4359,36 +4359,33 @@ function dpFmtCPA(costManwon,cnt){
   return Math.round(costManwon*10000/cnt).toLocaleString('ko-KR')+'원';
 }
 
-function dpRender(){
-  if(!dpResult)return;
-  const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
+function dpBuildTableHtml(title,cls,bucketGetter,dates,opts){
+  const withCost=!!(opts&&opts.withCost);
   const cat=dpCat;
-  const groupCls=cat==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
-
-  // Header 2 rows
   let html='<thead>';
   html+='<tr>';
   html+='<th rowspan="2">분배일</th>';
-  html+=`<th class="${groupCls}" colspan="11">${cat}</th>`;
-  html+='<th class="dp-grp-cost" colspan="2">광고비(만원) / CPA</th>';
+  html+=`<th class="${cls}" colspan="11">${title||cat}</th>`;
+  if(withCost) html+='<th class="dp-grp-cost" colspan="2">광고비(만원) / CPA</th>';
   html+='</tr><tr>';
   const subs=['DB수','계약수','계약률','일계약','일계약률','이전계약','이전계약률','신규DB계약','신규계약률','재콜DB계약','재콜계약률'];
-  for(const s of subs) html+=`<th class="${groupCls}">${s}</th>`;
-  html+='<th class="dp-grp-cost">광고비(만원)</th>';
-  html+='<th class="dp-grp-cost">CPA</th>';
+  for(const s of subs) html+=`<th class="${cls}">${s}</th>`;
+  if(withCost){
+    html+='<th class="dp-grp-cost">광고비(만원)</th>';
+    html+='<th class="dp-grp-cost">CPA</th>';
+  }
   html+='</tr></thead><tbody>';
 
-  // Body
   const tot=dpNewBucket();
   let totCost=0;
+  const todayStr=dpFmtYmd(new Date());
   for(const d of dates){
     const e=dpResult.byDate[d]||dpInitDateEntry();
-    const b=e[cat];
+    const b=bucketGetter(e)||dpNewBucket();
     tot.db+=b.db; tot.contract+=b.contract;
     tot.today+=b.today; tot.prev+=b.prev;
     tot.newDb+=b.newDb; tot.recallDb+=b.recallDb;
-    const isPast=d<dpFmtYmd(new Date());
-    const resetBtn=isPast?`<button class="dp-reset-btn" title="이 날짜 재계산" onclick="dpResetSnapshot('${d}')">↻</button>`:'';
+    const resetBtn=d<todayStr?`<button class="dp-reset-btn" title="이 날짜 재계산" onclick="dpResetSnapshot('${d}')">↻</button>`:'';
     html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}${resetBtn}</td>`;
     html+=`<td>${dpFmtNum(b.db)}</td>`;
     html+=`<td>${dpFmtNum(b.contract)}</td>`;
@@ -4401,11 +4398,13 @@ function dpRender(){
     html+=`<td>${dpFmtPct(b.newDb,b.db)}</td>`;
     html+=`<td>${dpFmtNum(b.recallDb)}</td>`;
     html+=`<td>${dpFmtPct(b.recallDb,b.db)}</td>`;
-    const cost=dpAdCost[d]||{};
-    const cv=Number(cost[cat]||0);
-    totCost+=cv;
-    html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="${cat}" value="${cv||''}" oninput="dpCostChange(this)"></td>`;
-    html+=`<td data-cpa="cat">${dpFmtCPA(cv,b.contract)}</td>`;
+    if(withCost){
+      const cost=dpAdCost[d]||{};
+      const cv=Number(cost[cat]||0);
+      totCost+=cv;
+      html+=`<td><input type="number" class="dp-cost" data-date="${d}" data-cat="${cat}" value="${cv||''}" oninput="dpCostChange(this)"></td>`;
+      html+=`<td data-cpa="cat">${dpFmtCPA(cv,b.contract)}</td>`;
+    }
     html+='</tr>';
   }
 
@@ -4421,11 +4420,35 @@ function dpRender(){
   html+=`<td>${dpFmtPct(tot.newDb,tot.db)}</td>`;
   html+=`<td>${dpFmtNum(tot.recallDb)}</td>`;
   html+=`<td>${dpFmtPct(tot.recallDb,tot.db)}</td>`;
-  html+=`<td data-total="cost">${dpFmtNum(totCost)}</td>`;
-  html+=`<td data-total="cpa">${dpFmtCPA(totCost,tot.contract)}</td>`;
+  if(withCost){
+    html+=`<td data-total="cost">${dpFmtNum(totCost)}</td>`;
+    html+=`<td data-total="cpa">${dpFmtCPA(totCost,tot.contract)}</td>`;
+  }
   html+='</tr></tbody>';
+  return html;
+}
 
-  document.getElementById('dpTable').innerHTML=html;
+function dpRender(){
+  if(!dpResult)return;
+  const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
+  const cat=dpCat;
+  const cls=cat==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
+
+  document.getElementById('dpTable').innerHTML=dpBuildTableHtml(null,cls,e=>e[cat],dates,{withCost:true});
+
+  const gs=document.getElementById('dpGroupSections');
+  if(cat==='뇌새김영어'){
+    const groups=['W그룹','E그룹','N그룹'];
+    let gh='';
+    for(const g of groups){
+      gh+=`<div class="ia-section" style="overflow-x:auto;margin-top:16px"><div class="dp-table-wrap"><table class="ia-table dp-table">`;
+      gh+=dpBuildTableHtml(g,'dp-grp-brain',e=>(e.groups&&e.groups[g])||dpNewBucket(),dates,{withCost:false});
+      gh+='</table></div></div>';
+    }
+    gs.innerHTML=gh;
+  }else{
+    gs.innerHTML='';
+  }
 }
 
 function dpCostChange(el){
