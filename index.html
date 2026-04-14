@@ -4223,16 +4223,17 @@ function dpCompute(){
     if(pkg==='EXCLUDE')continue;
     const cat=dpCategoryOf(pkg);
     if(!cat)continue;
-    const dist=parseDate(row[8]);
-    if(!dist)continue;
-    const key=dpFmtYmd(dist);
+    // 계약수는 '계약일(오더일)' 기준으로 집계
+    const orderDate=parseDate(orderDt);
+    if(!orderDate)continue;
+    const key=dpFmtYmd(orderDate);
     if(!byDate[key]) byDate[key]=dpInitDateEntry();
     const b=byDate[key][cat];
     b.contract++;
-    // 일계약 vs 이전계약
-    const orderDate=parseDate(orderDt);
+    // 일계약: 재콜 없음 AND 분배일==오더일
+    const distDate=parseDate(row[8]);
     const hasRecall=dbInfo.includes('재콜');
-    if(!hasRecall&&orderDate&&dpFmtYmd(orderDate)===key) b.today++;
+    if(!hasRecall&&distDate&&dpFmtYmd(distDate)===key) b.today++;
     else b.prev++;
     // 신규 vs 재콜
     if(hasRecall) b.recallDb++;
