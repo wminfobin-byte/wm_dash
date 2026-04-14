@@ -1062,7 +1062,7 @@ async function autoSyncDownload(){
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
   // 로컬에 파일이 하나라도 있으면 덮어쓰지 않음 (누적 DB 보호)
-  const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||iaFiles.cont||(iaFiles.attend&&iaFiles.attend.length>0));
+  const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||(iaFiles.cont&&iaFiles.cont.length>0)||(iaFiles.attend&&iaFiles.attend.length>0));
   const iaLoaded=!iaAccess||iaHasLocal;
   if(ngReady&&cdReady&&iaLoaded)return;
   try{
@@ -1105,15 +1105,13 @@ async function autoSyncDownload(){
       if(!iaIdb) await iaOpenIdb();
       const existing=await iaIdbGetAll();
       for(const r of existing) await iaIdbDeleteId(r.id);
-      iaFiles={db:[],cont:null,attend:[]};
+      iaFiles={db:[],cont:[],attend:[]};
       for(const f of payload.ia){
         let data=f.data;
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
-        if(f.type==='db') iaFiles.db.push(rec);
-        else if(f.type==='attend') iaFiles.attend.push(rec);
-        else iaFiles[f.type]=rec;
+        if(iaFiles[f.type]) iaFiles[f.type].push(rec);
       }
       iaBindUploadBoxes();iaUpdateStatus();
       if(iaReady()){iaInitDateRange();iaGenerate();}
@@ -1220,15 +1218,14 @@ async function doSyncUpload(token){
     // IDB results 데이터 (수동 그룹 수정 포함)
     const ngResults=await getAllResults();
 
-    // 유입분석 IDB 데이터 수집 (db는 누적 배열, cont는 단일, attend는 원본)
+    // 유입분석 IDB 데이터 수집 (db/cont는 누적 배열, attend는 원본)
     const IA_COLS=[6,7,9,15,19,21,23,29];
     const iaSyncFiles=[];
     for(const f of iaFiles.db){
       const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
       iaSyncFiles.push({type:'db',fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
     }
-    if(iaFiles.cont){
-      const f=iaFiles.cont;
+    for(const f of iaFiles.cont){
       const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
       iaSyncFiles.push({type:'cont',fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
     }
@@ -1328,15 +1325,13 @@ async function doSyncDownloadManual(){
       if(!iaIdb) await iaOpenIdb();
       const existing=await iaIdbGetAll();
       for(const r of existing) await iaIdbDeleteId(r.id);
-      iaFiles={db:[],cont:null,attend:[]};
+      iaFiles={db:[],cont:[],attend:[]};
       for(const f of payload.ia){
         let data=f.data;
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
-        if(f.type==='db') iaFiles.db.push(rec);
-        else if(f.type==='attend') iaFiles.attend.push(rec);
-        else iaFiles[f.type]=rec;
+        if(iaFiles[f.type]) iaFiles[f.type].push(rec);
       }
       iaUpdateStatus();
       if(iaReady()){iaInitDateRange();iaGenerate();}
@@ -3633,7 +3628,7 @@ function cdScrollToTop(){
 //  Inflow Analysis Tab (유입분석) — info_bin 전용
 // ═══════════════════════════════════════════════════════════════
 const IA_DB_NAME='inflowAnalysis',IA_DB_VER=2;
-let iaIdb=null, iaFiles={db:[],cont:null,attend:[]};
+let iaIdb=null, iaFiles={db:[],cont:[],attend:[]};
 let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all', iaOffsetView='1', iaBase='inflow';
 let iaChartWd=null, iaChartHr=null, iaChartOffset=null;
 
@@ -3668,7 +3663,26 @@ function iaOpenModal(v){
 function iaCloseModal(){document.getElementById('iaModalOverlay').classList.remove('open');}
 
 function iaHasDb(){return iaFiles.db.length>0;}
-function iaReady(){return iaHasDb()&&iaFiles.cont;}
+function iaHasCont(){return iaFiles.cont.length>0;}
+function iaReady(){return iaHasDb()&&iaHasCont();}
+
+// 누적된 계약수 파일 행을 customerKey 기준으로 중복 제거 (최신 업로드 우선)
+function iaMergedContRows(){
+  if(!iaHasCont())return [];
+  const seen=new Set();
+  const ordered=[...iaFiles.cont].sort((a,b)=>b.uploadTime-a.uploadTime);
+  const rows=[];
+  for(const f of ordered){
+    for(let i=1;i<f.data.length;i++){
+      const row=f.data[i];
+      const ck=String(row[6]||'');
+      if(ck&&seen.has(ck))continue;
+      if(ck)seen.add(ck);
+      rows.push(row);
+    }
+  }
+  return rows;
+}
 
 function iaUpdateUploadStatus(){
   // db (누적)
@@ -3691,21 +3705,25 @@ function iaUpdateUploadStatus(){
       atFn.textContent=`${latest.fileName} (누적 ${iaFiles.attend.length}건)`;
     }else{atBox.classList.remove('loaded');atFn.textContent='';}
   }
-  // cont (덮어쓰기)
+  // cont (누적)
   const contBox=document.getElementById('box-ia-cont');
   const contFn=document.getElementById('fname-ia-cont');
   if(contBox){
-    if(iaFiles.cont){contBox.classList.add('loaded');contFn.textContent=iaFiles.cont.fileName;}
-    else{contBox.classList.remove('loaded');contFn.textContent='';}
+    if(iaHasCont()){
+      contBox.classList.add('loaded');
+      const latest=iaFiles.cont[iaFiles.cont.length-1];
+      contFn.textContent=`${latest.fileName} (누적 ${iaFiles.cont.length}건)`;
+    }else{contBox.classList.remove('loaded');contFn.textContent='';}
   }
   document.getElementById('iaBtnGenerate').disabled=!iaReady();
 }
 
 function iaRenderFileHistory(){
   let html='';
-  // DB수 (누적)
+  // 누적 파일들
   const accums=[
     {key:'db',label:'DB수 파일',cls:'db',icon:'📋',list:iaFiles.db||[]},
+    {key:'cont',label:'계약수 파일',cls:'cont',icon:'📝',list:iaFiles.cont||[]},
     {key:'attend',label:'명단 (근태보고)',cls:'attend',icon:'👥',list:iaFiles.attend||[]},
   ];
   for(const t of accums){
@@ -3724,19 +3742,6 @@ function iaRenderFileHistory(){
     }
     html+='</div>';
   }
-  // cont (덮어쓰기)
-  const f=iaFiles.cont;
-  html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type cont">📝 계약수 파일</span> ${f?'1건':'0건'} (덮어쓰기)</div>`;
-  if(!f){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
-  else{
-    html+=`<div class="fh-item active">
-      <span class="fh-name">${f.fileName}</span>
-      <span class="fh-active-badge">사용중</span>
-      <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
-      <button class="btn-del" onclick="iaDeleteFileSingle('cont')" title="삭제">&times;</button>
-    </div>`;
-  }
-  html+='</div>';
   document.getElementById('iaFileHistory').innerHTML=html;
 }
 
@@ -3744,16 +3749,8 @@ async function iaDeleteFileId(id){
   if(!confirm('이 파일을 삭제하시겠습니까?'))return;
   await iaIdbDeleteId(id);
   iaFiles.db=iaFiles.db.filter(f=>f.id!==id);
+  iaFiles.cont=iaFiles.cont.filter(f=>f.id!==id);
   iaFiles.attend=iaFiles.attend.filter(f=>f.id!==id);
-  iaUpdateStatus();iaUpdateUploadStatus();iaRenderFileHistory();
-  if(!iaReady()){document.getElementById('iaDashboard').classList.add('hidden');document.getElementById('iaEmpty').classList.remove('hidden');}
-  else iaGenerate();
-}
-
-async function iaDeleteFileSingle(type){
-  if(!confirm('이 파일을 삭제하시겠습니까?'))return;
-  await iaIdbDeleteByType(type);
-  iaFiles[type]=null;
   iaUpdateStatus();iaUpdateUploadStatus();iaRenderFileHistory();
   if(!iaReady()){document.getElementById('iaDashboard').classList.add('hidden');document.getElementById('iaEmpty').classList.remove('hidden');}
   else iaGenerate();
@@ -3763,11 +3760,11 @@ async function iaLoad(){
   try{
     await iaOpenIdb();
     const all=await iaIdbGetAll();
-    iaFiles={db:[],cont:null,attend:[]};
+    iaFiles={db:[],cont:[],attend:[]};
     for(const r of all){
       if(r.type==='db') iaFiles.db.push(r);
+      else if(r.type==='cont') iaFiles.cont.push(r);
       else if(r.type==='attend') iaFiles.attend.push(r);
-      else iaFiles[r.type]=r;
     }
     iaBindUploadBoxes();
     iaUpdateStatus();
@@ -3779,7 +3776,7 @@ function iaUpdateStatus(){
   const dotDb=document.getElementById('ia-dot-db');
   if(dotDb)dotDb.classList.toggle('ok',iaHasDb());
   const dotCont=document.getElementById('ia-dot-cont');
-  if(dotCont)dotCont.classList.toggle('ok',!!iaFiles.cont);
+  if(dotCont)dotCont.classList.toggle('ok',iaHasCont());
   const dotAt=document.getElementById('ia-dot-attend');
   if(dotAt)dotAt.classList.toggle('ok',iaFiles.attend&&iaFiles.attend.length>0);
 }
@@ -3802,17 +3799,11 @@ function iaBindUploadBoxes(){
         const data=key==='attend'
           ? XLSX.utils.sheet_to_json(ws,{defval:''})
           : XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-        // cont: 덮어쓰기. db/attend: 누적.
-        if(key==='cont'){
-          await iaIdbDeleteByType(key);
-          iaFiles[key]=null;
-        }
+        // 모두 누적
         const rec={type:key,fileName:f.name,uploadTime:Date.now(),data};
         const id=await iaIdbAdd(rec);
         rec.id=id;
-        if(key==='db') iaFiles.db.push(rec);
-        else if(key==='attend') iaFiles.attend.push(rec);
-        else iaFiles[key]=rec;
+        iaFiles[key].push(rec);
         prog.classList.remove('loading');prog.classList.add('done');
         box.classList.add('loaded');
         iaUpdateStatus();iaUpdateUploadStatus();
@@ -3931,11 +3922,9 @@ function iaGenerate(){
     b.style.opacity=(b.disabled?'0.4':'');
   });
 
-  // Contract map: customerKey → orderDate
+  // Contract map: customerKey → orderDate (누적 cont 파일 dedup 후)
   const contMap={};
-  const cData=iaFiles.cont.data;
-  for(let i=1;i<cData.length;i++){
-    const row=cData[i];
+  for(const row of iaMergedContRows()){
     const ck=String(row[6]||'');if(!ck)continue;
     const od=iaClassifyContract(row);
     if(od)contMap[ck]=od;
@@ -4282,7 +4271,7 @@ function dpNewBucket(){return {db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0
 function dpInitDateEntry(){return {뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket(),groups:{W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()}};}
 
 function dpCompute(){
-  if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont){
+  if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont||iaFiles.cont.length===0){
     dpResult=null;return;
   }
   const nameMaps=dpBuildNameMapByMonth();
@@ -4320,10 +4309,8 @@ function dpCompute(){
     }
   }
 
-  // 계약수 집계 (유입분석 cont 파일 재활용)
-  const cData=iaFiles.cont.data;
-  for(let i=1;i<cData.length;i++){
-    const row=cData[i];
+  // 계약수 집계 (유입분석 cont 파일 재활용, customerKey 중복 제거)
+  for(const row of iaMergedContRows()){
     if(!dpPassObName(row[7]))continue;
     const media=String(row[19]||'').toLowerCase();
     if(media.includes('talkis'))continue;
