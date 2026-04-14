@@ -209,6 +209,33 @@ tr.row-h td{background:var(--gh-light)}
 #page-cancel-dash .kpi-card .kl{font-size:12px;margin-bottom:3px}
 #page-cancel-dash .kpi-card .ks{font-size:11px;margin-top:2px}
 
+/* Inflow Analysis Tab */
+#page-inflow .container{max-width:100%;padding:28px 40px}
+.ia-upload-zone{background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ia-upload-row{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
+.ia-upload-card{flex:1;min-width:240px}
+.ia-upload-label{font-size:13px;color:#475569;margin-bottom:8px;font-weight:600}
+.ia-upload-card input[type=file]{font-size:12px;width:100%}
+.ia-file-name{font-size:12px;color:#64748b;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ia-dashboard{display:flex;flex-direction:column;gap:20px}
+.ia-control-bar{background:#fff;border-radius:10px;padding:14px 20px;display:flex;gap:12px;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ia-control-bar label{font-size:13px;font-weight:600;color:#475569}
+.ia-control-bar input[type=date]{padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px}
+.ia-section{background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ia-section h3{font-size:16px;font-weight:700;margin-bottom:14px;color:#0f172a}
+.ia-chart-wrap{height:280px;margin-bottom:18px;position:relative}
+.ia-chart-wrap canvas{max-height:280px}
+.ia-table-wrap{overflow-x:auto}
+.ia-table{width:100%;border-collapse:collapse;font-size:12px}
+.ia-table th,.ia-table td{padding:7px 6px;border:1px solid #e2e8f0;text-align:center;white-space:nowrap}
+.ia-table th{background:#f8fafc;font-weight:600;color:#475569}
+.ia-table td:first-child,.ia-table th:first-child{font-weight:600;background:#f8fafc;text-align:left;position:sticky;left:0}
+.ia-view-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.ia-view-btn{padding:6px 14px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;color:#475569}
+.ia-view-btn:hover{background:#f8fafc}
+.ia-view-btn.active{background:#4361EE;color:#fff;border-color:#4361EE}
+.ia-empty{text-align:center;padding:60px 20px;color:#94a3b8;font-size:14px;background:#fff;border-radius:12px}
+
 /* Cancel Dashboard — Wide table */
 .cd-wide-table{overflow-x:auto}
 .cd-wide-table table{width:100%;min-width:1800px}
@@ -398,12 +425,24 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn2">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-inflow" style="display:none">
+    <div class="status-dots" title="파일 상태: DB수 / 계약수">
+      <div class="status-dot" id="ia-dot-db"></div>
+      <div class="status-dot" id="ia-dot-cont"></div>
+    </div>
+    <button class="btn-header" onclick="iaOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="iaOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn3">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
 <div class="tab-nav">
   <div class="tab-item active" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
+  <div class="tab-item" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
@@ -588,6 +627,46 @@ tr.row-h td{background:var(--gh-light)}
       <div class="file-history" id="cdFileHistory"></div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cdCloseModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="iaModalOverlay" onclick="if(event.target===this)iaCloseModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="iaCloseModal()">&times;</button>
+    <div id="iaModalUpload">
+      <h2>파일 업로드 — 유입분석</h2>
+      <div class="upload-grid">
+        <div class="upload-box" id="box-ia-db">
+          <input type="file" accept=".xlsx,.xls" id="file-ia-db">
+          <div class="icon">📋</div>
+          <div class="label">DB수</div>
+          <div class="desc">WM_고객관리<br>유입일(J열) 기준 분석</div>
+          <span class="upload-badge overwrite">덮어쓰기</span>
+          <div class="filename" id="fname-ia-db"></div>
+          <div class="progress-bar hidden" id="prog-ia-db"><div class="progress-fill"></div></div>
+        </div>
+        <div class="upload-box" id="box-ia-cont">
+          <input type="file" accept=".xlsx,.xls" id="file-ia-cont">
+          <div class="icon">📝</div>
+          <div class="label">계약수</div>
+          <div class="desc">WM_고객관리<br>실계약 판정용</div>
+          <span class="upload-badge overwrite">덮어쓰기</span>
+          <div class="filename" id="fname-ia-cont"></div>
+          <div class="progress-bar hidden" id="prog-ia-cont"><div class="progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="iaCloseModal()">닫기</button>
+        <button class="btn btn-primary" id="iaBtnGenerate" disabled onclick="iaGenerate();iaCloseModal();">분석 실행</button>
+      </div>
+    </div>
+    <div id="iaModalManage" class="hidden">
+      <h2>파일 관리 — 유입분석</h2>
+      <div class="file-history" id="iaFileHistory"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="iaCloseModal()">닫기</button>
       </div>
     </div>
   </div>
@@ -785,12 +864,57 @@ tr.row-h td{background:var(--gh-light)}
 </div>
 </div><!-- /page-cancel-dash -->
 
+<div class="page" id="page-inflow">
+  <div class="container">
+    <div class="ia-empty" id="iaEmpty" style="text-align:center;padding:80px 20px;color:var(--gray)">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">⏱️</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">파일을 업로드하세요</div>
+      <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → DB수 + 계약수 업로드 → 분석 실행</div>
+    </div>
+    <div class="ia-dashboard hidden" id="iaDashboard">
+      <div class="ia-control-bar">
+        <label>유입일 기간:</label>
+        <input type="date" id="iaDateStart" onchange="iaGenerate()">
+        <span>~</span>
+        <input type="date" id="iaDateEnd" onchange="iaGenerate()">
+      </div>
+
+      <div class="ia-section">
+        <h3>① 요일별 유입 → 같은 주(월~일) 내 계약 전환</h3>
+        <div class="ia-view-tabs">
+          <button class="ia-view-btn active" data-period="all" onclick="iaSwitchWdView('all')">전체</button>
+          <button class="ia-view-btn" data-period="am" onclick="iaSwitchWdView('am')">오전 유입 (00~11시)</button>
+          <button class="ia-view-btn" data-period="pm" onclick="iaSwitchWdView('pm')">오후 유입 (12~23시)</button>
+        </div>
+        <div class="ia-chart-wrap"><canvas id="iaChartWeekday"></canvas></div>
+        <table class="ia-table" id="iaTableWeekday"></table>
+      </div>
+
+      <div class="ia-section">
+        <h3>② 유입 시간대별 계약 전환</h3>
+        <div class="ia-view-tabs">
+          <button class="ia-view-btn active" data-day="all" onclick="iaSwitchHourView('all')">전체</button>
+          <button class="ia-view-btn" data-day="1" onclick="iaSwitchHourView('1')">월</button>
+          <button class="ia-view-btn" data-day="2" onclick="iaSwitchHourView('2')">화</button>
+          <button class="ia-view-btn" data-day="3" onclick="iaSwitchHourView('3')">수</button>
+          <button class="ia-view-btn" data-day="4" onclick="iaSwitchHourView('4')">목</button>
+          <button class="ia-view-btn" data-day="5" onclick="iaSwitchHourView('5')">금</button>
+          <button class="ia-view-btn" data-day="6" onclick="iaSwitchHourView('6')">토</button>
+          <button class="ia-view-btn" data-day="0" onclick="iaSwitchHourView('0')">일</button>
+        </div>
+        <div class="ia-chart-wrap"><canvas id="iaChartHour"></canvas></div>
+        <div class="ia-table-wrap"><table class="ia-table" id="iaTableHour"></table></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-inflow -->
+
 <script>
 // ═══════════════════════════════════════════
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['ngroup','cancel-dash']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['ngroup','cancel-dash','inflow']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -815,12 +939,16 @@ function applyAuth(){
   switchPage(authUser.tabs[0]);
   // 로컬 데이터 없으면 자동 다운로드
   autoSyncDownload();
+  // 유입분석 탭 접근권한 있으면 IDB 로드
+  if(authUser.tabs.includes('inflow')) iaLoad();
 }
 
 async function autoSyncDownload(){
   const ngReady=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
   const cdReady=cdAllFiles.length>0;
-  if(ngReady&&cdReady)return;
+  const iaAccess=authUser&&authUser.tabs.includes('inflow');
+  const iaReady=!iaAccess||(iaFiles.db&&iaFiles.cont);
+  if(ngReady&&cdReady&&iaReady)return;
   try{
     const payload=await fetchSyncPayload();
 
@@ -849,6 +977,21 @@ async function autoSyncDownload(){
       cdUpdateStatusDots();cdUpdateUploadStatus();
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
       if(ok)cdGenerate();
+    }
+    // 유입분석 복원 (info_bin 권한 + 아직 안 불러온 경우만)
+    if(!iaReady&&payload.ia){
+      if(!iaIdb) await iaOpenIdb();
+      for(const k of ['db','cont'])await iaIdbDelete(k);
+      iaFiles={db:null,cont:null};
+      for(const f of payload.ia){
+        let data=f.data;
+        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+        const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
+        await iaIdbPut(rec);
+        iaFiles[f.type]=rec;
+      }
+      iaBindUploadBoxes();iaUpdateStatus();
+      if(iaFiles.db&&iaFiles.cont){iaInitDateRange();iaGenerate();}
     }
     // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
@@ -927,14 +1070,14 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
 function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.innerHTML=msg;}
 
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -952,11 +1095,20 @@ async function doSyncUpload(token){
     // IDB results 데이터 (수동 그룹 수정 포함)
     const ngResults=await getAllResults();
 
+    // 유입분석 IDB 데이터 수집 (컬럼 슬림화: 필요 컬럼만)
+    const IA_COLS=[6,7,9,15,19,21,23,29];
+    const iaSyncFiles=[];
+    for(const k of ['db','cont']){
+      const f=iaFiles[k];if(!f)continue;
+      const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
+      iaSyncFiles.push({type:k,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
+    }
+
     // localStorage 이력 데이터
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    const payload=JSON.stringify({v:4,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ls:lsData});
+    const payload=JSON.stringify({v:5,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -1030,6 +1182,22 @@ async function doSyncDownloadManual(){
       if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
       const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}}
     cdUpdateStatusDots();cdUpdateUploadStatus();
+
+    // 유입분석 복원 (info_bin 접근권한 사용자만)
+    if(payload.ia&&authUser&&authUser.tabs.includes('inflow')){
+      if(!iaIdb) await iaOpenIdb();
+      iaFiles={db:null,cont:null};
+      for(const k of ['db','cont'])await iaIdbDelete(k);
+      for(const f of payload.ia){
+        let data=f.data;
+        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+        const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
+        await iaIdbPut(rec);
+        iaFiles[f.type]=rec;
+      }
+      iaUpdateStatus();
+      if(iaFiles.db&&iaFiles.cont){iaInitDateRange();iaGenerate();}
+    }
     const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
     if(ok)cdGenerate();
 
@@ -1141,6 +1309,8 @@ function switchPage(pageId){
   // 페이지별 헤더 우측 버튼 전환
   document.getElementById('headerRight-ngroup').style.display = pageId==='ngroup' ? 'flex' : 'none';
   document.getElementById('headerRight-cancel-dash').style.display = pageId==='cancel-dash' ? 'flex' : 'none';
+  const hrIa=document.getElementById('headerRight-inflow');
+  if(hrIa) hrIa.style.display = pageId==='inflow' ? 'flex' : 'none';
 }
 
 // ═══════════════════════════════════════════
@@ -3312,6 +3482,347 @@ function cdScrollToTop(){
     if(ok)cdGenerate();
   }catch(err){console.error('Cancel Dashboard IDB 오류:',err);}
 })();
+
+// ═══════════════════════════════════════════════════════════════
+//  Inflow Analysis Tab (유입분석) — info_bin 전용
+// ═══════════════════════════════════════════════════════════════
+const IA_DB_NAME='inflowAnalysis',IA_DB_VER=1;
+let iaIdb=null, iaFiles={db:null,cont:null};
+let iaResult=null, iaHourView='all', iaWdView='all';
+let iaChartWd=null, iaChartHr=null;
+
+function iaOpenIdb(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IA_DB_NAME,IA_DB_VER);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'type'});};
+    req.onsuccess=()=>{iaIdb=req.result;res();};
+    req.onerror=()=>rej(req.error);
+  });
+}
+function iaIdbPut(rec){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');tx.objectStore('files').put(rec);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function iaIdbGetAll(){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readonly');const req=tx.objectStore('files').getAll();req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}
+function iaIdbDelete(type){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');tx.objectStore('files').delete(type);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+
+function iaOpenModal(v){
+  iaBindUploadBoxes();
+  document.getElementById('iaModalUpload').classList.toggle('hidden',v!=='upload');
+  document.getElementById('iaModalManage').classList.toggle('hidden',v!=='manage');
+  document.getElementById('iaModalOverlay').classList.add('open');
+  if(v==='upload') iaUpdateUploadStatus();
+  if(v==='manage') iaRenderFileHistory();
+}
+function iaCloseModal(){document.getElementById('iaModalOverlay').classList.remove('open');}
+
+function iaUpdateUploadStatus(){
+  ['db','cont'].forEach(k=>{
+    const box=document.getElementById(`box-ia-${k}`);
+    const fn=document.getElementById(`fname-ia-${k}`);
+    if(iaFiles[k]){box.classList.add('loaded');fn.textContent=iaFiles[k].fileName;}
+    else{box.classList.remove('loaded');fn.textContent='';}
+  });
+  document.getElementById('iaBtnGenerate').disabled=!(iaFiles.db&&iaFiles.cont);
+}
+
+function iaRenderFileHistory(){
+  const types=[
+    {key:'db',label:'DB수 파일',cls:'db',icon:'📋'},
+    {key:'cont',label:'계약수 파일',cls:'cont',icon:'📝'},
+  ];
+  let html='';
+  for(const t of types){
+    const f=iaFiles[t.key];
+    html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${f?'1건':'0건'} (덮어쓰기)</div>`;
+    if(!f){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
+    else{
+      html+=`<div class="fh-item active">
+        <span class="fh-name">${f.fileName}</span>
+        <span class="fh-active-badge">사용중</span>
+        <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
+        <button class="btn-del" onclick="iaDeleteFile('${t.key}')" title="삭제">&times;</button>
+      </div>`;
+    }
+    html+='</div>';
+  }
+  document.getElementById('iaFileHistory').innerHTML=html;
+}
+
+async function iaDeleteFile(type){
+  if(!confirm('이 파일을 삭제하시겠습니까?'))return;
+  await iaIdbDelete(type);
+  iaFiles[type]=null;
+  iaUpdateStatus();
+  iaRenderFileHistory();
+  if(!iaFiles.db||!iaFiles.cont){
+    document.getElementById('iaDashboard').classList.add('hidden');
+    document.getElementById('iaEmpty').classList.remove('hidden');
+  }
+}
+
+async function iaLoad(){
+  try{
+    await iaOpenIdb();
+    const all=await iaIdbGetAll();
+    for(const r of all){iaFiles[r.type]=r;}
+    iaBindUploadBoxes();
+    iaUpdateStatus();
+    if(iaFiles.db&&iaFiles.cont){iaInitDateRange();iaGenerate();}
+  }catch(e){console.error('iaLoad',e);}
+}
+
+function iaUpdateStatus(){
+  const dotDb=document.getElementById('ia-dot-db');
+  const dotCt=document.getElementById('ia-dot-cont');
+  if(dotDb) dotDb.classList.toggle('active',!!iaFiles.db);
+  if(dotCt) dotCt.classList.toggle('active',!!iaFiles.cont);
+  const n1=document.getElementById('ia-file-db-name');
+  const n2=document.getElementById('ia-file-cont-name');
+  if(n1) n1.textContent=iaFiles.db?iaFiles.db.fileName:'—';
+  if(n2) n2.textContent=iaFiles.cont?iaFiles.cont.fileName:'—';
+}
+
+function iaBindUploadBoxes(){
+  ['db','cont'].forEach(key=>{
+    const input=document.getElementById(`file-ia-${key}`);
+    const box=document.getElementById(`box-ia-${key}`);
+    if(!input||input.dataset.bound)return;
+    input.dataset.bound='1';
+    input.addEventListener('change',async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const prog=document.getElementById(`prog-ia-${key}`);
+      prog.classList.remove('hidden','done');prog.classList.add('loading');
+      document.getElementById(`fname-ia-${key}`).textContent=f.name;
+      try{
+        const buf=await f.arrayBuffer();
+        const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+        const rec={type:key,fileName:f.name,uploadTime:Date.now(),data};
+        await iaIdbPut(rec);
+        iaFiles[key]=rec;
+        prog.classList.remove('loading');prog.classList.add('done');
+        box.classList.add('loaded');
+        iaUpdateStatus();iaUpdateUploadStatus();
+      }catch(err){prog.classList.remove('loading');alert(`${key} 파일 처리 오류: ${err.message}`);console.error(err);}
+      input.value='';
+    });
+    box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('dragover');});
+    box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
+    box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;input.dispatchEvent(new Event('change'));}});
+  });
+}
+
+// "2026-03-30 09:25" 형식 파싱 (시분까지)
+function iaParseInflow(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:v;
+  const s=String(v).trim();if(!s)return null;
+  const m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})[ T]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+  if(m){return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0));}
+  const d=new Date(s);return isNaN(d)?null:d;
+}
+
+function iaMonOfWeek(d){
+  const wd=d.getDay();
+  const diff=wd===0?-6:1-wd;
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate()+diff);
+}
+function iaSameWeek(a,b){
+  const ma=iaMonOfWeek(a),mb=iaMonOfWeek(b);
+  return ma.getFullYear()===mb.getFullYear()&&ma.getMonth()===mb.getMonth()&&ma.getDate()===mb.getDate();
+}
+
+function iaInitDateRange(){
+  if(!iaFiles.db)return;
+  let min=null,max=null;
+  const data=iaFiles.db.data;
+  for(let i=1;i<data.length;i++){
+    const d=iaParseInflow(data[i][9]);
+    if(!d)continue;
+    if(!min||d<min)min=d;
+    if(!max||d>max)max=d;
+  }
+  const fmt=(d)=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+  const s=document.getElementById('iaDateStart'),e=document.getElementById('iaDateEnd');
+  if(s&&!s.value)s.value=fmt(min);
+  if(e&&!e.value)e.value=fmt(max);
+}
+
+function iaPassDbFilter(row){
+  const obName=String(row[7]||'');
+  const dbInfo=String(row[15]||'');
+  const mediaCode=String(row[19]||'');
+  if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청'))return false;
+  if(dbInfo.includes('재콜'))return false;
+  if(dbInfo.toLowerCase().includes('in')&&!mediaCode)return false;
+  if(mediaCode.toLowerCase().includes('talkis'))return false;
+  return true;
+}
+
+function iaClassifyContract(row){
+  const custStatus=String(row[29]||'');
+  const lastCall=String(row[21]||'');
+  const orderDt=String(row[23]||'');
+  const orderDate=parseDate(orderDt);
+  const mediaCode=String(row[19]||'');
+  const dbInfo=String(row[15]||'');
+  const obName=String(row[7]||'');
+  if(!orderDate)return null;
+  if(isHoliday(orderDate))return null;
+  if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청'))return null;
+  if(mediaCode.toLowerCase().includes('talkis'))return null;
+  if(dbInfo.toLowerCase().includes('in')&&!mediaCode)return null;
+  const status=classifyStatus(custStatus,lastCall,orderDt);
+  if(status==='계약'||status==='취소')return orderDate;
+  return null;
+}
+
+function iaGenerate(){
+  if(!iaFiles.db||!iaFiles.cont)return;
+  const sVal=document.getElementById('iaDateStart').value;
+  const eVal=document.getElementById('iaDateEnd').value;
+  if(!sVal||!eVal)return;
+  const startD=new Date(sVal+'T00:00:00');
+  const endD=new Date(eVal+'T23:59:59');
+
+  // Contract map: customerKey → orderDate
+  const contMap={};
+  const cData=iaFiles.cont.data;
+  for(let i=1;i<cData.length;i++){
+    const row=cData[i];
+    const ck=String(row[6]||'');if(!ck)continue;
+    const od=iaClassifyContract(row);
+    if(od)contMap[ck]=od;
+  }
+
+  // wdDb[period][day] / wdCont[period][day]
+  // period: 0=all, 1=am(<12), 2=pm(>=12)
+  const wdDb=[new Array(7).fill(0),new Array(7).fill(0),new Array(7).fill(0)];
+  const wdCont=[new Array(7).fill(0),new Array(7).fill(0),new Array(7).fill(0)];
+  const hrAllDb=new Array(24).fill(0);
+  const hrAllCont=new Array(24).fill(0);
+  const hrByDayDb={}; const hrByDayCont={};
+  for(let d=0;d<7;d++){hrByDayDb[d]=new Array(24).fill(0);hrByDayCont[d]=new Array(24).fill(0);}
+
+  const dbData=iaFiles.db.data;
+  for(let i=1;i<dbData.length;i++){
+    const row=dbData[i];
+    if(!iaPassDbFilter(row))continue;
+    const inflow=iaParseInflow(row[9]);
+    if(!inflow)continue;
+    if(inflow<startD||inflow>endD)continue;
+    const wd=inflow.getDay();
+    const hr=inflow.getHours();
+    const periodIdx=hr<12?1:2;
+    wdDb[0][wd]++; wdDb[periodIdx][wd]++;
+    hrAllDb[hr]++;
+    hrByDayDb[wd][hr]++;
+    const ck=String(row[6]||'');
+    const contOd=contMap[ck];
+    if(contOd){
+      if(iaSameWeek(inflow,contOd)){
+        wdCont[0][wd]++; wdCont[periodIdx][wd]++;
+      }
+      hrAllCont[hr]++;
+      hrByDayCont[wd][hr]++;
+    }
+  }
+
+  iaResult={wdDb,wdCont,hrAllDb,hrAllCont,hrByDayDb,hrByDayCont};
+  iaRender();
+  document.getElementById('iaDashboard').classList.remove('hidden');
+  document.getElementById('iaEmpty').classList.add('hidden');
+}
+
+const IA_WD_LABELS=['월','화','수','목','금','토','일'];
+const IA_WD_ORDER=[1,2,3,4,5,6,0];
+
+function iaRenderWeekday(){
+  if(!iaResult)return;
+  const pIdx=iaWdView==='all'?0:(iaWdView==='am'?1:2);
+  const wdDb=iaResult.wdDb[pIdx], wdCont=iaResult.wdCont[pIdx];
+  let html='<thead><tr><th>구분</th>';
+  IA_WD_LABELS.forEach(l=>html+=`<th>${l}</th>`);
+  html+='<th>합계</th></tr></thead><tbody>';
+  let tDb=0,tCt=0;
+  html+='<tr><td>DB수</td>';
+  IA_WD_ORDER.forEach(d=>{html+=`<td>${wdDb[d]}</td>`;tDb+=wdDb[d];});
+  html+=`<td><b>${tDb}</b></td></tr>`;
+  html+='<tr><td>계약수</td>';
+  IA_WD_ORDER.forEach(d=>{html+=`<td>${wdCont[d]}</td>`;tCt+=wdCont[d];});
+  html+=`<td><b>${tCt}</b></td></tr>`;
+  html+='<tr><td>계약률</td>';
+  IA_WD_ORDER.forEach(d=>{const r=wdDb[d]?(wdCont[d]/wdDb[d]*100).toFixed(1)+'%':'-';html+=`<td>${r}</td>`;});
+  html+=`<td><b>${tDb?(tCt/tDb*100).toFixed(1)+'%':'-'}</b></td></tr>`;
+  html+='</tbody>';
+  document.getElementById('iaTableWeekday').innerHTML=html;
+
+  const dbArr=IA_WD_ORDER.map(d=>wdDb[d]);
+  const ctArr=IA_WD_ORDER.map(d=>wdCont[d]);
+  const rateArr=IA_WD_ORDER.map(d=>wdDb[d]?+(wdCont[d]/wdDb[d]*100).toFixed(1):0);
+  if(iaChartWd)iaChartWd.destroy();
+  iaChartWd=new Chart(document.getElementById('iaChartWeekday'),{
+    type:'bar',
+    data:{labels:IA_WD_LABELS,datasets:[
+      {label:'DB수',data:dbArr,backgroundColor:'#4361EE',yAxisID:'y',order:2},
+      {label:'계약수',data:ctArr,backgroundColor:'#2EC4B6',yAxisID:'y',order:2},
+      {label:'계약률(%)',data:rateArr,type:'line',borderColor:'#F0920E',backgroundColor:'#F0920E',yAxisID:'y1',tension:0.3,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},
+      scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'건수'}},
+              y1:{beginAtZero:true,position:'right',title:{display:true,text:'계약률(%)'},grid:{drawOnChartArea:false}}}}
+  });
+}
+
+function iaRenderHour(){
+  if(!iaResult)return;
+  let db,ct;
+  if(iaHourView==='all'){db=iaResult.hrAllDb;ct=iaResult.hrAllCont;}
+  else {const d=+iaHourView;db=iaResult.hrByDayDb[d];ct=iaResult.hrByDayCont[d];}
+
+  let html='<thead><tr><th>구분</th>';
+  for(let h=0;h<24;h++)html+=`<th>${h}시</th>`;
+  html+='<th>합계</th></tr></thead><tbody>';
+  let tDb=0,tCt=0;
+  html+='<tr><td>DB수</td>';
+  for(let h=0;h<24;h++){html+=`<td>${db[h]}</td>`;tDb+=db[h];}
+  html+=`<td><b>${tDb}</b></td></tr>`;
+  html+='<tr><td>계약수</td>';
+  for(let h=0;h<24;h++){html+=`<td>${ct[h]}</td>`;tCt+=ct[h];}
+  html+=`<td><b>${tCt}</b></td></tr>`;
+  html+='<tr><td>계약률</td>';
+  for(let h=0;h<24;h++){const r=db[h]?(ct[h]/db[h]*100).toFixed(1)+'%':'-';html+=`<td>${r}</td>`;}
+  html+=`<td><b>${tDb?(tCt/tDb*100).toFixed(1)+'%':'-'}</b></td></tr>`;
+  html+='</tbody>';
+  document.getElementById('iaTableHour').innerHTML=html;
+
+  const labels=[];for(let h=0;h<24;h++)labels.push(h+'시');
+  const rate=db.map((v,h)=>v?+(ct[h]/v*100).toFixed(1):0);
+  if(iaChartHr)iaChartHr.destroy();
+  iaChartHr=new Chart(document.getElementById('iaChartHour'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'DB수',data:db,backgroundColor:'#4361EE',yAxisID:'y',order:2},
+      {label:'계약수',data:ct,backgroundColor:'#2EC4B6',yAxisID:'y',order:2},
+      {label:'계약률(%)',data:rate,type:'line',borderColor:'#F0920E',backgroundColor:'#F0920E',yAxisID:'y1',tension:0.3,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},
+      scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'건수'}},
+              y1:{beginAtZero:true,position:'right',title:{display:true,text:'계약률(%)'},grid:{drawOnChartArea:false}}}}
+  });
+}
+
+function iaRender(){iaRenderWeekday();iaRenderHour();}
+
+function iaSwitchWdView(v){
+  iaWdView=v;
+  document.querySelectorAll('#page-inflow .ia-view-btn[data-period]').forEach(b=>b.classList.toggle('active',b.dataset.period===v));
+  iaRenderWeekday();
+}
+function iaSwitchHourView(v){
+  iaHourView=v;
+  document.querySelectorAll('#page-inflow .ia-view-btn[data-day]').forEach(b=>b.classList.toggle('active',b.dataset.day===v));
+  iaRenderHour();
+}
 </script>
 </body>
 </html>
