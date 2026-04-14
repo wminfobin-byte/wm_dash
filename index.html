@@ -1048,7 +1048,7 @@ async function autoSyncDownload(){
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
   // 로컬에 파일이 하나라도 있으면 덮어쓰지 않음 (누적 DB 보호)
-  const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||iaFiles.cont||iaFiles.attend);
+  const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||iaFiles.cont||(iaFiles.attend&&iaFiles.attend.length>0));
   const iaLoaded=!iaAccess||iaHasLocal;
   if(ngReady&&cdReady&&iaLoaded)return;
   try{
@@ -1091,13 +1091,14 @@ async function autoSyncDownload(){
       if(!iaIdb) await iaOpenIdb();
       const existing=await iaIdbGetAll();
       for(const r of existing) await iaIdbDeleteId(r.id);
-      iaFiles={db:[],cont:null,attend:null};
+      iaFiles={db:[],cont:null,attend:[]};
       for(const f of payload.ia){
         let data=f.data;
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
         if(f.type==='db') iaFiles.db.push(rec);
+        else if(f.type==='attend') iaFiles.attend.push(rec);
         else iaFiles[f.type]=rec;
       }
       iaBindUploadBoxes();iaUpdateStatus();
@@ -1217,8 +1218,8 @@ async function doSyncUpload(token){
       const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
       iaSyncFiles.push({type:'cont',fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
     }
-    if(iaFiles.attend){
-      iaSyncFiles.push({type:'attend',fileName:iaFiles.attend.fileName,uploadTime:iaFiles.attend.uploadTime,data:iaFiles.attend.data});
+    for(const f of iaFiles.attend){
+      iaSyncFiles.push({type:'attend',fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
     }
 
     // localStorage 이력 데이터
@@ -1313,13 +1314,14 @@ async function doSyncDownloadManual(){
       if(!iaIdb) await iaOpenIdb();
       const existing=await iaIdbGetAll();
       for(const r of existing) await iaIdbDeleteId(r.id);
-      iaFiles={db:[],cont:null,attend:null};
+      iaFiles={db:[],cont:null,attend:[]};
       for(const f of payload.ia){
         let data=f.data;
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
         if(f.type==='db') iaFiles.db.push(rec);
+        else if(f.type==='attend') iaFiles.attend.push(rec);
         else iaFiles[f.type]=rec;
       }
       iaUpdateStatus();
@@ -3617,7 +3619,7 @@ function cdScrollToTop(){
 //  Inflow Analysis Tab (유입분석) — info_bin 전용
 // ═══════════════════════════════════════════════════════════════
 const IA_DB_NAME='inflowAnalysis',IA_DB_VER=2;
-let iaIdb=null, iaFiles={db:[],cont:null,attend:null};
+let iaIdb=null, iaFiles={db:[],cont:null,attend:[]};
 let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all', iaOffsetView='1';
 let iaChartWd=null, iaChartHr=null, iaChartOffset=null;
 
@@ -3665,53 +3667,62 @@ function iaUpdateUploadStatus(){
       dbFn.textContent=`${latest.fileName} (누적 ${iaFiles.db.length}건)`;
     }else{dbBox.classList.remove('loaded');dbFn.textContent='';}
   }
-  // cont, attend (덮어쓰기)
-  ['cont','attend'].forEach(k=>{
-    const box=document.getElementById(`box-ia-${k}`);
-    const fn=document.getElementById(`fname-ia-${k}`);
-    if(!box)return;
-    if(iaFiles[k]){box.classList.add('loaded');fn.textContent=iaFiles[k].fileName;}
-    else{box.classList.remove('loaded');fn.textContent='';}
-  });
+  // attend (누적)
+  const atBox=document.getElementById('box-ia-attend');
+  const atFn=document.getElementById('fname-ia-attend');
+  if(atBox){
+    if(iaFiles.attend&&iaFiles.attend.length>0){
+      atBox.classList.add('loaded');
+      const latest=iaFiles.attend[iaFiles.attend.length-1];
+      atFn.textContent=`${latest.fileName} (누적 ${iaFiles.attend.length}건)`;
+    }else{atBox.classList.remove('loaded');atFn.textContent='';}
+  }
+  // cont (덮어쓰기)
+  const contBox=document.getElementById('box-ia-cont');
+  const contFn=document.getElementById('fname-ia-cont');
+  if(contBox){
+    if(iaFiles.cont){contBox.classList.add('loaded');contFn.textContent=iaFiles.cont.fileName;}
+    else{contBox.classList.remove('loaded');contFn.textContent='';}
+  }
   document.getElementById('iaBtnGenerate').disabled=!iaReady();
 }
 
 function iaRenderFileHistory(){
   let html='';
   // DB수 (누적)
-  html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type db">📋 DB수 파일</span> ${iaFiles.db.length}건 (누적)</div>`;
-  if(iaFiles.db.length===0){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
-  else{
-    const sorted=[...iaFiles.db].sort((a,b)=>b.uploadTime-a.uploadTime);
-    sorted.forEach((f,i)=>{
-      html+=`<div class="fh-item${i===0?' active':''}">
-        <span class="fh-name">${f.fileName}</span>
-        ${i===0?'<span class="fh-active-badge">최신</span>':''}
-        <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
-        <button class="btn-del" onclick="iaDeleteFileId(${f.id})" title="삭제">&times;</button>
-      </div>`;
-    });
-  }
-  html+='</div>';
-  // cont/attend (덮어쓰기)
-  const singles=[
-    {key:'cont',label:'계약수 파일',cls:'cont',icon:'📝'},
-    {key:'attend',label:'명단 (근태보고)',cls:'attend',icon:'👥'},
+  const accums=[
+    {key:'db',label:'DB수 파일',cls:'db',icon:'📋',list:iaFiles.db||[]},
+    {key:'attend',label:'명단 (근태보고)',cls:'attend',icon:'👥',list:iaFiles.attend||[]},
   ];
-  for(const t of singles){
-    const f=iaFiles[t.key];
-    html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${f?'1건':'0건'} (덮어쓰기)</div>`;
-    if(!f){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
+  for(const t of accums){
+    html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${t.list.length}건 (누적)</div>`;
+    if(t.list.length===0){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
     else{
-      html+=`<div class="fh-item active">
-        <span class="fh-name">${f.fileName}</span>
-        <span class="fh-active-badge">사용중</span>
-        <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
-        <button class="btn-del" onclick="iaDeleteFileSingle('${t.key}')" title="삭제">&times;</button>
-      </div>`;
+      const sorted=[...t.list].sort((a,b)=>b.uploadTime-a.uploadTime);
+      sorted.forEach((f,i)=>{
+        html+=`<div class="fh-item${i===0?' active':''}">
+          <span class="fh-name">${f.fileName}</span>
+          ${i===0?'<span class="fh-active-badge">최신</span>':''}
+          <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
+          <button class="btn-del" onclick="iaDeleteFileId(${f.id})" title="삭제">&times;</button>
+        </div>`;
+      });
     }
     html+='</div>';
   }
+  // cont (덮어쓰기)
+  const f=iaFiles.cont;
+  html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type cont">📝 계약수 파일</span> ${f?'1건':'0건'} (덮어쓰기)</div>`;
+  if(!f){html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';}
+  else{
+    html+=`<div class="fh-item active">
+      <span class="fh-name">${f.fileName}</span>
+      <span class="fh-active-badge">사용중</span>
+      <span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span>
+      <button class="btn-del" onclick="iaDeleteFileSingle('cont')" title="삭제">&times;</button>
+    </div>`;
+  }
+  html+='</div>';
   document.getElementById('iaFileHistory').innerHTML=html;
 }
 
@@ -3719,6 +3730,7 @@ async function iaDeleteFileId(id){
   if(!confirm('이 파일을 삭제하시겠습니까?'))return;
   await iaIdbDeleteId(id);
   iaFiles.db=iaFiles.db.filter(f=>f.id!==id);
+  iaFiles.attend=iaFiles.attend.filter(f=>f.id!==id);
   iaUpdateStatus();iaUpdateUploadStatus();iaRenderFileHistory();
   if(!iaReady()){document.getElementById('iaDashboard').classList.add('hidden');document.getElementById('iaEmpty').classList.remove('hidden');}
   else iaGenerate();
@@ -3737,9 +3749,10 @@ async function iaLoad(){
   try{
     await iaOpenIdb();
     const all=await iaIdbGetAll();
-    iaFiles={db:[],cont:null,attend:null};
+    iaFiles={db:[],cont:null,attend:[]};
     for(const r of all){
       if(r.type==='db') iaFiles.db.push(r);
+      else if(r.type==='attend') iaFiles.attend.push(r);
       else iaFiles[r.type]=r;
     }
     iaBindUploadBoxes();
@@ -3751,10 +3764,10 @@ async function iaLoad(){
 function iaUpdateStatus(){
   const dotDb=document.getElementById('ia-dot-db');
   if(dotDb)dotDb.classList.toggle('ok',iaHasDb());
-  ['cont','attend'].forEach(k=>{
-    const dot=document.getElementById(`ia-dot-${k}`);
-    if(dot)dot.classList.toggle('ok',!!iaFiles[k]);
-  });
+  const dotCont=document.getElementById('ia-dot-cont');
+  if(dotCont)dotCont.classList.toggle('ok',!!iaFiles.cont);
+  const dotAt=document.getElementById('ia-dot-attend');
+  if(dotAt)dotAt.classList.toggle('ok',iaFiles.attend&&iaFiles.attend.length>0);
 }
 
 function iaBindUploadBoxes(){
@@ -3775,8 +3788,8 @@ function iaBindUploadBoxes(){
         const data=key==='attend'
           ? XLSX.utils.sheet_to_json(ws,{defval:''})
           : XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-        // 덮어쓰기: cont/attend는 기존 삭제 후 추가. db는 누적.
-        if(key==='cont'||key==='attend'){
+        // cont: 덮어쓰기. db/attend: 누적.
+        if(key==='cont'){
           await iaIdbDeleteByType(key);
           iaFiles[key]=null;
         }
@@ -3784,6 +3797,7 @@ function iaBindUploadBoxes(){
         const id=await iaIdbAdd(rec);
         rec.id=id;
         if(key==='db') iaFiles.db.push(rec);
+        else if(key==='attend') iaFiles.attend.push(rec);
         else iaFiles[key]=rec;
         prog.classList.remove('loading');prog.classList.add('done');
         box.classList.add('loaded');
@@ -3870,21 +3884,22 @@ function iaGenerate(){
   const startD=new Date(sVal+'T00:00:00');
   const endD=new Date(eVal+'T23:59:59');
 
-  // 명단 → 이름별 담당 매핑 (뇌새김영어/제2외국어/톡이즈)
+  // 명단 → 이름별 담당 매핑 (뇌새김영어/제2외국어/톡이즈) — 최신 명단 사용
   const nameToBrand={};
-  if(iaFiles.attend){
-    for(const r of iaFiles.attend.data){
+  const latestAttend=iaFiles.attend&&iaFiles.attend.length>0
+    ? [...iaFiles.attend].sort((a,b)=>b.uploadTime-a.uploadTime)[0] : null;
+  if(latestAttend){
+    for(const r of latestAttend.data){
       const name=String(r['이름']||'').trim();
       const brand=String(r['담당']||'').trim();
       if(name&&brand) nameToBrand[name]=brand;
     }
   }
   const brandFilter=iaBrand;
-  const brandActive=brandFilter!=='all'&&iaFiles.attend;
-  // 토글 버튼 활성화: 명단 없으면 '전체'만 의미 있음
+  const brandActive=brandFilter!=='all'&&latestAttend;
   document.querySelectorAll('#page-inflow .ia-view-btn[data-brand]').forEach(b=>{
     const d=b.dataset.brand;
-    b.disabled=(!iaFiles.attend&&d!=='all');
+    b.disabled=(!latestAttend&&d!=='all');
     b.style.opacity=(b.disabled?'0.4':'');
   });
 
@@ -3927,7 +3942,7 @@ function iaGenerate(){
     const row=allRows[i];
     if(!iaPassDbFilter(row))continue;
     // 담당 필터 (명단 업로드 시)
-    if(iaFiles.attend){
+    if(latestAttend){
       const obName=String(row[7]||'').trim();
       const brand=nameToBrand[obName]||'';
       if(brand==='톡이즈')continue; // 톡이즈는 항상 제외
@@ -4146,17 +4161,58 @@ function dpResolveGroup(g){
   if(s.includes('A')||s.includes('B')||s.includes('H'))return 'N그룹';
   return null;
 }
-function dpBuildNameMap(){
-  const map={};
-  if(!iaFiles||!iaFiles.attend)return map;
-  for(const r of iaFiles.attend.data){
-    const name=dpNormName(r['이름']);
-    const brand=String(r['담당']||'').trim();
-    const group=dpResolveGroup(r['그룹']);
-    if(name&&brand) map[name]={brand,group};
-  }
-  return map;
+// 파일명에서 YYYY-MM 추출: 202604 / 2026-04 / 26년4월 / 2604 등
+function dpParseAttendMonth(filename){
+  const s=String(filename||'');
+  let m=s.match(/(20\d{2})[-_.]?(0[1-9]|1[0-2])/);
+  if(m)return `${m[1]}-${m[2]}`;
+  m=s.match(/(\d{2})년\s*(\d{1,2})월/);
+  if(m)return `20${m[1]}-${String(m[2]).padStart(2,'0')}`;
+  m=s.match(/\b(\d{2})(0[1-9]|1[0-2])\b/);
+  if(m)return `20${m[1]}-${m[2]}`;
+  return null;
 }
+
+// 월별 명단 → {'YYYY-MM': nameMap, 'latest': nameMap}
+function dpBuildNameMapByMonth(){
+  const byMonth={};
+  const months=[];
+  if(!iaFiles||!iaFiles.attend)return {byMonth,latest:{},months:[]};
+  const sorted=[...iaFiles.attend].sort((a,b)=>a.uploadTime-b.uploadTime);
+  for(const f of sorted){
+    const mon=dpParseAttendMonth(f.fileName);
+    const map={};
+    for(const r of f.data){
+      const name=dpNormName(r['이름']);
+      const brand=String(r['담당']||'').trim();
+      const group=dpResolveGroup(r['그룹']);
+      if(name&&brand) map[name]={brand,group};
+    }
+    if(mon){byMonth[mon]=map;months.push(mon);}
+    // latest update
+    byMonth.__latest=map;
+  }
+  const latest=byMonth.__latest||{};
+  delete byMonth.__latest;
+  return {byMonth,latest,months:[...new Set(months)].sort()};
+}
+
+// dateKey(YYYY-MM-DD)에 해당하는 nameMap 조회: 월 일치 우선, 없으면 가장 가까운 과거 월, 최후엔 latest
+function dpResolveNameMap(maps,dateKey){
+  if(!dateKey)return maps.latest;
+  const mon=dateKey.slice(0,7);
+  if(maps.byMonth[mon])return maps.byMonth[mon];
+  // 이전 가장 가까운 월
+  let best=null;
+  for(const m of maps.months){
+    if(m<=mon&&(!best||m>best))best=m;
+  }
+  if(best)return maps.byMonth[best];
+  // 미래 월만 있다면 가장 이른 월
+  if(maps.months.length>0)return maps.byMonth[maps.months[0]];
+  return maps.latest;
+}
+
 function dpCategoryByName(nameMap,obName){
   const key=dpNormName(obName);
   const info=nameMap[key];
@@ -4181,7 +4237,7 @@ function dpCompute(){
   if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont){
     dpResult=null;return;
   }
-  const nameMap=dpBuildNameMap();
+  const nameMaps=dpBuildNameMapByMonth();
   const byDate={};
   // DB수 집계 (유입분석 db 파일 재활용, customerKey 중복 제거)
   const seen=new Set();
@@ -4200,17 +4256,17 @@ function dpCompute(){
       if(dbInfo.includes('재콜'))continue;
       if(dbInfo.toLowerCase().includes('in')&&!media)continue;
       if(media.includes('callback')||media.includes('tv_b'))continue;
-      // 카테고리: 명단의 담당 기준
-      const cat=dpCategoryByName(nameMap,row[7]);
-      if(!cat)continue;
       const dist=parseDate(row[8]);
       if(!dist)continue;
       const key=dpFmtYmd(dist);
+      // 날짜 월에 해당하는 명단으로 카테고리 판정
+      const nm=dpResolveNameMap(nameMaps,key);
+      const cat=dpCategoryByName(nm,row[7]);
+      if(!cat)continue;
       if(!byDate[key]) byDate[key]=dpInitDateEntry();
       byDate[key][cat].db++;
-      // 뇌새김영어 그룹 분할
       if(cat==='뇌새김영어'){
-        const g=dpGroupByName(nameMap,row[7]);
+        const g=dpGroupByName(nm,row[7]);
         if(g&&byDate[key].groups[g]) byDate[key].groups[g].db++;
       }
     }
@@ -4229,13 +4285,14 @@ function dpCompute(){
     const orderDt=String(row[23]||'');
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status!=='계약'&&status!=='취소')continue;
-    // 카테고리: 명단의 담당 기준
-    const cat=dpCategoryByName(nameMap,row[7]);
-    if(!cat)continue;
     // 계약수는 '계약일(오더일)' 기준으로 집계
     const orderDate=parseDate(orderDt);
     if(!orderDate)continue;
     const key=dpFmtYmd(orderDate);
+    // 해당 월 명단으로 카테고리 판정
+    const nm=dpResolveNameMap(nameMaps,key);
+    const cat=dpCategoryByName(nm,row[7]);
+    if(!cat)continue;
     if(!byDate[key]) byDate[key]=dpInitDateEntry();
     const b=byDate[key][cat];
     b.contract++;
@@ -4250,7 +4307,7 @@ function dpCompute(){
     else b.newDb++;
     // 뇌새김영어 그룹 분할
     if(cat==='뇌새김영어'){
-      const g=dpGroupByName(nameMap,row[7]);
+      const g=dpGroupByName(nm,row[7]);
       if(g&&byDate[key].groups[g]){
         const gb=byDate[key].groups[g];
         gb.contract++;
