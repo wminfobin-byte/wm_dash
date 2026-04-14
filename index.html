@@ -3890,7 +3890,6 @@ function iaRenderWeekday(){
   iaChartWd=new Chart(document.getElementById('iaChartWeekday'),{
     type:'bar',
     data:{labels:IA_WD_LABELS,datasets:[
-      {label:'DB수',data:dbArr,backgroundColor:'#4361EE',yAxisID:'y',order:2},
       {label:'계약수',data:ctArr,backgroundColor:'#2EC4B6',yAxisID:'y',order:2},
       {label:'계약률(%)',data:rateArr,type:'line',borderColor:'#F0920E',backgroundColor:'#F0920E',yAxisID:'y1',tension:0.3,order:1}
     ]},
@@ -3929,7 +3928,6 @@ function iaRenderHour(){
   iaChartHr=new Chart(document.getElementById('iaChartHour'),{
     type:'bar',
     data:{labels,datasets:[
-      {label:'DB수',data:db,backgroundColor:'#4361EE',yAxisID:'y',order:2},
       {label:'계약수',data:ct,backgroundColor:'#2EC4B6',yAxisID:'y',order:2},
       {label:'계약률(%)',data:rate,type:'line',borderColor:'#F0920E',backgroundColor:'#F0920E',yAxisID:'y1',tension:0.3,order:1}
     ]},
