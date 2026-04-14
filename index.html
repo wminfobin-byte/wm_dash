@@ -4184,7 +4184,8 @@ function dpCompute(){
       const media=String(row[19]||'').toLowerCase();
       if(media.includes('talkis'))continue;
       const dbInfo=String(row[15]||'');
-      // DB수 filter: IN무매체, callback, tv_b 제외
+      // DB수 filter: 재콜, IN무매체, callback, tv_b 제외
+      if(dbInfo.includes('재콜'))continue;
       if(dbInfo.toLowerCase().includes('in')&&!media)continue;
       if(media.includes('callback')||media.includes('tv_b'))continue;
       const pkg=dpClassifyByMedia(media);
