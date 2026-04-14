@@ -4126,18 +4126,22 @@ function dpPassObName(name){
   return true;
 }
 
+// 이름 정규화: (R_당산)황인태, (퇴사)황인태[260414] → 황인태
+function dpNormName(s){
+  return String(s||'').replace(/\([^)]*\)/g,'').replace(/\[[^\]]*\]/g,'').trim();
+}
 function dpBuildNameToBrand(){
   const map={};
   if(!iaFiles||!iaFiles.attend)return map;
   for(const r of iaFiles.attend.data){
-    const name=String(r['이름']||'').trim();
+    const name=dpNormName(r['이름']);
     const brand=String(r['담당']||'').trim();
     if(name&&brand) map[name]=brand;
   }
   return map;
 }
 function dpCategoryByName(nameToBrand,obName){
-  const key=String(obName||'').trim();
+  const key=dpNormName(obName);
   const brand=nameToBrand[key];
   if(brand==='뇌새김영어'||brand==='제2외국어') return brand;
   return null;
