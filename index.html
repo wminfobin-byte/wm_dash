@@ -3771,7 +3771,6 @@ function iaClassifyContract(row){
   const dbInfo=String(row[15]||'');
   const obName=String(row[7]||'');
   if(!orderDate)return null;
-  if(isHoliday(orderDate))return null;
   if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청'))return null;
   if(mediaCode.toLowerCase().includes('talkis'))return null;
   if(dbInfo.toLowerCase().includes('in')&&!mediaCode)return null;
