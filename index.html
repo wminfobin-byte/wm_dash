@@ -4169,6 +4169,16 @@ function dpFmtDateWd(ymd){
   const dt=new Date(y,m-1,d);
   return `${ymd}(${DP_DOW[dt.getDay()]})`;
 }
+function dpDateColor(ymd){
+  if(!ymd)return '';
+  const [y,m,d]=ymd.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  const wd=dt.getDay();
+  if(wd===0) return '#e71d36'; // 일요일 빨강
+  if(wd===6) return '#4361ee'; // 토요일 파랑
+  try{ if(isHoliday(dt)) return '#e71d36'; }catch{}
+  return '';
+}
 
 const DP_EXCLUDE_OB=['군자','관리자','스마트스토어','삭제요청'];
 
@@ -4473,7 +4483,9 @@ function dpBuildTableHtml(title,cls,bucketGetter,dates,opts){
     tot.today+=b.today; tot.prev+=b.prev;
     tot.newDb+=b.newDb; tot.recallDb+=b.recallDb;
     const resetBtn=d<todayStr?`<button class="dp-reset-btn" title="이 날짜 재계산" onclick="dpResetSnapshot('${d}')">↻</button>`:'';
-    html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}${resetBtn}</td>`;
+    const dc=dpDateColor(d);
+    const dateCellStyle=dc?` style="color:${dc};font-weight:600"`:'';
+    html+=`<tr data-date="${d}"><td${dateCellStyle}>${dpFmtDateWd(d)}${resetBtn}</td>`;
     html+=`<td>${dpFmtNum(b.db)}</td>`;
     html+=`<td>${dpFmtNum(b.contract)}</td>`;
     html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
