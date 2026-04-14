@@ -965,7 +965,9 @@ async function autoSyncDownload(){
   const ngReady=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
-  const iaLoaded=!iaAccess||(iaFiles&&iaFiles.db&&iaFiles.db.length>0&&iaFiles.cont);
+  // 로컬에 파일이 하나라도 있으면 덮어쓰지 않음 (누적 DB 보호)
+  const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||iaFiles.cont||iaFiles.attend);
+  const iaLoaded=!iaAccess||iaHasLocal;
   if(ngReady&&cdReady&&iaLoaded)return;
   try{
     const payload=await fetchSyncPayload();
