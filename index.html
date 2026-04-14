@@ -255,6 +255,8 @@ tr.row-h td{background:var(--gh-light)}
 .dp-table tbody tr:hover{background:#f8fafc}
 .dp-table input.dp-cost{width:90px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit;font-size:12px;text-align:right}
 .dp-total-row{background:#f1f5f9;font-weight:700}
+.dp-reset-btn{background:none;border:none;cursor:pointer;color:#94a3b8;padding:0 4px;font-size:13px;margin-left:4px}
+.dp-reset-btn:hover{color:#e71d36}
 .dp-filter-btn{background:#4361EE;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
 .dp-filter-btn:hover{background:#3451d1;transform:translateY(-1px)}
 .dp-filter-btn span{margin-left:4px;opacity:.85;font-weight:500}
@@ -987,6 +989,8 @@ tr.row-h td{background:var(--gh-light)}
           <button class="ia-view-btn active" data-dpcat="뇌새김영어" onclick="dpSwitchCat('뇌새김영어')">뇌새김영어</button>
           <button class="ia-view-btn" data-dpcat="제2외국어" onclick="dpSwitchCat('제2외국어')">제2외국어</button>
         </div>
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <button class="ia-view-btn" style="color:#e71d36;border-color:#fecaca" onclick="dpResetAllSnapshots()" title="이전 일자 스냅샷 전체 리셋">🔄 스냅샷 전체 리셋</button>
       </div>
       <div class="dp-date-panel hidden" id="dpDatePanel">
         <div class="dp-date-panel-header">
@@ -4294,6 +4298,22 @@ function dpToggleDatePanel(evt){
   document.getElementById('dpDatePanel').classList.toggle('hidden');
 }
 
+function dpResetSnapshot(date){
+  if(!confirm(`${date} 의 스냅샷을 삭제하고 현재 파일/명단 기준으로 재계산할까요?`))return;
+  delete dpSnapshot[date];
+  dpSavePrefs();
+  dpCompute();
+  dpRender();
+  dpRenderDateList();
+}
+function dpResetAllSnapshots(){
+  if(!confirm('이전 일자 스냅샷을 모두 삭제하고 현재 데이터 기준으로 재계산할까요?\n(주의: 명단에서 퇴사자가 빠진 경우 과거 수치도 달라집니다)'))return;
+  dpSnapshot={};
+  dpSavePrefs();
+  dpCompute();
+  dpRender();
+  dpRenderDateList();
+}
 function dpSwitchCat(c){
   dpCat=c;
   document.querySelectorAll('#page-daily-perf .ia-view-btn[data-dpcat]').forEach(b=>b.classList.toggle('active',b.dataset.dpcat===c));
@@ -4336,7 +4356,9 @@ function dpRender(){
     tot.db+=b.db; tot.contract+=b.contract;
     tot.today+=b.today; tot.prev+=b.prev;
     tot.newDb+=b.newDb; tot.recallDb+=b.recallDb;
-    html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}</td>`;
+    const isPast=d<dpFmtYmd(new Date());
+    const resetBtn=isPast?`<button class="dp-reset-btn" title="이 날짜 재계산" onclick="dpResetSnapshot('${d}')">↻</button>`:'';
+    html+=`<tr data-date="${d}"><td>${dpFmtDateWd(d)}${resetBtn}</td>`;
     html+=`<td>${dpFmtNum(b.db)}</td>`;
     html+=`<td>${dpFmtNum(b.contract)}</td>`;
     html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
