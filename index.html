@@ -898,7 +898,7 @@ tr.row-h td{background:var(--gh-light)}
       </div>
 
       <div class="ia-section">
-        <h3>① 요일별 유입 → 같은 주(월~일) 내 계약 전환</h3>
+        <h3>① 유입 요일별 → 같은 주(월~일) 내 계약 전환</h3>
         <div class="ia-view-tabs">
           <button class="ia-view-btn active" data-period="all" onclick="iaSwitchWdView('all')">전체</button>
           <button class="ia-view-btn" data-period="am" onclick="iaSwitchWdView('am')">오전 유입 (00~11시)</button>
@@ -909,7 +909,22 @@ tr.row-h td{background:var(--gh-light)}
       </div>
 
       <div class="ia-section">
-        <h3>② 유입 시간대별 계약 전환</h3>
+        <h3>② 유입 요일별 → 이후 요일별 계약 전환 (유입 당일~6일 후)</h3>
+        <div class="ia-view-tabs">
+          <button class="ia-view-btn active" data-offset="1" onclick="iaSwitchOffsetView('1')">월 유입</button>
+          <button class="ia-view-btn" data-offset="2" onclick="iaSwitchOffsetView('2')">화 유입</button>
+          <button class="ia-view-btn" data-offset="3" onclick="iaSwitchOffsetView('3')">수 유입</button>
+          <button class="ia-view-btn" data-offset="4" onclick="iaSwitchOffsetView('4')">목 유입</button>
+          <button class="ia-view-btn" data-offset="5" onclick="iaSwitchOffsetView('5')">금 유입</button>
+          <button class="ia-view-btn" data-offset="6" onclick="iaSwitchOffsetView('6')">토 유입</button>
+          <button class="ia-view-btn" data-offset="0" onclick="iaSwitchOffsetView('0')">일 유입</button>
+        </div>
+        <div class="ia-chart-wrap"><canvas id="iaChartOffset"></canvas></div>
+        <table class="ia-table" id="iaTableOffset"></table>
+      </div>
+
+      <div class="ia-section">
+        <h3>③ 유입 시간대별 계약 전환</h3>
         <div class="ia-view-tabs">
           <button class="ia-view-btn active" data-day="all" onclick="iaSwitchHourView('all')">전체</button>
           <button class="ia-view-btn" data-day="1" onclick="iaSwitchHourView('1')">월</button>
@@ -3520,8 +3535,8 @@ function cdScrollToTop(){
 // ═══════════════════════════════════════════════════════════════
 const IA_DB_NAME='inflowAnalysis',IA_DB_VER=2;
 let iaIdb=null, iaFiles={db:[],cont:null,attend:null};
-let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all';
-let iaChartWd=null, iaChartHr=null;
+let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all', iaOffsetView='1';
+let iaChartWd=null, iaChartHr=null, iaChartOffset=null;
 
 function iaOpenIdb(){
   return new Promise((res,rej)=>{
@@ -3809,6 +3824,9 @@ function iaGenerate(){
   const hrAllCont=new Array(24).fill(0);
   const hrByDayDb={}; const hrByDayCont={};
   for(let d=0;d<7;d++){hrByDayDb[d]=new Array(24).fill(0);hrByDayCont[d]=new Array(24).fill(0);}
+  // offsetCont[baseWd][offsetDay] = 유입 당일~6일 후 계약수 (offsetDay 0=당일)
+  const offsetCont={}; const offsetDb=new Array(7).fill(0);
+  for(let d=0;d<7;d++)offsetCont[d]=new Array(7).fill(0);
 
   // 중복 제거: customerKey 기준으로 최신 업로드 우선 (누적 파일 간 중복 방지)
   const seenCk=new Set();
@@ -3842,6 +3860,7 @@ function iaGenerate(){
     wdDb[0][wd]++; wdDb[periodIdx][wd]++;
     hrAllDb[hr]++;
     hrByDayDb[wd][hr]++;
+    offsetDb[wd]++;
     const ck=String(row[6]||'');
     const contOd=contMap[ck];
     if(contOd){
@@ -3850,10 +3869,15 @@ function iaGenerate(){
       }
       hrAllCont[hr]++;
       hrByDayCont[wd][hr]++;
+      // 유입 당일~6일 후 집계 (자정 기준 일수 차이)
+      const inflowMid=new Date(inflow.getFullYear(),inflow.getMonth(),inflow.getDate());
+      const orderMid=new Date(contOd.getFullYear(),contOd.getMonth(),contOd.getDate());
+      const diff=Math.round((orderMid-inflowMid)/86400000);
+      if(diff>=0&&diff<=6) offsetCont[wd][diff]++;
     }
   }
 
-  iaResult={wdDb,wdCont,hrAllDb,hrAllCont,hrByDayDb,hrByDayCont};
+  iaResult={wdDb,wdCont,hrAllDb,hrAllCont,hrByDayDb,hrByDayCont,offsetDb,offsetCont};
   iaRender();
   document.getElementById('iaDashboard').classList.remove('hidden');
   document.getElementById('iaEmpty').classList.add('hidden');
@@ -3937,12 +3961,61 @@ function iaRenderHour(){
   });
 }
 
-function iaRender(){iaRenderWeekday();iaRenderHour();}
+function iaRenderOffset(){
+  if(!iaResult)return;
+  const nf=n=>Number(n).toLocaleString('ko-KR');
+  const WD=['일','월','화','수','목','금','토'];
+  const baseWd=+iaOffsetView; // 0=Sun..6=Sat
+  const dbTotal=iaResult.offsetDb[baseWd];
+  const labels=[]; const ctArr=[]; const rateArr=[];
+  for(let off=0;off<7;off++){
+    const targetWd=(baseWd+off)%7;
+    labels.push(`${WD[targetWd]}${off===0?' (당일)':` (+${off})`}`);
+    const c=iaResult.offsetCont[baseWd][off];
+    ctArr.push(c);
+    rateArr.push(dbTotal?+(c/dbTotal*100).toFixed(1):0);
+  }
+
+  let html='<thead><tr><th>구분</th>';
+  labels.forEach(l=>html+=`<th>${l}</th>`);
+  html+='<th>합계</th></tr></thead><tbody>';
+  html+='<tr><td>DB수</td>';
+  for(let i=0;i<7;i++)html+=`<td>${nf(dbTotal)}</td>`;
+  html+=`<td><b>${nf(dbTotal)}</b></td></tr>`;
+  html+='<tr><td>계약수</td>';
+  let tCt=0;
+  ctArr.forEach(v=>{html+=`<td>${nf(v)}</td>`;tCt+=v;});
+  html+=`<td><b>${nf(tCt)}</b></td></tr>`;
+  html+='<tr><td>계약률</td>';
+  rateArr.forEach(r=>html+=`<td>${r}%</td>`);
+  html+=`<td><b>${dbTotal?(tCt/dbTotal*100).toFixed(1)+'%':'-'}</b></td></tr>`;
+  html+='</tbody>';
+  document.getElementById('iaTableOffset').innerHTML=html;
+
+  if(iaChartOffset)iaChartOffset.destroy();
+  iaChartOffset=new Chart(document.getElementById('iaChartOffset'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'계약수',data:ctArr,backgroundColor:'#2EC4B6',yAxisID:'y',order:2},
+      {label:'계약률(%)',data:rateArr,type:'line',borderColor:'#F0920E',backgroundColor:'#F0920E',yAxisID:'y1',tension:0.3,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},
+      scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'건수'}},
+              y1:{beginAtZero:true,position:'right',title:{display:true,text:'계약률(%)'},grid:{drawOnChartArea:false}}}}
+  });
+}
+
+function iaRender(){iaRenderWeekday();iaRenderOffset();iaRenderHour();}
 
 function iaSwitchBrand(v){
   iaBrand=v;
   document.querySelectorAll('#page-inflow .ia-view-btn[data-brand]').forEach(b=>b.classList.toggle('active',b.dataset.brand===v));
   iaGenerate();
+}
+function iaSwitchOffsetView(v){
+  iaOffsetView=v;
+  document.querySelectorAll('#page-inflow .ia-view-btn[data-offset]').forEach(b=>b.classList.toggle('active',b.dataset.offset===v));
+  iaRenderOffset();
 }
 function iaSwitchWdView(v){
   iaWdView=v;
