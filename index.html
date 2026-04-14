@@ -915,7 +915,13 @@ tr.row-h td{background:var(--gh-light)}
     </div>
     <div class="ia-dashboard hidden" id="iaDashboard">
       <div class="ia-control-bar">
-        <label>유입일 기간:</label>
+        <label>기준:</label>
+        <div class="ia-view-tabs" style="margin:0;gap:6px">
+          <button class="ia-view-btn active" data-base="inflow" onclick="iaSwitchBase('inflow')">유입일</button>
+          <button class="ia-view-btn" data-base="distribute" onclick="iaSwitchBase('distribute')">분배일</button>
+        </div>
+        <div style="width:1px;height:22px;background:#e2e8f0;margin:0 8px"></div>
+        <label id="iaDateLabel">유입일 기간:</label>
         <input type="date" id="iaDateStart" onchange="iaGenerate()">
         <span>~</span>
         <input type="date" id="iaDateEnd" onchange="iaGenerate()">
@@ -929,7 +935,7 @@ tr.row-h td{background:var(--gh-light)}
       </div>
 
       <div class="ia-section">
-        <h3>① 유입 요일별 → 7일 이내 계약 전환</h3>
+        <h3>① <span id="iaSec1Base">유입</span> 요일별 → 7일 이내 계약 전환</h3>
         <div class="ia-view-tabs">
           <button class="ia-view-btn active" data-period="all" onclick="iaSwitchWdView('all')">전체</button>
           <button class="ia-view-btn" data-period="am" onclick="iaSwitchWdView('am')">오전 유입 (00~11시)</button>
@@ -940,7 +946,7 @@ tr.row-h td{background:var(--gh-light)}
       </div>
 
       <div class="ia-section">
-        <h3>② 유입 요일별 → 이후 요일별 계약 전환 (유입 당일~6일 후)</h3>
+        <h3>② <span id="iaSec2Base">유입</span> 요일별 → 이후 요일별 계약 전환 (기준일 당일~6일 후)</h3>
         <div class="ia-view-tabs">
           <button class="ia-view-btn active" data-offset="1" onclick="iaSwitchOffsetView('1')">월 유입</button>
           <button class="ia-view-btn" data-offset="2" onclick="iaSwitchOffsetView('2')">화 유입</button>
@@ -3620,7 +3626,7 @@ function cdScrollToTop(){
 // ═══════════════════════════════════════════════════════════════
 const IA_DB_NAME='inflowAnalysis',IA_DB_VER=2;
 let iaIdb=null, iaFiles={db:[],cont:null,attend:[]};
-let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all', iaOffsetView='1';
+let iaResult=null, iaHourView='all', iaWdView='all', iaBrand='all', iaOffsetView='1', iaBase='inflow';
 let iaChartWd=null, iaChartHr=null, iaChartOffset=null;
 
 function iaOpenIdb(){
@@ -3811,6 +3817,16 @@ function iaBindUploadBoxes(){
   });
 }
 
+// 분배일 등 일반 날짜 파싱 (시분 없을 수 있음)
+function iaParseDay(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:v;
+  const s=String(v).trim();if(!s)return null;
+  const m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m){return new Date(+m[1],+m[2]-1,+m[3]);}
+  const d=new Date(s);return isNaN(d)?null:d;
+}
+
 // "2026-03-30 09:25" 형식 파싱 (시분까지)
 function iaParseInflow(v){
   if(v==null||v==='')return null;
@@ -3834,9 +3850,11 @@ function iaSameWeek(a,b){
 function iaInitDateRange(){
   if(!iaHasDb())return;
   let min=null,max=null;
+  const col=iaBase==='distribute'?8:9;
+  const parser=iaBase==='distribute'?iaParseDay:iaParseInflow;
   for(const f of iaFiles.db){
     for(let i=1;i<f.data.length;i++){
-      const d=iaParseInflow(f.data[i][9]);
+      const d=parser(f.data[i][col]);
       if(!d)continue;
       if(!min||d<min)min=d;
       if(!max||d>max)max=d;
@@ -3844,8 +3862,10 @@ function iaInitDateRange(){
   }
   const fmt=(d)=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   const s=document.getElementById('iaDateStart'),e=document.getElementById('iaDateEnd');
-  if(s&&!s.value)s.value=fmt(min);
-  if(e&&!e.value)e.value=fmt(max);
+  if(s)s.value=fmt(min);
+  if(e)e.value=fmt(max);
+  const lbl=document.getElementById('iaDateLabel');
+  if(lbl) lbl.textContent=(iaBase==='distribute'?'분배일 기간:':'유입일 기간:');
 }
 
 function iaPassDbFilter(row){
@@ -3948,28 +3968,29 @@ function iaGenerate(){
       if(brand==='톡이즈')continue; // 톡이즈는 항상 제외
       if(brandActive&&brand!==brandFilter)continue;
     }
+    // 기준 날짜(유입일 or 분배일) — 섹션 ①/② 의 요일/윈도우 계산에 사용
+    const base=iaBase==='distribute'?iaParseDay(row[8]):iaParseInflow(row[9]);
+    if(!base)continue;
+    if(base<startD||base>endD)continue;
+    // 시간대(섹션 ③)는 항상 유입일 기준
     const inflow=iaParseInflow(row[9]);
-    if(!inflow)continue;
-    if(inflow<startD||inflow>endD)continue;
-    const wd=inflow.getDay();
-    const hr=inflow.getHours();
+    const wd=base.getDay();
+    const hr=inflow?inflow.getHours():0;
     const periodIdx=hr<12?1:2;
     wdDb[0][wd]++; wdDb[periodIdx][wd]++;
-    hrAllDb[hr]++;
-    hrByDayDb[wd][hr]++;
+    if(inflow){hrAllDb[hr]++;hrByDayDb[wd][hr]++;}
     offsetDb[wd]++;
     const ck=String(row[6]||'');
     const contOd=contMap[ck];
     if(contOd){
-      // 유입일로부터 0~6일(7일 이내) 계약만 섹션① 카운트
-      const inflowMid=new Date(inflow.getFullYear(),inflow.getMonth(),inflow.getDate());
+      // 기준 날짜로부터 0~6일(7일 이내) 계약만 섹션① 카운트
+      const baseMid=new Date(base.getFullYear(),base.getMonth(),base.getDate());
       const orderMid=new Date(contOd.getFullYear(),contOd.getMonth(),contOd.getDate());
-      const diff=Math.round((orderMid-inflowMid)/86400000);
+      const diff=Math.round((orderMid-baseMid)/86400000);
       if(diff>=0&&diff<=6){
         wdCont[0][wd]++; wdCont[periodIdx][wd]++;
       }
-      hrAllCont[hr]++;
-      hrByDayCont[wd][hr]++;
+      if(inflow){hrAllCont[hr]++;hrByDayCont[wd][hr]++;}
       if(diff>=0&&diff<=6) offsetCont[wd][diff]++;
     }
   }
@@ -4107,6 +4128,15 @@ function iaRender(){iaRenderWeekday();iaRenderOffset();iaRenderHour();}
 function iaSwitchBrand(v){
   iaBrand=v;
   document.querySelectorAll('#page-inflow .ia-view-btn[data-brand]').forEach(b=>b.classList.toggle('active',b.dataset.brand===v));
+  iaGenerate();
+}
+function iaSwitchBase(v){
+  iaBase=v;
+  document.querySelectorAll('#page-inflow .ia-view-btn[data-base]').forEach(b=>b.classList.toggle('active',b.dataset.base===v));
+  const lbl=v==='distribute'?'분배':'유입';
+  const s1=document.getElementById('iaSec1Base'); if(s1)s1.textContent=lbl;
+  const s2=document.getElementById('iaSec2Base'); if(s2)s2.textContent=lbl;
+  iaInitDateRange();
   iaGenerate();
 }
 function iaSwitchOffsetView(v){
