@@ -4117,15 +4117,13 @@ function dpFmtDateWd(ymd){
   return `${ymd}(${DP_DOW[dt.getDay()]})`;
 }
 
-const DP_CENTERS=['대전','노원','유성','강동','당산'];
 const DP_EXCLUDE_OB=['군자','관리자','스마트스토어','삭제요청'];
 
 function dpPassObName(name){
   const n=String(name||'');
   if(!n)return false;
   for(const x of DP_EXCLUDE_OB) if(n.includes(x))return false;
-  for(const c of DP_CENTERS) if(n.includes(c))return true;
-  return false;
+  return true;
 }
 
 function dpBuildNameToBrand(){
