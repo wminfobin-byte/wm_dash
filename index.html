@@ -943,7 +943,7 @@ async function doSyncUpload(token){
     const cdFiles=cdAllFiles.map(f=>{
       if(f.type==='attend') return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data};
       // 신청자/고객관리: 필요 컬럼만 추출
-      const cols=f.type==='cust'?[CD_CUST.customerKey,CD_CUST.bkPhone,CD_CUST.bkSubscribe]
+      const cols=f.type==='cust'?[CD_CUST.customerKey,CD_CUST.bkPhone,CD_CUST.bkAccount]
         :[CD_APP.customerKey,CD_APP.manager,CD_APP.applicationDate,CD_APP.classification,CD_APP.gift,CD_APP.returnDate];
       const slim=f.data.map((row,i)=>i===0?row:cols.map(c=>row[c]!=null?row[c]:''));
       return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols};
