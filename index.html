@@ -240,12 +240,16 @@ tr.row-h td{background:var(--gh-light)}
 /* Daily Perf Tab */
 #page-daily-perf .container{max-width:100%;padding:28px 40px}
 .dp-dashboard{display:flex;flex-direction:column;gap:20px}
-.dp-date-panel{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.dp-date-panel-header{display:flex;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e2e8f0}
-.dp-date-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;max-height:260px;overflow-y:auto}
+.dp-date-wrap{position:relative;display:inline-block}
+.dp-date-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:100;background:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.15);border:1px solid #e2e8f0;min-width:320px;max-width:520px}
+.dp-date-panel-header{display:flex;gap:6px;margin-bottom:8px}
+.dp-date-search{width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit;margin-bottom:8px;outline:none}
+.dp-date-search:focus{border-color:#4361EE}
+.dp-date-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px;max-height:260px;overflow-y:auto}
 .dp-date-list label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border-radius:4px}
 .dp-date-list label:hover{background:#f8fafc}
 .dp-date-list input[type=checkbox]{margin:0}
+.dp-date-list-empty{grid-column:1/-1;text-align:center;color:#94a3b8;font-size:12px;padding:12px}
 .dp-table{min-width:1100px;font-size:11px}
 .dp-table th,.dp-table td{padding:5px 4px;white-space:nowrap}
 .dp-table th{background:#2D3748;color:#fff;font-weight:600;font-size:11px}
@@ -989,7 +993,19 @@ tr.row-h td{background:var(--gh-light)}
     <div class="dp-dashboard hidden" id="dpDashboard">
       <div class="ia-control-bar" style="flex-wrap:wrap;gap:10px">
         <label>날짜 필터:</label>
-        <button class="dp-filter-btn" id="dpDateBtn" onclick="dpToggleDatePanel(event)">📅 날짜 선택 <span id="dpDateCount"></span></button>
+        <div class="dp-date-wrap">
+          <button class="dp-filter-btn" id="dpDateBtn" onclick="dpToggleDatePanel(event)">📅 날짜 선택 <span id="dpDateCount"></span> ▾</button>
+          <div class="dp-date-panel hidden" id="dpDatePanel" onclick="event.stopPropagation()">
+            <input type="text" id="dpDateSearch" class="dp-date-search" placeholder="검색 (예: 2026-04, 04-13, 월)" oninput="dpRenderDateList()">
+            <div class="dp-date-panel-header">
+              <button class="ia-view-btn" onclick="dpDateSelectAll(true)">전체 선택</button>
+              <button class="ia-view-btn" onclick="dpDateSelectAll(false)">전체 해제</button>
+              <button class="ia-view-btn" onclick="dpDateSelectFiltered(true)">검색결과 선택</button>
+              <button class="ia-view-btn" onclick="dpDateSelectFiltered(false)">검색결과 해제</button>
+            </div>
+            <div class="dp-date-list" id="dpDateList"></div>
+          </div>
+        </div>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <div class="ia-view-tabs" style="margin:0;gap:6px">
           <button class="ia-view-btn active" data-dpcat="뇌새김영어" onclick="dpSwitchCat('뇌새김영어')">뇌새김영어</button>
@@ -997,14 +1013,6 @@ tr.row-h td{background:var(--gh-light)}
         </div>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <button class="ia-view-btn" style="color:#e71d36;border-color:#fecaca" onclick="dpResetAllSnapshots()" title="이전 일자 스냅샷 전체 리셋">🔄 스냅샷 전체 리셋</button>
-      </div>
-      <div class="dp-date-panel hidden" id="dpDatePanel">
-        <div class="dp-date-panel-header">
-          <button class="ia-view-btn" onclick="dpDateSelectAll(true)">전체 선택</button>
-          <button class="ia-view-btn" onclick="dpDateSelectAll(false)">전체 해제</button>
-          <button class="ia-view-btn" onclick="dpToggleDatePanel()">닫기</button>
-        </div>
-        <div class="dp-date-list" id="dpDateList"></div>
       </div>
       <div class="ia-section" style="overflow-x:auto">
         <div class="dp-table-wrap"><table class="ia-table dp-table" id="dpTable"></table></div>
@@ -4402,14 +4410,48 @@ function dpShow(){
 }
 
 function dpRenderDateList(){
+  if(!dpResult)return;
   const list=document.getElementById('dpDateList');
-  list.innerHTML=dpResult.dates.map(d=>{
-    const checked=dpSelectedDates.has(d)?'checked':'';
-    return `<label><input type="checkbox" value="${d}" ${checked} onchange="dpToggleDate('${d}',this.checked)"> ${dpFmtDateWd(d)}</label>`;
-  }).join('');
+  const search=(document.getElementById('dpDateSearch')?.value||'').trim().toLowerCase();
+  const filtered=dpResult.dates.filter(d=>{
+    if(!search)return true;
+    const label=dpFmtDateWd(d).toLowerCase();
+    return label.includes(search)||d.toLowerCase().includes(search);
+  });
+  if(filtered.length===0){
+    list.innerHTML='<div class="dp-date-list-empty">검색 결과 없음</div>';
+  }else{
+    list.innerHTML=filtered.map(d=>{
+      const checked=dpSelectedDates.has(d)?'checked':'';
+      return `<label><input type="checkbox" value="${d}" ${checked} onchange="dpToggleDate('${d}',this.checked)"> ${dpFmtDateWd(d)}</label>`;
+    }).join('');
+  }
   const cnt=dpSelectedDates.size;
   document.getElementById('dpDateCount').textContent=`(${cnt}/${dpResult.dates.length})`;
 }
+
+function dpDateSelectFiltered(select){
+  if(!dpResult)return;
+  const search=(document.getElementById('dpDateSearch')?.value||'').trim().toLowerCase();
+  const filtered=dpResult.dates.filter(d=>{
+    if(!search)return true;
+    const label=dpFmtDateWd(d).toLowerCase();
+    return label.includes(search)||d.toLowerCase().includes(search);
+  });
+  for(const d of filtered){
+    if(select) dpSelectedDates.add(d); else dpSelectedDates.delete(d);
+  }
+  dpRenderDateList();
+  dpRender();
+}
+
+// 바깥 클릭 시 날짜 패널 닫기
+document.addEventListener('click',e=>{
+  const panel=document.getElementById('dpDatePanel');
+  if(!panel||panel.classList.contains('hidden'))return;
+  const wrap=panel.closest('.dp-date-wrap');
+  if(wrap&&!wrap.contains(e.target)) panel.classList.add('hidden');
+});
 function dpToggleDate(date,checked){
   if(checked) dpSelectedDates.add(date);
   else dpSelectedDates.delete(date);
