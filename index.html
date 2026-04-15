@@ -4572,7 +4572,7 @@ function dpWeekLabel(monYmd){
   const [y,m,d]=monYmd.split('-').map(Number);
   const mon=new Date(y,m-1,d);
   const sun=new Date(y,m-1,d+6);
-  const f=dt=>`${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+  const f=dt=>`${dt.getMonth()+1}/${dt.getDate()}(${DP_DOW[dt.getDay()]})`;
   return `${f(mon)}~${f(sun)}`;
 }
 // 주차 집계: {weekKey: {bucket, cost}}
