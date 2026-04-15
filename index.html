@@ -4502,7 +4502,7 @@ function dpBuildTableHtml(title,cls,bucketGetter,dates,opts){
   for(const s of subs) html+=`<th class="${cls}">${s}</th>`;
   if(withCost){
     html+='<th class="dp-grp-cost">광고비(만원)</th>';
-    html+='<th class="dp-grp-cost">CPA</th>';
+    html+='<th class="dp-grp-cost">계약당단가</th>';
   }
   html+='</tr></thead><tbody>';
 
@@ -4605,7 +4605,7 @@ function dpBuildWeekTableHtml(cls,bucketGetter,dates,opts){
   for(const s of subs) html+=`<th class="${cls}">${s}</th>`;
   if(withCost){
     html+='<th class="dp-grp-cost">광고비(만원)</th>';
-    html+='<th class="dp-grp-cost">CPA</th>';
+    html+='<th class="dp-grp-cost">계약당단가</th>';
   }
   html+='</tr></thead><tbody>';
 
@@ -4740,12 +4740,12 @@ async function dpDownloadExcel(){
     const r1=new Array(ncols).fill('');
     r1[0]='분배일';
     r1[1]=title;
-    if(withCost) r1[1+subs.length]='광고비(만원) / CPA';
+    if(withCost) r1[1+subs.length]='광고비(만원) / 계약당단가';
     aoa.push(r1);
     // 헤더 2행
     const r2=new Array(ncols).fill('');
     for(let i=0;i<subs.length;i++) r2[1+i]=subs[i];
-    if(withCost){r2[1+subs.length]='광고비(만원)';r2[2+subs.length]='CPA';}
+    if(withCost){r2[1+subs.length]='광고비(만원)';r2[2+subs.length]='계약당단가';}
     aoa.push(r2);
     // merges: 분배일 세로, 카테고리 가로, 광고비 가로
     merges.push({s:{r:startRow,c:0},e:{r:startRow+1,c:0}});
@@ -4812,12 +4812,12 @@ async function dpDownloadExcel(){
     const r1=new Array(ncols).fill('');
     r1[0]='주차';
     r1[1]=`${cat} · 주차별 합계`;
-    r1[1+subs.length]='광고비(만원) / CPA';
+    r1[1+subs.length]='광고비(만원) / 계약당단가';
     aoa.push(r1);
     const r2=new Array(ncols).fill('');
     for(let i=0;i<subs.length;i++) r2[1+i]=subs[i];
     r2[1+subs.length]='광고비(만원)';
-    r2[2+subs.length]='CPA';
+    r2[2+subs.length]='계약당단가';
     aoa.push(r2);
     merges.push({s:{r:startRow,c:0},e:{r:startRow+1,c:0}});
     merges.push({s:{r:startRow,c:1},e:{r:startRow,c:subs.length}});
