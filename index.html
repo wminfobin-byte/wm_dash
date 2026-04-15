@@ -4265,6 +4265,19 @@ function dpGroupByName(nameMap,obName){
   const info=nameMap[dpNormName(obName)];
   return info?info.group:null;
 }
+// 월 일치 명단 우선, 없으면 다른 월 명단 전체에서 탐색 (신규 입사자 대응)
+function dpLookupInfo(maps,dateKey,obName){
+  const key=dpNormName(obName);
+  if(!key)return null;
+  const primary=dpResolveNameMap(maps,dateKey);
+  if(primary&&primary[key])return primary[key];
+  for(const m of maps.months){
+    const mp=maps.byMonth[m];
+    if(mp&&mp[key])return mp[key];
+  }
+  if(maps.latest&&maps.latest[key])return maps.latest[key];
+  return null;
+}
 
 function dpFmtYmd(d){
   if(!d)return null;
@@ -4300,14 +4313,15 @@ function dpCompute(){
       const dist=parseDate(row[8]);
       if(!dist)continue;
       const key=dpFmtYmd(dist);
-      // 날짜 월에 해당하는 명단으로 카테고리 판정
-      const nm=dpResolveNameMap(nameMaps,key);
-      const cat=dpCategoryByName(nm,row[7]);
+      // 명단 조회 (월 일치 우선, 신규 입사자 fallback)
+      const info=dpLookupInfo(nameMaps,key,row[7]);
+      if(!info)continue;
+      const cat=(info.brand==='뇌새김영어'||info.brand==='제2외국어')?info.brand:null;
       if(!cat)continue;
       if(!byDate[key]) byDate[key]=dpInitDateEntry();
       byDate[key][cat].db++;
       if(cat==='뇌새김영어'){
-        const g=dpGroupByName(nm,row[7]);
+        const g=info.group;
         if(g&&byDate[key].groups[g]) byDate[key].groups[g].db++;
       }
     }
@@ -4328,9 +4342,10 @@ function dpCompute(){
     const orderDate=parseDate(orderDt);
     if(!orderDate)continue;
     const key=dpFmtYmd(orderDate);
-    // 해당 월 명단으로 카테고리 판정
-    const nm=dpResolveNameMap(nameMaps,key);
-    const cat=dpCategoryByName(nm,row[7]);
+    // 명단 조회 (월 일치 우선, 신규 입사자 fallback)
+    const info=dpLookupInfo(nameMaps,key,row[7]);
+    if(!info)continue;
+    const cat=(info.brand==='뇌새김영어'||info.brand==='제2외국어')?info.brand:null;
     if(!cat)continue;
     if(!byDate[key]) byDate[key]=dpInitDateEntry();
     const b=byDate[key][cat];
@@ -4346,7 +4361,7 @@ function dpCompute(){
     else b.newDb++;
     // 뇌새김영어 그룹 분할
     if(cat==='뇌새김영어'){
-      const g=dpGroupByName(nm,row[7]);
+      const g=info.group;
       if(g&&byDate[key].groups[g]){
         const gb=byDate[key].groups[g];
         gb.contract++;
