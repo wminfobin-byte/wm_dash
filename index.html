@@ -456,6 +456,7 @@ tr.row-h td{background:var(--gh-light)}
   </div>
   <div class="header-right" id="headerRight-daily-perf" style="display:none">
     <span style="font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap">유입분석 데이터 사용</span>
+    <button class="btn-header" onclick="dpDownloadExcel()">엑셀 다운로드</button>
     <div class="header-sep"></div>
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn4">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
@@ -4609,6 +4610,146 @@ function dpUpdateCostCells(){
     if(c) c.textContent=dpFmtNum(totCost);
     if(p) p.textContent=dpFmtCPA(totCost,totCnt);
   }
+}
+
+// 일자별 성과 엑셀 다운로드 — 화면과 동일한 색/레이아웃
+async function dpDownloadExcel(){
+  if(!dpResult){alert('데이터가 없습니다.');return;}
+  const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
+  if(dates.length===0){alert('선택된 날짜가 없습니다.');return;}
+  const cat=dpCat;
+
+  const COL_HDR={fill:{patternType:'solid',fgColor:{rgb:'2D3748'}},font:{color:{rgb:'FFFFFF'},bold:true,sz:11},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:dpBorder()};
+  const COL_BRAIN={...COL_HDR,fill:{patternType:'solid',fgColor:{rgb:'4361EE'}}};
+  const COL_FOREIGN={...COL_HDR,fill:{patternType:'solid',fgColor:{rgb:'2EC4B6'}}};
+  const COL_COST={...COL_HDR,fill:{patternType:'solid',fgColor:{rgb:'F0920E'}}};
+  const CELL={alignment:{horizontal:'center',vertical:'center'},border:dpBorder(),font:{sz:11}};
+  const TOTAL={...CELL,fill:{patternType:'solid',fgColor:{rgb:'F1F5F9'}},font:{sz:11,bold:true}};
+
+  const aoa=[];
+  const merges=[];
+  const styles={}; // {"A1": styleObj}
+
+  const subs=['DB수','계약수','계약률','일계약','일계약률','이전계약','이전계약률','신규DB계약','신규계약률','재콜DB계약','재콜계약률'];
+
+  function appendTable(title,groupStyle,bucketGetter,withCost){
+    const startRow=aoa.length; // 0-indexed
+    const ncols=1+subs.length+(withCost?2:0);
+    // 헤더 1행: 분배일(rowspan2) + 카테고리(colspan 11) + (광고비/CPA colspan 2)
+    const r1=new Array(ncols).fill('');
+    r1[0]='분배일';
+    r1[1]=title;
+    if(withCost) r1[1+subs.length]='광고비(만원) / CPA';
+    aoa.push(r1);
+    // 헤더 2행
+    const r2=new Array(ncols).fill('');
+    for(let i=0;i<subs.length;i++) r2[1+i]=subs[i];
+    if(withCost){r2[1+subs.length]='광고비(만원)';r2[2+subs.length]='CPA';}
+    aoa.push(r2);
+    // merges: 분배일 세로, 카테고리 가로, 광고비 가로
+    merges.push({s:{r:startRow,c:0},e:{r:startRow+1,c:0}});
+    merges.push({s:{r:startRow,c:1},e:{r:startRow,c:subs.length}});
+    if(withCost) merges.push({s:{r:startRow,c:1+subs.length},e:{r:startRow,c:2+subs.length}});
+    // 헤더 스타일
+    for(let c=0;c<ncols;c++){
+      const isCost=withCost&&c>subs.length;
+      const st=(c===0)?COL_HDR:(isCost?COL_COST:groupStyle);
+      styles[XLSX.utils.encode_cell({r:startRow,c})]=st;
+      styles[XLSX.utils.encode_cell({r:startRow+1,c})]=st;
+    }
+
+    const tot={db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0};
+    let totCost=0;
+    for(const d of dates){
+      const e=dpResult.byDate[d]||dpInitDateEntry();
+      const b=bucketGetter(e)||dpNewBucket();
+      tot.db+=b.db;tot.contract+=b.contract;tot.today+=b.today;tot.prev+=b.prev;tot.newDb+=b.newDb;tot.recallDb+=b.recallDb;
+      const row=[
+        dpFmtDateWd(d),
+        dpFmtNum(b.db),dpFmtNum(b.contract),dpFmtPct(b.contract,b.db),
+        dpFmtNum(b.today),dpFmtPct(b.today,b.db),
+        dpFmtNum(b.prev),dpFmtPct(b.prev,b.db),
+        dpFmtNum(b.newDb),dpFmtPct(b.newDb,b.db),
+        dpFmtNum(b.recallDb),dpFmtPct(b.recallDb,b.db),
+      ];
+      if(withCost){
+        const cost=dpAdCost[d]||{};
+        const cv=Number(cost[cat]||0);
+        totCost+=cv;
+        row.push(cv||'',dpFmtCPA(cv,b.contract));
+      }
+      const rIdx=aoa.length;
+      aoa.push(row);
+      // 날짜 색상
+      const dc=dpDateColor(d);
+      const dateStyle=dc?{...CELL,font:{sz:11,bold:true,color:{rgb:dc.replace('#','').toUpperCase()}}}:CELL;
+      styles[XLSX.utils.encode_cell({r:rIdx,c:0})]=dateStyle;
+      for(let c=1;c<ncols;c++) styles[XLSX.utils.encode_cell({r:rIdx,c})]=CELL;
+    }
+    // 합계행
+    const totRow=[
+      '합계',
+      dpFmtNum(tot.db),dpFmtNum(tot.contract),dpFmtPct(tot.contract,tot.db),
+      dpFmtNum(tot.today),dpFmtPct(tot.today,tot.db),
+      dpFmtNum(tot.prev),dpFmtPct(tot.prev,tot.db),
+      dpFmtNum(tot.newDb),dpFmtPct(tot.newDb,tot.db),
+      dpFmtNum(tot.recallDb),dpFmtPct(tot.recallDb,tot.db),
+    ];
+    if(withCost){totRow.push(dpFmtNum(totCost),dpFmtCPA(totCost,tot.contract));}
+    const tIdx=aoa.length;
+    aoa.push(totRow);
+    for(let c=0;c<ncols;c++) styles[XLSX.utils.encode_cell({r:tIdx,c})]=TOTAL;
+  }
+
+  const mainStyle=cat==='뇌새김영어'?COL_BRAIN:COL_FOREIGN;
+  const mainGetter=e=>e[cat]||dpNewBucket();
+  appendTable(cat,mainStyle,mainGetter,true);
+
+  if(cat==='뇌새김영어'){
+    const groups=['W그룹','E그룹','N그룹'];
+    for(const g of groups){
+      aoa.push([]); // 빈 행
+      appendTable(g,COL_BRAIN,e=>(e.groups&&e.groups[g])||dpNewBucket(),false);
+    }
+  }
+
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges']=merges;
+  // 스타일 적용
+  for(const[addr,st]of Object.entries(styles)){
+    if(ws[addr]) ws[addr].s=st;
+    else {ws[addr]={v:'',t:'s',s:st};}
+  }
+  // 열 너비
+  const maxCols=14;
+  ws['!cols']=[{wch:18}];
+  for(let i=1;i<maxCols;i++) ws['!cols'].push({wch:11});
+  // 행 높이 (헤더)
+  ws['!rows']=aoa.map(()=>({hpt:20}));
+
+  const wb=XLSX.utils.book_new();
+  const sheetName=cat==='뇌새김영어'?'뇌새김영어':'제2외국어';
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+
+  // 눈금선 제거 (JSZip 패치)
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  const zip=await JSZip.loadAsync(wbBuf);
+  for(const path of Object.keys(zip.files)){
+    if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+      const xml=await zip.file(path).async('string');
+      zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));
+    }
+  }
+  const blob=await zip.generateAsync({type:'blob'});
+  const today=dpFmtYmd(new Date()).replace(/-/g,'').slice(2);
+  const fname=`일자별성과_${cat}_${today}.xlsx`;
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fname;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function dpBorder(){
+  const s={style:'thin',color:{rgb:'CBD5E1'}};
+  return {top:s,bottom:s,left:s,right:s};
 }
 
 const DP_LS_KEY='dp_prefs';
