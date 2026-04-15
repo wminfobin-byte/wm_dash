@@ -4911,6 +4911,50 @@ function dpBorder(){
   return {top:s,bottom:s,left:s,right:s};
 }
 
+// 디버그: 특정 날짜 + 카테고리의 계약수 누락 원인 분석
+// 사용: dpDebug('2026-04-14','뇌새김영어')
+window.dpDebug=function(targetDate,targetCat='뇌새김영어'){
+  if(!iaFiles||!iaFiles.cont||iaFiles.cont.length===0){console.warn('cont 파일 없음');return;}
+  const nameMaps=dpBuildNameMapByMonth();
+  const rows=iaMergedContRows();
+  const reasons={},details=[];
+  let matched=0, totalOrderedOnDate=0;
+  for(const row of rows){
+    const ob=String(row[7]||'');
+    const media=String(row[19]||'').toLowerCase();
+    const custStatus=String(row[29]||'');
+    const lastCall=String(row[21]||'');
+    const orderDt=String(row[23]||'');
+    const orderDate=parseDate(orderDt);
+    if(!orderDate)continue;
+    const key=dpFmtYmd(orderDate);
+    if(key!==targetDate)continue;
+    totalOrderedOnDate++;
+    const status=classifyStatus(custStatus,lastCall,orderDt);
+    let reason=null;
+    if(!dpPassObName(ob))reason=`obName 제외(${ob})`;
+    else if(media.includes('talkis'))reason='talkis 제외';
+    else if(status!=='계약'&&status!=='취소')reason=`상태=${status||'미분류'}`;
+    else {
+      const nm=dpResolveNameMap(nameMaps,key);
+      const cat=dpCategoryByName(nm,ob);
+      if(!cat)reason=`명단 미매칭(${ob})`;
+      else if(cat!==targetCat)reason=`다른카테고리=${cat}`;
+    }
+    if(reason){
+      reasons[reason]=(reasons[reason]||0)+1;
+      details.push({ob,media,custStatus,orderDt,reason});
+    }else{
+      matched++;
+    }
+  }
+  console.log(`[${targetDate}] ${targetCat} 매칭 계약수: ${matched}`);
+  console.log(`[${targetDate}] 주문일 전체 행: ${totalOrderedOnDate}`);
+  console.log('제외 사유별 집계:');console.table(reasons);
+  console.log('제외 상세:',details);
+  return {matched,totalOrderedOnDate,reasons,details};
+};
+
 const DP_LS_KEY='dp_prefs';
 function dpLoadPrefs(){
   try{
