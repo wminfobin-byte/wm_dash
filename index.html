@@ -1016,6 +1016,9 @@ tr.row-h td{background:var(--gh-light)}
         <button class="ia-view-btn" style="color:#e71d36;border-color:#fecaca" onclick="dpResetAllSnapshots()" title="이전 일자 스냅샷 전체 리셋">🔄 스냅샷 전체 리셋</button>
       </div>
       <div class="ia-section" style="overflow-x:auto">
+        <div class="dp-table-wrap"><table class="ia-table dp-table" id="dpWeekTable"></table></div>
+      </div>
+      <div class="ia-section" style="overflow-x:auto;margin-top:16px">
         <div class="dp-table-wrap"><table class="ia-table dp-table" id="dpTable"></table></div>
       </div>
       <div id="dpGroupSections"></div>
@@ -4557,12 +4560,110 @@ function dpBuildTableHtml(title,cls,bucketGetter,dates,opts){
   return html;
 }
 
+function dpWeekKey(ymd){
+  const [y,m,d]=ymd.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  const wd=dt.getDay();
+  const diff=wd===0?-6:1-wd;
+  const mon=new Date(y,m-1,d+diff);
+  return dpFmtYmd(mon);
+}
+function dpWeekLabel(monYmd){
+  const [y,m,d]=monYmd.split('-').map(Number);
+  const mon=new Date(y,m-1,d);
+  const sun=new Date(y,m-1,d+6);
+  const f=dt=>`${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+  return `${f(mon)}~${f(sun)}`;
+}
+// 주차 집계: {weekKey: {bucket, cost}}
+function dpAggregateByWeek(dates,bucketGetter,withCost){
+  const map={};
+  for(const d of dates){
+    const wk=dpWeekKey(d);
+    if(!map[wk]) map[wk]={bucket:dpNewBucket(),cost:0};
+    const e=dpResult.byDate[d]||dpInitDateEntry();
+    const b=bucketGetter(e)||dpNewBucket();
+    const w=map[wk].bucket;
+    w.db+=b.db;w.contract+=b.contract;w.today+=b.today;w.prev+=b.prev;w.newDb+=b.newDb;w.recallDb+=b.recallDb;
+    if(withCost){
+      const c=dpAdCost[d]||{};
+      map[wk].cost+=Number(c[dpCat]||0);
+    }
+  }
+  return map;
+}
+
+function dpBuildWeekTableHtml(cls,bucketGetter,dates,opts){
+  const withCost=!!(opts&&opts.withCost);
+  const cat=dpCat;
+  let html='<thead><tr>';
+  html+='<th rowspan="2">주차</th>';
+  html+=`<th class="${cls}" colspan="11">${cat} · 주차별 합계</th>`;
+  if(withCost) html+='<th class="dp-grp-cost" colspan="2">광고비(만원) / CPA</th>';
+  html+='</tr><tr>';
+  const subs=['DB수','계약수','계약률','일계약','일계약률','이전계약','이전계약률','신규DB계약','신규계약률','재콜DB계약','재콜계약률'];
+  for(const s of subs) html+=`<th class="${cls}">${s}</th>`;
+  if(withCost){
+    html+='<th class="dp-grp-cost">광고비(만원)</th>';
+    html+='<th class="dp-grp-cost">CPA</th>';
+  }
+  html+='</tr></thead><tbody>';
+
+  const wkMap=dpAggregateByWeek(dates,bucketGetter,withCost);
+  const weeks=Object.keys(wkMap).sort();
+  const tot=dpNewBucket();
+  let totCost=0;
+  for(const wk of weeks){
+    const b=wkMap[wk].bucket;
+    tot.db+=b.db;tot.contract+=b.contract;tot.today+=b.today;tot.prev+=b.prev;
+    tot.newDb+=b.newDb;tot.recallDb+=b.recallDb;
+    html+=`<tr><td>${dpWeekLabel(wk)}</td>`;
+    html+=`<td>${dpFmtNum(b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.contract)}</td>`;
+    html+=`<td>${dpFmtPct(b.contract,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.today)}</td>`;
+    html+=`<td>${dpFmtPct(b.today,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.prev)}</td>`;
+    html+=`<td>${dpFmtPct(b.prev,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.newDb)}</td>`;
+    html+=`<td>${dpFmtPct(b.newDb,b.db)}</td>`;
+    html+=`<td>${dpFmtNum(b.recallDb)}</td>`;
+    html+=`<td>${dpFmtPct(b.recallDb,b.db)}</td>`;
+    if(withCost){
+      const cv=wkMap[wk].cost;
+      totCost+=cv;
+      html+=`<td>${dpFmtNum(cv)}</td>`;
+      html+=`<td>${dpFmtCPA(cv,b.contract)}</td>`;
+    }
+    html+='</tr>';
+  }
+  html+='<tr class="dp-total-row"><td>합계</td>';
+  html+=`<td>${dpFmtNum(tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.contract)}</td>`;
+  html+=`<td>${dpFmtPct(tot.contract,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.today)}</td>`;
+  html+=`<td>${dpFmtPct(tot.today,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.prev)}</td>`;
+  html+=`<td>${dpFmtPct(tot.prev,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.newDb)}</td>`;
+  html+=`<td>${dpFmtPct(tot.newDb,tot.db)}</td>`;
+  html+=`<td>${dpFmtNum(tot.recallDb)}</td>`;
+  html+=`<td>${dpFmtPct(tot.recallDb,tot.db)}</td>`;
+  if(withCost){
+    html+=`<td>${dpFmtNum(totCost)}</td>`;
+    html+=`<td>${dpFmtCPA(totCost,tot.contract)}</td>`;
+  }
+  html+='</tr></tbody>';
+  return html;
+}
+
 function dpRender(){
   if(!dpResult)return;
   const dates=dpResult.dates.filter(d=>dpSelectedDates.has(d)).sort();
   const cat=dpCat;
   const cls=cat==='뇌새김영어'?'dp-grp-brain':'dp-grp-foreign';
 
+  document.getElementById('dpWeekTable').innerHTML=dpBuildWeekTableHtml(cls,e=>e[cat],dates,{withCost:true});
   document.getElementById('dpTable').innerHTML=dpBuildTableHtml(null,cls,e=>e[cat],dates,{withCost:true});
 
   const gs=document.getElementById('dpGroupSections');
@@ -4703,6 +4804,64 @@ async function dpDownloadExcel(){
 
   const mainStyle=cat==='뇌새김영어'?COL_BRAIN:COL_FOREIGN;
   const mainGetter=e=>e[cat]||dpNewBucket();
+
+  // 주차별 테이블 (상단)
+  function appendWeekTable(){
+    const startRow=aoa.length;
+    const ncols=1+subs.length+2;
+    const r1=new Array(ncols).fill('');
+    r1[0]='주차';
+    r1[1]=`${cat} · 주차별 합계`;
+    r1[1+subs.length]='광고비(만원) / CPA';
+    aoa.push(r1);
+    const r2=new Array(ncols).fill('');
+    for(let i=0;i<subs.length;i++) r2[1+i]=subs[i];
+    r2[1+subs.length]='광고비(만원)';
+    r2[2+subs.length]='CPA';
+    aoa.push(r2);
+    merges.push({s:{r:startRow,c:0},e:{r:startRow+1,c:0}});
+    merges.push({s:{r:startRow,c:1},e:{r:startRow,c:subs.length}});
+    merges.push({s:{r:startRow,c:1+subs.length},e:{r:startRow,c:2+subs.length}});
+    for(let c=0;c<ncols;c++){
+      const isCost=c>subs.length;
+      const st=(c===0)?COL_HDR:(isCost?COL_COST:mainStyle);
+      styles[XLSX.utils.encode_cell({r:startRow,c})]=st;
+      styles[XLSX.utils.encode_cell({r:startRow+1,c})]=st;
+    }
+    const wkMap=dpAggregateByWeek(dates,mainGetter,true);
+    const weeks=Object.keys(wkMap).sort();
+    const tot={db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0};
+    let totCost=0;
+    for(const wk of weeks){
+      const b=wkMap[wk].bucket;
+      tot.db+=b.db;tot.contract+=b.contract;tot.today+=b.today;tot.prev+=b.prev;tot.newDb+=b.newDb;tot.recallDb+=b.recallDb;
+      const cv=wkMap[wk].cost;totCost+=cv;
+      const row=[
+        dpWeekLabel(wk),
+        dpFmtNum(b.db),dpFmtNum(b.contract),dpFmtPct(b.contract,b.db),
+        dpFmtNum(b.today),dpFmtPct(b.today,b.db),
+        dpFmtNum(b.prev),dpFmtPct(b.prev,b.db),
+        dpFmtNum(b.newDb),dpFmtPct(b.newDb,b.db),
+        dpFmtNum(b.recallDb),dpFmtPct(b.recallDb,b.db),
+        cv||'',dpFmtCPA(cv,b.contract),
+      ];
+      const rIdx=aoa.length;aoa.push(row);
+      for(let c=0;c<ncols;c++) styles[XLSX.utils.encode_cell({r:rIdx,c})]=CELL;
+    }
+    const totRow=[
+      '합계',
+      dpFmtNum(tot.db),dpFmtNum(tot.contract),dpFmtPct(tot.contract,tot.db),
+      dpFmtNum(tot.today),dpFmtPct(tot.today,tot.db),
+      dpFmtNum(tot.prev),dpFmtPct(tot.prev,tot.db),
+      dpFmtNum(tot.newDb),dpFmtPct(tot.newDb,tot.db),
+      dpFmtNum(tot.recallDb),dpFmtPct(tot.recallDb,tot.db),
+      dpFmtNum(totCost),dpFmtCPA(totCost,tot.contract),
+    ];
+    const tIdx=aoa.length;aoa.push(totRow);
+    for(let c=0;c<ncols;c++) styles[XLSX.utils.encode_cell({r:tIdx,c})]=TOTAL;
+  }
+  appendWeekTable();
+  aoa.push([]); // 빈 행
   appendTable(cat,mainStyle,mainGetter,true);
 
   if(cat==='뇌새김영어'){
