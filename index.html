@@ -4303,6 +4303,7 @@ function dpPurgeEmptySnapshots(){
 
 function dpCompute(){
   if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont||iaFiles.cont.length===0){
+    console.warn('[dpCompute] SKIP: iaFiles missing',{db:iaFiles?.db?.length,cont:iaFiles?.cont?.length});
     dpResult=null;return;
   }
   const nameMaps=dpBuildNameMapByMonth();
@@ -4310,26 +4311,31 @@ function dpCompute(){
   // DB수 집계 (유입분석 db 파일 재활용, customerKey 중복 제거)
   const seen=new Set();
   const ordered=[...iaFiles.db].sort((a,b)=>b.uploadTime-a.uploadTime);
+  // ── 진단 카운터 ──
+  let _d={total:0,dup:0,obFail:0,talkis:0,recall:0,inNoMedia:0,cbTv:0,noDist:0,noInfo:0,ok:0};
+  const _sampleSkips=[];
   for(const f of ordered){
     for(let i=1;i<f.data.length;i++){
       const row=f.data[i];
+      _d.total++;
       const ck=String(row[6]||'');
-      if(ck&&seen.has(ck))continue;
+      if(ck&&seen.has(ck)){_d.dup++;continue;}
       if(ck)seen.add(ck);
-      if(!dpPassObName(row[7]))continue;
+      if(!dpPassObName(row[7])){_d.obFail++;continue;}
       const media=String(row[19]||'').toLowerCase();
-      if(media.includes('talkis'))continue;
+      if(media.includes('talkis')){_d.talkis++;continue;}
       const dbInfo=String(row[15]||'');
       // DB수 filter: 재콜, IN무매체, callback, tv_b 제외
-      if(dbInfo.includes('재콜'))continue;
-      if(dbInfo.toLowerCase().includes('in')&&!media)continue;
-      if(media.includes('callback')||media.includes('tv_b'))continue;
+      if(dbInfo.includes('재콜')){_d.recall++;continue;}
+      if(dbInfo.toLowerCase().includes('in')&&!media){_d.inNoMedia++;continue;}
+      if(media.includes('callback')||media.includes('tv_b')){_d.cbTv++;continue;}
       const dist=parseDate(row[8]);
-      if(!dist)continue;
+      if(!dist){_d.noDist++;if(_sampleSkips.length<3)_sampleSkips.push({i,row8:row[8],row:row.slice(0,10)});continue;}
       const key=dpFmtYmd(dist);
       // 명단 조회 (월 일치 우선, 신규 입사자 fallback)
       const info=dpLookupInfo(nameMaps,key,row[7]);
-      if(!info)continue;
+      if(!info){_d.noInfo++;if(_sampleSkips.length<3)_sampleSkips.push({i,name:row[7],key,reason:'noInfo'});continue;}
+      _d.ok++;
       const cat=(info.brand==='뇌새김영어'||info.brand==='제2외국어')?info.brand:null;
       if(!cat)continue;
       if(!byDate[key]) byDate[key]=dpInitDateEntry();
@@ -4340,6 +4346,9 @@ function dpCompute(){
       }
     }
   }
+  console.log('[dpCompute] DB수 진단:',_d,'attend파일:',iaFiles.attend?.length,'nameMaps.months:',nameMaps.months);
+  if(_sampleSkips.length>0)console.log('[dpCompute] 스킵 샘플:',_sampleSkips);
+  if(_d.ok===0)console.warn('[dpCompute] ⚠ DB수 0건! 첫 row 샘플:',ordered[0]?.data?.[1]?.slice?.(0,30));
 
   // 계약수 집계 (유입분석 cont 파일 재활용, customerKey 중복 제거)
   for(const row of iaMergedContRows()){
