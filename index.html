@@ -1251,7 +1251,8 @@ async function doSyncUpload(token){
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    // 일자별 성과: 광고비
+    // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
+    dpLoadPrefs();
     const dpPrefs={adCost:dpAdCost||{},snapshot:dpSnapshot||{}};
     const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
