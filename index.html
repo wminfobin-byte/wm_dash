@@ -1282,7 +1282,7 @@ async function doSyncUpload(token){
     const newCommitSha=(await commitRes.json()).sha;
 
     // 5) main 브랜치 포인터 업데이트
-    const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha})});
+    const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:true})});
     if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
     syncBtnText('완료!');setTimeout(syncBtnReset,2000);
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
