@@ -1223,7 +1223,7 @@ async function doSyncUpload(token){
     const ngResults=await getAllResults();
 
     // 유입분석 IDB 데이터 수집 (db/cont는 누적 배열, attend는 원본)
-    const IA_COLS=[6,7,9,15,19,21,23,29];
+    const IA_COLS=[6,7,8,9,15,19,21,23,29];
     const iaSyncFiles=[];
     for(const f of iaFiles.db){
       const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
@@ -1242,7 +1242,7 @@ async function doSyncUpload(token){
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // 일자별 성과: 광고비
-    const dpPrefs={adCost:dpAdCost||{}};
+    const dpPrefs={adCost:dpAdCost||{},snapshot:dpSnapshot||{}};
     const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
