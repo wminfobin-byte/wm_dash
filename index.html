@@ -1102,6 +1102,7 @@ async function autoSyncDownload(){
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||dpAdCost;
       dpSnapshot=payload.dp.snapshot||dpSnapshot;
+      dpPurgeEmptySnapshots();
       localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,snapshot:dpSnapshot}));
     }
     // 유입분석 복원 (info_bin 권한 + 아직 안 불러온 경우만)
@@ -1322,6 +1323,7 @@ async function doSyncDownloadManual(){
     if(payload.dp&&authUser&&authUser.tabs.includes('daily-perf')){
       dpAdCost=payload.dp.adCost||{};
       dpSnapshot=payload.dp.snapshot||{};
+      dpPurgeEmptySnapshots();
       localStorage.setItem('dp_prefs',JSON.stringify({adCost:dpAdCost,snapshot:dpSnapshot}));
     }
     // 유입분석 복원 (info_bin 접근권한 사용자만)
@@ -4287,6 +4289,18 @@ function dpFmtYmd(d){
 function dpNewBucket(){return {db:0,contract:0,today:0,prev:0,newDb:0,recallDb:0};}
 function dpInitDateEntry(){return {뇌새김영어:dpNewBucket(),제2외국어:dpNewBucket(),groups:{W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()}};}
 
+// 손상된 스냅샷(DB수 0인 날짜) 일괄 제거
+function dpPurgeEmptySnapshots(){
+  let cleaned=0;
+  for(const k of Object.keys(dpSnapshot)){
+    const s=dpSnapshot[k];
+    if(s['뇌새김영어']&&s['제2외국어']&&s['뇌새김영어'].db===0&&s['제2외국어'].db===0){
+      delete dpSnapshot[k];cleaned++;
+    }
+  }
+  if(cleaned>0){dpSavePrefs();console.log(`dpSnapshot: ${cleaned}개 손상 스냅샷 제거`);}
+}
+
 function dpCompute(){
   if(!iaFiles||!iaFiles.db||iaFiles.db.length===0||!iaFiles.cont||iaFiles.cont.length===0){
     dpResult=null;return;
@@ -4378,9 +4392,19 @@ function dpCompute(){
   for(const k of allKeys){
     if(k<today){
       if(dpSnapshot[k]){
-        byDate[k]=dpSnapshot[k];
-        // 구 스냅샷(그룹 필드 없음) 호환
-        if(!byDate[k].groups) byDate[k].groups={W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()};
+        // 손상된 스냅샷(DB수 0) 감지: 새로 계산한 값이 있으면 스냅샷 폐기 후 재저장
+        const snap=dpSnapshot[k];
+        const snapEmpty=snap['뇌새김영어']&&snap['제2외국어']&&snap['뇌새김영어'].db===0&&snap['제2외국어'].db===0;
+        const freshHasData=byDate[k]&&(byDate[k]['뇌새김영어'].db>0||byDate[k]['제2외국어'].db>0);
+        if(snapEmpty&&freshHasData){
+          // 손상 스냅샷 → 새로 계산한 값으로 교체
+          dpSnapshot[k]=byDate[k];
+          snapshotDirty=true;
+        }else{
+          byDate[k]=snap;
+          // 구 스냅샷(그룹 필드 없음) 호환
+          if(!byDate[k].groups) byDate[k].groups={W그룹:dpNewBucket(),E그룹:dpNewBucket(),N그룹:dpNewBucket()};
+        }
       }else if(byDate[k]){
         dpSnapshot[k]=byDate[k];
         snapshotDirty=true;
