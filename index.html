@@ -2292,10 +2292,10 @@ function renderKPI(){
   const tAdj=s.reduce((a,x)=>a+x.refAdjContract,0);
   const avgRate=s.length>0?s.reduce((a,x)=>a+x.refAdjRate,0)/s.length:0;
   document.getElementById('kpiGrid').innerHTML=`
-    <div class="kpi-card"><div class="kl">N그룹 인원</div><div class="kv">${result.members.length}명</div></div>
+    <div class="kpi-card"><div class="kl">N그룹 인원</div><div class="kv">${result.members.length.toLocaleString()}명</div></div>
     <div class="kpi-card"><div class="kl">총 DB수</div><div class="kv">${tDb.toLocaleString()}</div></div>
     <div class="kpi-card"><div class="kl">총 실계약수</div><div class="kv">${tCont.toLocaleString()}</div><div class="ks">계약률 ${tDb>0?pct(tCont/tDb):'-'}</div></div>
-    <div class="kpi-card"><div class="kl">취소율반영 계약수</div><div class="kv">${tAdj.toFixed(1)}</div><div class="ks">반영 계약률 ${tDb>0?pct(tAdj/tDb):'-'}</div></div>
+    <div class="kpi-card"><div class="kl">취소율반영 계약수</div><div class="kv">${tAdj.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</div><div class="ks">반영 계약률 ${tDb>0?pct(tAdj/tDb):'-'}</div></div>
     <div class="kpi-card"><div class="kl">평균 취소율반영 계약률</div><div class="kv">${pct(avgRate)}</div></div>
   `;
 }
@@ -2313,7 +2313,7 @@ function renderGroupSummary(){
   document.getElementById('groupSummary').innerHTML=cards.map(c=>{
     const m=gc[c.key]||[];
     const avg=m.length>0?m.reduce((a,n)=>a+(result.stats[n]?.refAdjRate||0),0)/m.length:0;
-    return `<div class="gcard ${c.cls}"><div class="gt">${c.label} (${c.sub})</div><div class="gn">${m.length}명</div><div class="gs">평균 ${pct(avg)}</div>${c.cut?`<div class="gc-cut">${c.cut}</div>`:''}</div>`;
+    return `<div class="gcard ${c.cls}"><div class="gt">${c.label} (${c.sub})</div><div class="gn">${m.length.toLocaleString()}명</div><div class="gs">평균 ${pct(avg)}</div>${c.cut?`<div class="gc-cut">${c.cut}</div>`:''}</div>`;
   }).join('');
 }
 
@@ -2341,8 +2341,8 @@ function renderTable(){
   rows=[...normal.slice(0,insertAt),...protect,...normal.slice(insertAt),...hRows];
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,adj:a.adj+r.refAdjContract}),{db:0,cont:0,adj:0});
   let html=`<tr class="row-total"><td></td><td style="text-align:left;padding-left:16px">합계</td>
-    <td>${t.db}</td><td>${t.cont}</td><td>${t.db>0?pct(t.cont/t.db):'-'}</td>
-    <td>-</td><td>${t.adj.toFixed(1)}</td><td>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td></tr>`;
+    <td>${t.db.toLocaleString()}</td><td>${t.cont.toLocaleString()}</td><td>${t.db>0?pct(t.cont/t.db):'-'}</td>
+    <td>-</td><td>${t.adj.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td><td>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td></tr>`;
 
   rows.forEach(r=>{
     const gc=r.group.replace('그룹','').replace('N_','');
@@ -2358,8 +2358,8 @@ function renderTable(){
     html+=`<tr class="row-${gc.toLowerCase()}">
       <td>${groupCell}</td>
       <td class="name-cell ${gc}">${r.name}</td>
-      <td>${r.db}</td><td>${r.contract}</td><td>${pct(r.contractRate)}</td>
-      <td>${pct2(r.refCancelRate)}</td><td>${r.refAdjContract.toFixed(1)}</td>
+      <td>${r.db.toLocaleString()}</td><td>${r.contract.toLocaleString()}</td><td>${pct(r.contractRate)}</td>
+      <td>${pct2(r.refCancelRate)}</td><td>${r.refAdjContract.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td>
       <td style="font-weight:800">${pct2(r.refAdjRate)}</td>
       <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: -1" onclick="adjustStreak('${r.name}',-1)">${r.streak}</span></td></tr>`;
   });
