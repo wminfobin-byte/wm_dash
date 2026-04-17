@@ -400,10 +400,66 @@ tr.row-h td{background:var(--gh-light)}
 .cd-top-btn:hover .cd-top-arrow{transform:translateY(-2px)}
 .cd-top-btn:active{transform:translateY(-1px) scale(1);transition-duration:.1s}
 
+/* ───── Mobile-friendly (Step 1: foundation) ───── */
 @media(max-width:768px){
-  .group-summary{grid-template-columns:repeat(2,1fr)}
-  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  body{font-size:14px}
+  .container{padding:16px}
+  #page-cancel-dash .container,
+  #page-inflow .container,
+  #page-daily-perf .container{padding:16px}
+
+  .header{padding:0 14px;height:56px}
+  .header h1{font-size:16px}
+  .header h1 span{display:none}
+  .header-brand{gap:8px}
+  .header-logo img{height:26px!important}
+  .btn-header{padding:6px 10px;font-size:12px}
+  .btn-header.btn-logout{padding:6px 8px;font-size:11px}
+  .status-dots{padding:4px 7px;margin-right:3px}
+  .header-sep{margin:0 2px}
+
+  .modal{padding:20px;width:94vw;max-height:90vh;border-radius:12px}
+  .modal h2{font-size:17px;margin-bottom:14px}
+  .modal h3{font-size:15px;margin:18px 0 10px;padding-top:12px}
+  .modal-close{top:10px;right:12px;font-size:22px}
+
   .upload-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+  .group-summary{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+
+  .btn{padding:9px 18px;font-size:14px}
+  .btn-sm{padding:7px 12px;font-size:12px}
+  .download-bar{flex-wrap:wrap;gap:8px}
+
+  .cd-top-btn{bottom:20px;right:16px;width:42px;height:42px;border-radius:12px}
+}
+
+@media(max-width:480px){
+  body{font-size:13px}
+  .container{padding:12px}
+  #page-cancel-dash .container,
+  #page-inflow .container,
+  #page-daily-perf .container{padding:12px}
+
+  .header{padding:0 10px;height:52px}
+  .header h1{font-size:14px}
+  .header-logo img{height:22px!important}
+  .btn-header{padding:5px 8px;font-size:11px;border-radius:6px}
+
+  .kpi-grid{grid-template-columns:1fr;gap:8px}
+  .group-summary{grid-template-columns:1fr;gap:8px}
+  .kpi-card{padding:14px}
+  .kpi-card .kv{font-size:22px}
+  .gcard{padding:14px}
+  .gcard .gn{font-size:22px}
+
+  .table-section{padding:14px;border-radius:10px;margin-bottom:16px}
+  .table-section h3{font-size:16px}
+  .history-panel{padding:14px;border-radius:10px}
+
+  .btn{padding:8px 14px;font-size:13px;border-radius:7px}
+  .btn-sm{padding:6px 10px;font-size:11px}
+  .cd-top-btn{bottom:14px;right:12px;width:38px;height:38px}
 }
 </style>
 </head>
