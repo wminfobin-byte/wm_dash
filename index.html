@@ -482,6 +482,31 @@ tr.row-h td{background:var(--gh-light)}
   /* 이력 패널 테이블 sticky */
   .history-list table th:first-child,.history-list table td:first-child{position:sticky;left:0;background:#fff;z-index:2;box-shadow:1px 0 0 #eee}
   .history-list table thead th:first-child{background:#f5f6fa;z-index:3}
+
+  /* Step 4: 기타 grid/flex 축소 */
+  .est-summary{grid-template-columns:1fr;gap:10px}
+  .est-box{padding:20px;border-radius:12px}
+  .cd-filter-bar{gap:10px;margin-bottom:14px}
+  .cd-subtabs{flex-wrap:wrap;gap:4px;margin-bottom:14px}
+  .cd-subtab{padding:7px 14px;font-size:13px}
+  .ia-control-bar{flex-wrap:wrap;padding:12px 14px;gap:8px}
+  .ia-upload-zone{padding:14px}
+  .ia-upload-card{min-width:100%}
+  .ia-section{padding:14px}
+  .period-bar{gap:8px;margin-bottom:14px}
+  .cd-calendar{width:min(300px,calc(100vw - 40px))}
+  .dp-date-panel{min-width:min(320px,calc(100vw - 40px));max-width:calc(100vw - 30px)}
+  .sync-box{padding:22px;border-radius:12px}
+  .login-box{padding:32px 24px;border-radius:16px}
+
+  /* 파일 업로드 박스 간격 축소 */
+  .upload-box{padding:14px}
+  .upload-box .icon{font-size:26px}
+  .upload-box .label{font-size:13px}
+  .upload-box .desc{font-size:11px}
+
+  /* 이력 패널 제목 배치 — 작은 화면에서 버튼 줄바꿈 */
+  .history-panel h3{flex-wrap:wrap;gap:8px}
 }
 
 @media(max-width:480px){
@@ -528,6 +553,18 @@ tr.row-h td{background:var(--gh-light)}
   .cd-wide-table th,.cd-wide-table td{padding:7px 8px;font-size:11px}
   .cd-wide-table th{font-size:10px}
   .ia-table th,.ia-table td{padding:5px 4px;font-size:10px}
+
+  /* Step 4: 더 조밀한 레이아웃 */
+  .cd-subtab{padding:6px 10px;font-size:12px}
+  .cd-quick-btn{padding:5px 10px;font-size:12px}
+  .cd-date-range{padding:6px 12px;font-size:13px}
+  .cd-filter-bar{gap:6px}
+  .upload-box{padding:12px}
+  .upload-box .icon{font-size:22px;margin-bottom:4px}
+  .login-box{padding:28px 20px}
+  .login-box h2{font-size:19px}
+  .sync-box{padding:18px}
+  .period-select{padding:6px 10px;font-size:13px}
 }
 </style>
 </head>
