@@ -253,7 +253,7 @@ tr.row-h td{background:var(--gh-light)}
 .dp-table{min-width:1100px;font-size:11px}
 .dp-table th,.dp-table td{padding:5px 4px;white-space:nowrap}
 .dp-table th{background:#2D3748;color:#fff;font-weight:600;font-size:11pt}
-.dp-table thead th:first-child{background:#2D3748;color:#fff}
+.dp-table thead tr:first-child th:first-child{background:#2D3748;color:#fff}
 .dp-table th.dp-grp-brain{background:#4361EE}
 .dp-table th.dp-grp-foreign{background:#2EC4B6}
 .dp-table th.dp-grp-cost{background:#F0920E}
@@ -472,9 +472,9 @@ tr.row-h td{background:var(--gh-light)}
   .cd-wide-table tr.cd-brand-DB관리 td:first-child{background:#fff3e0}
   .cd-wide-table tr.cd-brand-DB관리.bold-row td:first-child{background:#ffe8c8}
 
-  /* 일자별 성과 테이블: 첫 열(날짜) sticky */
-  .dp-table th:first-child,.dp-table td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 #e0e0e0}
-  .dp-table thead th:first-child{background:#2D3748;z-index:3}
+  /* 일자별 성과 테이블: 첫 열(날짜/주차) sticky */
+  .dp-table thead tr:first-child th:first-child,.dp-table tbody td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 #e0e0e0}
+  .dp-table thead tr:first-child th:first-child{background:#2D3748;color:#fff;z-index:3}
   .dp-table tr.dp-total-row td:first-child{background:#f1f5f9}
 
   /* 유입분석 테이블 (ia-table)은 이미 sticky 적용됨 — padding만 축소 */
