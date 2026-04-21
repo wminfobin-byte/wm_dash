@@ -287,6 +287,10 @@ tr.row-h td{background:var(--gh-light)}
 .cd-brand-DB관리{background:#fff3e0!important}
 .cd-brand-DB관리.bold-row{background:#ffe8c8!important}
 
+/* Monthly/Weekly collapsible group */
+.cd-mw-header{cursor:pointer}
+.cd-mw-header:hover{filter:brightness(0.96)}
+
 /* Period selector */
 .period-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
 .period-bar label{font-size:14px;font-weight:700;color:var(--gray)}
@@ -3424,6 +3428,25 @@ function cdTR(label,b,bold,indent,brand){
   h+=`<td class="cd-sep">${cdNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
 }
 
+// ── 월별/주차별 공통: 접기 가능한 그룹 헤더/하위 행 ──
+function cdMWHeaderTR(label,b,gid,brand){
+  const arrow=`<span class="cd-mw-arrow" data-mw-arrow="${gid}" style="display:inline-block;margin-right:6px;transition:transform .2s;transform:rotate(90deg)">▶</span>`;
+  const tr=cdTR(arrow+label,b,true,14,brand);
+  return tr.replace(/^<tr class="([^"]*)"/,`<tr class="$1 cd-mw-header" data-mw-header="${gid}" onclick="cdToggleMW('${gid}')"`);
+}
+function cdMWChildTR(label,b,gid,brand){
+  const tr=cdTR(label,b,false,28,brand);
+  return tr.replace(/^<tr class="([^"]*)"/,`<tr class="$1 cd-mw-child cd-mw-child-${gid}"`);
+}
+function cdToggleMW(gid){
+  const children=document.querySelectorAll('.cd-mw-child-'+gid);
+  const arrow=document.querySelector(`[data-mw-arrow="${gid}"]`);
+  if(!children.length)return;
+  const isHidden=children[0].style.display==='none';
+  children.forEach(el=>el.style.display=isHidden?'':'none');
+  if(arrow)arrow.style.transform=isHidden?'rotate(90deg)':'rotate(0deg)';
+}
+
 // ── 월별 ──
 function cdRenderMonthlyTable(data){
   const byBM={},byM={};
@@ -3433,26 +3456,41 @@ function cdRenderMonthlyTable(data){
   const months=Object.keys(byM).sort();
   const totalM=cdNewBucket();data.forEach(c=>cdAddToBucket(totalM,c));
   let html=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
-  html+=cdTR('전체',totalM,true);
-  for(const brand of CD_BRAND_ORDER){const bt=cdNewBucket();months.forEach(mk=>{const b=byBM[`${brand}|${mk}`];if(b)cdMergeBuckets(bt,b);});
-    if(bt.initial===0)continue;html+=cdTR(brand,bt,true,14,brand);
-    months.forEach(mk=>{const b=byBM[`${brand}|${mk}`];if(b&&b.initial>0){const[,m]=mk.split('-');html+=cdTR(`${+m}월`,b,false,28,brand);}});}
+  // 전체 합계 + 월별 소계 (접기 가능)
+  html+=cdMWHeaderTR('전체',totalM,'mo-all','');
+  months.forEach(mk=>{const b=byM[mk];if(b&&b.initial>0){const[,m]=mk.split('-');html+=cdMWChildTR(`${+m}월`,b,'mo-all','');}});
+  // 브랜드별 + 월별 소계 (접기 가능)
+  CD_BRAND_ORDER.forEach((brand,idx)=>{
+    const bt=cdNewBucket();months.forEach(mk=>{const b=byBM[`${brand}|${mk}`];if(b)cdMergeBuckets(bt,b);});
+    if(bt.initial===0)return;
+    const gid='mo-b'+idx;
+    html+=cdMWHeaderTR(brand,bt,gid,brand);
+    months.forEach(mk=>{const b=byBM[`${brand}|${mk}`];if(b&&b.initial>0){const[,m]=mk.split('-');html+=cdMWChildTR(`${+m}월`,b,gid,brand);}});
+  });
   html+='</tbody></table>';document.getElementById('cdMonthlyTable').innerHTML=html;
 }
 
 // ── 주차별 ──
 function cdRenderWeeklyTable(data){
-  const byBW={};
+  const byBW={},byW={};
   for(const c of data){if(!c.appDate)continue;const d=c.appDate;const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const w=Math.ceil(d.getDate()/7);const wk=`${mk}-W${w}`;
+    if(!byW[wk])byW[wk]=cdNewBucket();cdAddToBucket(byW[wk],c);
     const bk=`${c.brand}|${wk}`;if(!byBW[bk])byBW[bk]=cdNewBucket();cdAddToBucket(byBW[bk],c);}
-  const weeks=[...new Set(Object.keys(byBW).map(k=>k.split('|')[1]))].sort();
+  const weeks=Object.keys(byW).sort();
   const totalW=cdNewBucket();data.forEach(c=>cdAddToBucket(totalW,c));
   let html=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
-  html+=cdTR('전체',totalW,true);
-  for(const brand of CD_BRAND_ORDER){const bt=cdNewBucket();weeks.forEach(wk=>{const b=byBW[`${brand}|${wk}`];if(b)cdMergeBuckets(bt,b);});
-    if(bt.initial===0)continue;html+=cdTR(brand,bt,true,14,brand);
-    weeks.forEach(wk=>{const b=byBW[`${brand}|${wk}`];if(b&&b.initial>0){const pts=wk.match(/(\d+)-W(\d+)$/);html+=cdTR(`${+pts[1]}월 ${pts[2]}주차`,b,false,28,brand);}});}
+  // 전체 합계 + 주차별 소계 (접기 가능)
+  html+=cdMWHeaderTR('전체',totalW,'wk-all','');
+  weeks.forEach(wk=>{const b=byW[wk];if(b&&b.initial>0){const pts=wk.match(/(\d+)-W(\d+)$/);html+=cdMWChildTR(`${+pts[1]}월 ${pts[2]}주차`,b,'wk-all','');}});
+  // 브랜드별 + 주차별 소계 (접기 가능)
+  CD_BRAND_ORDER.forEach((brand,idx)=>{
+    const bt=cdNewBucket();weeks.forEach(wk=>{const b=byBW[`${brand}|${wk}`];if(b)cdMergeBuckets(bt,b);});
+    if(bt.initial===0)return;
+    const gid='wk-b'+idx;
+    html+=cdMWHeaderTR(brand,bt,gid,brand);
+    weeks.forEach(wk=>{const b=byBW[`${brand}|${wk}`];if(b&&b.initial>0){const pts=wk.match(/(\d+)-W(\d+)$/);html+=cdMWChildTR(`${+pts[1]}월 ${pts[2]}주차`,b,gid,brand);}});
+  });
   html+='</tbody></table>';document.getElementById('cdWeeklyTable').innerHTML=html;
 }
 
