@@ -396,6 +396,9 @@ tr.row-h td{background:var(--gh-light)}
 .cd-insight-all-item.warning{background:rgba(255,251,235,.7);border:1px solid #fed7aa}
 .cd-insight-all-item.success{background:rgba(240,253,244,.7);border:1px solid #bbf7d0}
 .cd-insight-all-item.info{background:rgba(239,246,255,.7);border:1px solid #bfdbfe}
+.cd-insight-all-item{cursor:pointer}
+@keyframes cdInsPulse{0%{background:rgba(99,102,241,.35)}50%{background:rgba(99,102,241,.18)}100%{background:rgba(99,102,241,.35)}}
+.cd-ins-hilite>td{animation:cdInsPulse 1s ease-in-out 2;box-shadow:inset 2px 0 0 #6366f1}
 .cd-insight-all-item b{font-weight:700;color:var(--dark)}
 
 /* TOP button — Premium */
@@ -3285,24 +3288,25 @@ function cdRenderInsights(data, targetId){
     const isCurOngoing=(curKey===curMk);
     const suffix=isCurOngoing?' <span style="color:#64748b;font-weight:500">(※ 진행 중 · 취소 추가 발생 가능)</span>':'';
     if(Math.abs(diff)>0.01){
-      if(diff>0) insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.${suffix}`});
-      else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.${suffix}`});
+      const nav={section:'monthly',keys:[curLabel]};
+      if(diff>0) insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.${suffix}`,nav});
+      else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.${suffix}`,nav});
     }
   }
 
   // 4. 배송전 취소 비중
-  if(pxRate>0.05) insights.push({type:'warning',label:'배송전 취소',text:`전체의 <b>${pctF(pxRate)}</b> (${Math.round(px)}건). 초기 이탈 방지 대응이 필요합니다.`});
+  if(pxRate>0.05) insights.push({type:'warning',label:'배송전 취소',text:`전체의 <b>${pctF(pxRate)}</b> (${Math.round(px)}건). 초기 이탈 방지 대응이 필요합니다.`,nav:{section:'monthly',keys:['전체']}});
 
   // 5. 취소 집중 구간 (배송후 취소 기간 분포)
   const nonCumul=CD_PERIODS.filter(p=>!p.cumul);
   let maxP=null,maxPRate=0;
   for(const p of nonCumul){const v=total.periods[p.key]||0;const r=n>0?v/n:0;if(r>maxPRate){maxPRate=r;maxP=p;}}
-  if(maxP&&maxPRate>0.02) insights.push({type:'info',label:'취소 집중 구간',text:`<b>${maxP.key}</b>에 가장 집중 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어 강화 권장.`});
+  if(maxP&&maxPRate>0.02) insights.push({type:'info',label:'취소 집중 구간',text:`<b>${maxP.key}</b>에 가장 집중 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어 강화 권장.`,nav:{section:'monthly',keys:['전체']}});
 
   // 6. 14일 이내 조기 취소 비중 (배송후 취소 중)
   const early14=total.periods['14일이내']||0;
   const earlyRatio=cx>0?early14/cx:0;
-  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',label:'조기 취소',text:`배송후 취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 프로세스 점검을 권장합니다.`});
+  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',label:'조기 취소',text:`배송후 취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 프로세스 점검을 권장합니다.`,nav:{section:'monthly',keys:['전체']}});
 
   // 7. 구분(brand)별 전체 취소율 차이
   const byBrand={};
@@ -3310,7 +3314,7 @@ function cdRenderInsights(data, targetId){
   let worstBrand=null,worstRate=0,bestBrand=null,bestRate=1;
   for(const[k,b]of Object.entries(byBrand)){if(b.initial<5)continue;const r=(b.preCx+b.cancel)/b.initial;if(r>worstRate){worstRate=r;worstBrand=k;}if(r<bestRate){bestRate=r;bestBrand=k;}}
   if(worstBrand&&bestBrand&&worstBrand!==bestBrand&&(worstRate-bestRate)>0.05){
-    insights.push({type:'danger',label:'구분별 편차',text:`<b>${worstBrand}</b>(${pctF(worstRate)}) 최고 / <b>${bestBrand}</b>(${pctF(bestRate)}) 최저. 편차 ${pctF(worstRate-bestRate)}.`});
+    insights.push({type:'danger',label:'구분별 편차',text:`<b>${worstBrand}</b>(${pctF(worstRate)}) 최고 / <b>${bestBrand}</b>(${pctF(bestRate)}) 최저. 편차 ${pctF(worstRate-bestRate)}.`,nav:{section:'monthly',keys:[worstBrand,bestBrand]}});
   }
 
   // 8. 센터별 전체 취소율 이상치
@@ -3322,7 +3326,7 @@ function cdRenderInsights(data, targetId){
     const outliers=centerRates.filter(x=>x.r>avgCR*1.3).sort((a,b)=>b.r-a.r);
     if(outliers.length>0){
       const names=outliers.map(x=>`<b>${x.k}</b>(${pctF(x.r)})`).join(', ');
-      insights.push({type:'warning',label:'센터별 이상치',text:`평균(${pctF(avgCR)}) 대비 높은 센터: ${names}.`});
+      insights.push({type:'warning',label:'센터별 이상치',text:`평균(${pctF(avgCR)}) 대비 높은 센터: ${names}.`,nav:{section:'center',keys:outliers.map(x=>x.k)}});
     }
   }
 
@@ -3335,14 +3339,15 @@ function cdRenderInsights(data, targetId){
     .map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,n:b.initial,cxN:Math.round(b.preCx+b.cancel)}))
     .sort((a,b)=>b.r-a.r);
   if(personRates.length>=3&&personRates[0].r>totalRate*1.3){
-    const top3=personRates.slice(0,3).map(x=>`<b>${x.k}</b>(${pctF(x.r)}, 취소 ${x.cxN}건)`).join(', ');
-    insights.push({type:'info',label:'개인별 상위',text:`${top3} — 개별 코칭 포인트로 활용하세요.`});
+    const top3Arr=personRates.slice(0,3);
+    const top3=top3Arr.map(x=>`<b>${x.k}</b>(${pctF(x.r)}, 취소 ${x.cxN}건)`).join(', ');
+    insights.push({type:'info',label:'개인별 상위',text:`${top3} — 개별 코칭 포인트로 활용하세요.`,nav:{section:'person',keys:top3Arr.map(x=>x.k)}});
   }
 
   // 10. 30일 이후 장기 취소 (배송후 취소 중)
   const late=total.periods['30일이후']||0;
   const lateRatio=cx>0?late/cx:0;
-  if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (배송후 취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`});
+  if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (배송후 취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`,nav:{section:'monthly',keys:['전체']}});
 
   // 렌더 — 한줄 로테이션
   if(!insights.length){el.innerHTML='';return;}
@@ -3350,8 +3355,8 @@ function cdRenderInsights(data, targetId){
   const uid=targetId||'cdInsightPanel';
   let dots='';for(let i=0;i<insights.length;i++)dots+=`<span${i===0?' class="active"':''}></span>`;
   let allHtml='';
-  for(const ins of insights) allHtml+=`<div class="cd-insight-all-item ${ins.type}"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;
-  el.innerHTML=`<div class="cd-insight-panel" id="${uid}-panel" onclick="cdInsightNext('${uid}')" onmouseenter="cdInsightPause('${uid}')" onmouseleave="cdInsightResume('${uid}')">
+  insights.forEach((ins,i)=>{allHtml+=`<div class="cd-insight-all-item ${ins.type}" onclick="event.stopPropagation();cdInsightGo('${uid}',${i})"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;});
+  el.innerHTML=`<div class="cd-insight-panel" id="${uid}-panel" onclick="cdInsightGo('${uid}')" onmouseenter="cdInsightPause('${uid}')" onmouseleave="cdInsightResume('${uid}')" title="클릭하면 해당 데이터로 이동">
     <div class="cd-insight-icon">AI</div>
     <div class="cd-insight-body" id="${uid}-body"></div>
     <div class="cd-insight-dots" id="${uid}-dots">${dots}</div>
@@ -3404,6 +3409,52 @@ function cdInsightResume(uid){
   state.timer=setInterval(()=>cdInsightNext(uid),4000);
 }
 
+function cdInsightGo(uid,idx){
+  const state=window._cdIns&&window._cdIns[uid];
+  if(!state)return;
+  const i=(typeof idx==='number')?idx:state.idx;
+  const ins=state.items[i];
+  if(!ins||!ins.nav){cdInsightNext(uid);return;}
+  const viewKey=uid==='cdInsightPanel'?null:uid.replace(/^cdInsight-/,'');
+  const section=ins.nav.section, keys=ins.nav.keys||[];
+  let scrollEl=null, tableEl=null;
+  if(!viewKey){
+    const navMap={monthly:['cdNavMonthly','cdMonthlyTable'],weekly:['cdNavWeekly','cdWeeklyTable'],center:['cdNavCenter','cdCenterTable'],product:['cdNavProduct','cdProductTable'],person:['cdNavPerson','cdPersonTable']};
+    const[navId,tableId]=navMap[section]||[];
+    scrollEl=document.getElementById(navId);tableEl=document.getElementById(tableId);
+  }else{
+    const idMap={monthly:`cdMonthly-${viewKey}`,weekly:`cdWeekly-${viewKey}`,center:`cdCenter-${viewKey}`,product:`cdProduct-${viewKey}`,person:`cdPerson-${viewKey}`};
+    tableEl=document.getElementById(idMap[section]);
+    scrollEl=tableEl?(tableEl.closest('.table-section')||tableEl):null;
+  }
+  if(!scrollEl||!tableEl)return;
+  // 개인별 섹션 자동 펼치기
+  if(section==='person'&&tableEl.classList.contains('hidden')){
+    if(viewKey&&typeof cdToggleBkPerson==='function')cdToggleBkPerson(viewKey);
+    else if(typeof cdTogglePerson==='function')cdTogglePerson();
+  }
+  scrollEl.scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>{
+    const rows=tableEl.querySelectorAll('tbody tr');
+    rows.forEach(r=>r.classList.remove('cd-ins-hilite'));
+    if(!keys.length)return;
+    const matched=[];
+    for(const r of rows){
+      const first=r.querySelector('td');if(!first)continue;
+      const txt=first.textContent.trim();
+      for(const k of keys){if(txt===k||txt.endsWith(k)||txt.includes(k)){matched.push(r);break;}}
+    }
+    // 접힌 자식 행이면 부모 그룹 펼치기
+    matched.forEach(r=>{
+      if(r.style.display==='none'){
+        const cls=(r.className.match(/cd-mw-child-(\S+)/)||[])[1];
+        if(cls&&typeof cdToggleMW==='function')cdToggleMW(cls);
+      }
+    });
+    matched.forEach(r=>r.classList.add('cd-ins-hilite'));
+    setTimeout(()=>matched.forEach(r=>r.classList.remove('cd-ins-hilite')),2200);
+  },450);
+}
 function cdInsightToggleExpand(uid){
   const state=window._cdIns[uid];if(!state)return;
   const panel=document.getElementById(`${uid}-panel`);
