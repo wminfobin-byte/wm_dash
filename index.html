@@ -3261,56 +3261,62 @@ function cdRenderInsights(data, targetId){
   const insights=[];
   const pctF=(v)=>(v*100).toFixed(1)+'%';
 
-  // 1. 전체 버킷
+  // 1. 전체 버킷 — 취소율 = (배송전 + 배송후) / 최초계약수 (메인 KPI/표와 동일)
   const total=cdNewBucket();data.forEach(c=>cdAddToBucket(total,c));
   const n=total.initial, px=total.preCx, cx=total.cancel, mt=n-px-cx;
-  const cxRate=n>0?cx/n:0, pxRate=n>0?px/n:0;
+  const tc=px+cx;
+  const totalRate=n>0?tc/n:0, pxRate=n>0?px/n:0;
 
-  // 2. 월별 추이
+  // 2. 월별 추이 — 최신 월이 아직 진행 중이면 "배송전 취소"만 집계돼 수치가 과소 추정됨
   const byMonth={};
   for(const c of data){if(!c.appDate)continue;const mk=`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;if(!byMonth[mk])byMonth[mk]=cdNewBucket();cdAddToBucket(byMonth[mk],c);}
   const months=Object.keys(byMonth).sort();
+  const now=new Date();
+  const curMk=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  // 3. 최근 월 vs 이전 월 비교
+  // 3. 최근 월 vs 이전 월 비교 (전체 취소율 기준)
   if(months.length>=2){
-    const cur=byMonth[months[months.length-1]], prev=byMonth[months[months.length-2]];
-    const curR=cur.initial>0?cur.cancel/cur.initial:0, prevR=prev.initial>0?prev.cancel/prev.initial:0;
+    const curKey=months[months.length-1], prevKey=months[months.length-2];
+    const cur=byMonth[curKey], prev=byMonth[prevKey];
+    const curR=cur.initial>0?(cur.preCx+cur.cancel)/cur.initial:0, prevR=prev.initial>0?(prev.preCx+prev.cancel)/prev.initial:0;
     const diff=curR-prevR;
-    const curLabel=months[months.length-1].replace(/^\d{4}-0?/,'').replace(/$/,'월');
-    const prevLabel=months[months.length-2].replace(/^\d{4}-0?/,'').replace(/$/,'월');
+    const curLabel=curKey.replace(/^\d{4}-0?/,'').replace(/$/,'월');
+    const prevLabel=prevKey.replace(/^\d{4}-0?/,'').replace(/$/,'월');
+    const isCurOngoing=(curKey===curMk);
+    const suffix=isCurOngoing?' <span style="color:#64748b;font-weight:500">(※ 진행 중 · 취소 추가 발생 가능)</span>':'';
     if(Math.abs(diff)>0.01){
-      if(diff>0) insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.`});
-      else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.`});
+      if(diff>0) insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.${suffix}`});
+      else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.${suffix}`});
     }
   }
 
   // 4. 배송전 취소 비중
   if(pxRate>0.05) insights.push({type:'warning',label:'배송전 취소',text:`전체의 <b>${pctF(pxRate)}</b> (${Math.round(px)}건). 초기 이탈 방지 대응이 필요합니다.`});
 
-  // 5. 취소 집중 구간
+  // 5. 취소 집중 구간 (배송후 취소 기간 분포)
   const nonCumul=CD_PERIODS.filter(p=>!p.cumul);
   let maxP=null,maxPRate=0;
   for(const p of nonCumul){const v=total.periods[p.key]||0;const r=n>0?v/n:0;if(r>maxPRate){maxPRate=r;maxP=p;}}
   if(maxP&&maxPRate>0.02) insights.push({type:'info',label:'취소 집중 구간',text:`<b>${maxP.key}</b>에 가장 집중 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어 강화 권장.`});
 
-  // 6. 14일 이내 조기 취소 비중
+  // 6. 14일 이내 조기 취소 비중 (배송후 취소 중)
   const early14=total.periods['14일이내']||0;
   const earlyRatio=cx>0?early14/cx:0;
-  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',label:'조기 취소',text:`취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 프로세스 점검을 권장합니다.`});
+  if(earlyRatio>0.5&&cx>=5) insights.push({type:'warning',label:'조기 취소',text:`배송후 취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 프로세스 점검을 권장합니다.`});
 
-  // 7. 구분(brand)별 취소율 차이
+  // 7. 구분(brand)별 전체 취소율 차이
   const byBrand={};
   for(const c of data){const k=c.brand;if(!byBrand[k])byBrand[k]=cdNewBucket();cdAddToBucket(byBrand[k],c);}
   let worstBrand=null,worstRate=0,bestBrand=null,bestRate=1;
-  for(const[k,b]of Object.entries(byBrand)){if(b.initial<5)continue;const r=b.cancel/b.initial;if(r>worstRate){worstRate=r;worstBrand=k;}if(r<bestRate){bestRate=r;bestBrand=k;}}
+  for(const[k,b]of Object.entries(byBrand)){if(b.initial<5)continue;const r=(b.preCx+b.cancel)/b.initial;if(r>worstRate){worstRate=r;worstBrand=k;}if(r<bestRate){bestRate=r;bestBrand=k;}}
   if(worstBrand&&bestBrand&&worstBrand!==bestBrand&&(worstRate-bestRate)>0.05){
     insights.push({type:'danger',label:'구분별 편차',text:`<b>${worstBrand}</b>(${pctF(worstRate)}) 최고 / <b>${bestBrand}</b>(${pctF(bestRate)}) 최저. 편차 ${pctF(worstRate-bestRate)}.`});
   }
 
-  // 8. 센터별 취소율 이상치
+  // 8. 센터별 전체 취소율 이상치
   const byCenter={};
   for(const c of data){const k=c.center||'기타';if(!byCenter[k])byCenter[k]=cdNewBucket();cdAddToBucket(byCenter[k],c);}
-  const centerRates=Object.entries(byCenter).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:b.cancel/b.initial,n:b.initial}));
+  const centerRates=Object.entries(byCenter).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,n:b.initial}));
   if(centerRates.length>=2){
     const avgCR=centerRates.reduce((s,x)=>s+x.r,0)/centerRates.length;
     const outliers=centerRates.filter(x=>x.r>avgCR*1.3).sort((a,b)=>b.r-a.r);
@@ -3320,19 +3326,19 @@ function cdRenderInsights(data, targetId){
     }
   }
 
-  // 9. 개인별 취소율 Top 3
+  // 9. 개인별 전체 취소율 Top 3
   const byPerson={};
   for(const c of data){const k=c.cleanName;if(!byPerson[k])byPerson[k]=cdNewBucket();cdAddToBucket(byPerson[k],c);}
-  const personRates=Object.entries(byPerson).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:b.cancel/b.initial,n:b.initial})).sort((a,b)=>b.r-a.r);
-  if(personRates.length>=3&&personRates[0].r>cxRate*1.3){
+  const personRates=Object.entries(byPerson).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,n:b.initial})).sort((a,b)=>b.r-a.r);
+  if(personRates.length>=3&&personRates[0].r>totalRate*1.3){
     const top3=personRates.slice(0,3).map(x=>`<b>${x.k}</b>(${pctF(x.r)}, ${x.n}건)`).join(', ');
     insights.push({type:'info',label:'개인별 상위',text:`${top3} — 개별 코칭 포인트로 활용하세요.`});
   }
 
-  // 10. 30일 이후 장기 취소
+  // 10. 30일 이후 장기 취소 (배송후 취소 중)
   const late=total.periods['30일이후']||0;
   const lateRatio=cx>0?late/cx:0;
-  if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`});
+  if(lateRatio>0.15&&late>=3) insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (배송후 취소 중 ${pctF(lateRatio)}). 장기 고객 이탈 패턴 분석이 필요합니다.`});
 
   // 렌더 — 한줄 로테이션
   if(!insights.length){el.innerHTML='';return;}
