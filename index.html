@@ -3326,12 +3326,16 @@ function cdRenderInsights(data, targetId){
     }
   }
 
-  // 9. 개인별 전체 취소율 Top 3
+  // 9. 개인별 전체 취소율 Top 3 (재직자만 — 명단 기반)
+  const memberMap=(cdResult&&cdResult.members)||{};
   const byPerson={};
   for(const c of data){const k=c.cleanName;if(!byPerson[k])byPerson[k]=cdNewBucket();cdAddToBucket(byPerson[k],c);}
-  const personRates=Object.entries(byPerson).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,n:b.initial})).sort((a,b)=>b.r-a.r);
+  const personRates=Object.entries(byPerson)
+    .filter(([k,b])=>b.initial>=5 && memberMap[k] && !memberMap[k].resigned)
+    .map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,n:b.initial,cxN:Math.round(b.preCx+b.cancel)}))
+    .sort((a,b)=>b.r-a.r);
   if(personRates.length>=3&&personRates[0].r>totalRate*1.3){
-    const top3=personRates.slice(0,3).map(x=>`<b>${x.k}</b>(${pctF(x.r)}, ${x.n}건)`).join(', ');
+    const top3=personRates.slice(0,3).map(x=>`<b>${x.k}</b>(${pctF(x.r)}, 취소 ${x.cxN}건)`).join(', ');
     insights.push({type:'info',label:'개인별 상위',text:`${top3} — 개별 코칭 포인트로 활용하세요.`});
   }
 
