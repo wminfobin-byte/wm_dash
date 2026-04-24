@@ -33,8 +33,16 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 .btn-header{background:rgba(255,255,255,.07);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.1);padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;backdrop-filter:blur(4px)}
 .btn-header:hover{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.2);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .btn-header:active{transform:translateY(0)}
-.btn-header.btn-sync{background:linear-gradient(135deg,rgba(67,97,238,.3),rgba(67,97,238,.15));border-color:rgba(67,97,238,.4)}
+.btn-header.btn-sync{background:linear-gradient(135deg,rgba(67,97,238,.3),rgba(67,97,238,.15));border-color:rgba(67,97,238,.4);position:relative}
 .btn-header.btn-sync:hover{background:linear-gradient(135deg,rgba(67,97,238,.5),rgba(67,97,238,.25));box-shadow:0 2px 12px rgba(67,97,238,.3)}
+.btn-header.btn-sync.wm-sync-dirty{background:linear-gradient(135deg,rgba(239,68,68,.35),rgba(239,68,68,.2));border-color:rgba(239,68,68,.55);box-shadow:0 0 0 1px rgba(239,68,68,.3),0 0 8px rgba(239,68,68,.35)}
+.btn-header.btn-sync.wm-sync-dirty::after{content:'●';position:absolute;top:-5px;right:-5px;width:12px;height:12px;border-radius:50%;background:#ef4444;color:transparent;font-size:0;box-shadow:0 0 0 2px #1a1d2e,0 0 6px rgba(239,68,68,.8);animation:wmSyncPulse 1.8s ease-in-out infinite}
+.btn-header.btn-sync.wm-sync-fail{background:linear-gradient(135deg,rgba(245,158,11,.35),rgba(245,158,11,.2));border-color:rgba(245,158,11,.55)}
+.btn-header.btn-sync.wm-sync-fail::before{content:'⚠';position:absolute;top:-6px;right:-4px;font-size:12px;color:#f59e0b;text-shadow:0 0 3px rgba(0,0,0,.7)}
+@keyframes wmSyncPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+.wm-sync-status-line{font-size:11px;color:rgba(255,255,255,.55);white-space:nowrap;margin-right:4px;user-select:none}
+.wm-sync-status-line.dirty{color:#fca5a5}
+.wm-sync-status-line.fail{color:#fbbf24}
 .btn-header.btn-logout{color:rgba(255,255,255,.5);font-size:12px;border-color:transparent;background:transparent;padding:8px 12px}
 .btn-header.btn-logout:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.05)}
 .status-dots{display:flex;gap:5px;margin-right:6px;padding:6px 10px;background:rgba(0,0,0,.2);border-radius:6px}
@@ -1239,6 +1247,7 @@ async function autoSyncDownload(){
   // 원격 동기화 타임스탬프 비교 — 원격이 더 새로우면 항상 갱신
   const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
   let remoteNewer=false;
+  window._wmSyncRestoring=true;  // 복원 중 dirty 마킹 억제
 
   try{
     const payload=await fetchSyncPayload();
@@ -1310,7 +1319,16 @@ async function autoSyncDownload(){
     }
     // 동기화 타임스탬프 저장
     localStorage.setItem('sync_last_ts',String(remoteTs));
-  }catch(e){console.log('자동 동기화 스킵:',e.message);}
+    wmSyncSetDownloadStatus('ok');
+    // 원격 복원 성공 시 로컬 dirty 플래그 해제 (원격과 일치 상태)
+    if(remoteNewer) wmSyncClearDirty();
+  }catch(e){
+    console.log('자동 동기화 스킵:',e.message);
+    wmSyncSetDownloadStatus('fail', e.message||'unknown');
+  }finally{
+    window._wmSyncRestoring=false;
+    wmSyncRenderBadge();
+  }
 }
 
 function doLogout(){
@@ -1377,7 +1395,46 @@ function showSyncActions(token){
 }
 
 function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+
+// ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
+const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
+const WM_SYNC_DL_STATUS_KEY='wm_sync_dl_status';
+const WM_SYNC_DL_MSG_KEY='wm_sync_dl_msg';
+function wmSyncMarkDirty(){
+  if(window._wmSyncRestoring)return;
+  localStorage.setItem(WM_SYNC_DIRTY_KEY,'1');
+  wmSyncRenderBadge();
+}
+function wmSyncClearDirty(){
+  localStorage.removeItem(WM_SYNC_DIRTY_KEY);
+  wmSyncRenderBadge();
+}
+function wmSyncSetDownloadStatus(status,msg){
+  localStorage.setItem(WM_SYNC_DL_STATUS_KEY,status);
+  if(msg) localStorage.setItem(WM_SYNC_DL_MSG_KEY,msg);
+  else localStorage.removeItem(WM_SYNC_DL_MSG_KEY);
+  wmSyncRenderBadge();
+}
+function wmSyncRenderBadge(){
+  try{
+    const dirty=localStorage.getItem(WM_SYNC_DIRTY_KEY)==='1';
+    const status=localStorage.getItem(WM_SYNC_DL_STATUS_KEY)||'ok';
+    const msg=localStorage.getItem(WM_SYNC_DL_MSG_KEY)||'';
+    const remoteTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
+    const remoteStr=remoteTs?new Date(remoteTs).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'없음';
+    const btns=document.querySelectorAll('.btn-sync');
+    btns.forEach(b=>{
+      b.classList.toggle('wm-sync-dirty',dirty && status!=='fail');
+      b.classList.toggle('wm-sync-fail',status==='fail');
+      let lines=[];
+      if(dirty) lines.push('● 로컬 변경사항이 있습니다 — 동기화를 눌러 업로드하세요');
+      if(status==='fail') lines.push('⚠ 원격 데이터 다운로드 실패'+(msg?` (${msg})`:'')+' — 새로고침 또는 재접속 시도');
+      lines.push(`원격 최신본: ${remoteStr}`);
+      b.title=lines.join('\n');
+    });
+  }catch(e){}
+}
 function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.innerHTML=msg;}
 
 async function doSyncUpload(token){
@@ -1463,6 +1520,10 @@ async function doSyncUpload(token){
     // 5) main 브랜치 포인터 업데이트
     const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:true})});
     if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
+    // 업로드 성공: 로컬 dirty 해제 + 원격 ts 동기화
+    localStorage.setItem('sync_last_ts',String(Date.now()));
+    wmSyncClearDirty();
+    wmSyncSetDownloadStatus('ok');
     syncBtnText('완료!');setTimeout(syncBtnReset,2000);
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
@@ -1478,6 +1539,7 @@ async function fetchSyncPayload(){
 }
 
 async function doSyncDownloadManual(){
+  window._wmSyncRestoring=true;
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
     const payload=await fetchSyncPayload();
@@ -1535,11 +1597,23 @@ async function doSyncDownloadManual(){
     }
 
     syncLog('다운로드 완료!');
+    // 원격 → 로컬 덮어쓰기 성공: 로컬 상태 = 원격 상태
+    localStorage.setItem('sync_last_ts',String(payload.ts||Date.now()));
+    wmSyncClearDirty();
+    wmSyncSetDownloadStatus('ok');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
-  }catch(err){syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);console.error(err);}
+  }catch(err){
+    syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);
+    wmSyncSetDownloadStatus('fail', err.message||'unknown');
+    console.error(err);
+  }finally{
+    window._wmSyncRestoring=false;
+    wmSyncRenderBadge();
+  }
 }
 
 async function doSyncDownload(token){
+  window._wmSyncRestoring=true;
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
     const payload=await fetchSyncPayload();
@@ -1599,8 +1673,18 @@ async function doSyncDownload(token){
     }
 
     syncLog('다운로드 완료! 대시보드가 갱신되었습니다.');
+    localStorage.setItem('sync_last_ts',String(payload.ts||Date.now()));
+    wmSyncClearDirty();
+    wmSyncSetDownloadStatus('ok');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},2000);
-  }catch(err){syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);console.error(err);}
+  }catch(err){
+    syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);
+    wmSyncSetDownloadStatus('fail', err.message||'unknown');
+    console.error(err);
+  }finally{
+    window._wmSyncRestoring=false;
+    wmSyncRenderBadge();
+  }
 }
 
 function checkAuth(){
@@ -1666,7 +1750,7 @@ function idbAdd(data){
     const tx=idb.transaction('files','readwrite');
     const store=tx.objectStore('files');
     const req=store.add(data);
-    req.onsuccess=()=>res(req.result);
+    req.onsuccess=()=>{wmSyncMarkDirty();res(req.result);};
     req.onerror=e=>rej(e);
   });
 }
@@ -1686,7 +1770,7 @@ function idbDelete(id){
     const tx=idb.transaction('files','readwrite');
     const store=tx.objectStore('files');
     const req=store.delete(id);
-    req.onsuccess=()=>res();
+    req.onsuccess=()=>{wmSyncMarkDirty();res();};
     req.onerror=e=>rej(e);
   });
 }
@@ -2617,6 +2701,7 @@ async function applyGroupEdit(){
     const startStr2=result.minDistDate?_fd2(result.minDistDate):'';
     const endStr2=result.maxDistDate?_fd2(result.maxDistDate):'';
     saveResultToIDB({sheetName, startStr:startStr2, endStr:endStr2, rows:periodRows});
+    wmSyncMarkDirty();
   }
   renderDashboard();
 }
@@ -2630,6 +2715,7 @@ function adjustStreak(name,delta){
   // streak 즉시 반영
   const newStreak=Math.max(0,(result.streaks[name]||0)+delta);
   result.streaks[name]=newStreak;
+  wmSyncMarkDirty();
   renderDashboard();
 }
 
@@ -2928,9 +3014,9 @@ const CD_PERIODS=[
 
 // ── IDB ──
 function cdOpenIDB(){return new Promise((r,j)=>{const q=indexedDB.open(CD_DB_NAME,CD_DB_VER);q.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};q.onsuccess=e=>{cdIdb=e.target.result;r(cdIdb);};q.onerror=e=>j(e);});}
-function cdIdbAdd(d){return new Promise((r,j)=>{const tx=cdIdb.transaction('files','readwrite');const q=tx.objectStore('files').add(d);q.onsuccess=()=>r(q.result);q.onerror=e=>j(e);});}
+function cdIdbAdd(d){return new Promise((r,j)=>{const tx=cdIdb.transaction('files','readwrite');const q=tx.objectStore('files').add(d);q.onsuccess=()=>{wmSyncMarkDirty();r(q.result);};q.onerror=e=>j(e);});}
 function cdIdbGetAll(){return new Promise((r,j)=>{const tx=cdIdb.transaction('files','readonly');const q=tx.objectStore('files').getAll();q.onsuccess=()=>r(q.result);q.onerror=e=>j(e);});}
-function cdIdbDelete(id){return new Promise((r,j)=>{const tx=cdIdb.transaction('files','readwrite');const q=tx.objectStore('files').delete(id);q.onsuccess=()=>r();q.onerror=e=>j(e);});}
+function cdIdbDelete(id){return new Promise((r,j)=>{const tx=cdIdb.transaction('files','readwrite');const q=tx.objectStore('files').delete(id);q.onsuccess=()=>{wmSyncMarkDirty();r();};q.onerror=e=>j(e);});}
 function cdGetLatest(t){return cdAllFiles.filter(f=>f.type===t).sort((a,b)=>b.uploadTime-a.uploadTime)[0]||null;}
 function cdGetFilesByType(t){return cdAllFiles.filter(f=>f.type===t).sort((a,b)=>b.uploadTime-a.uploadTime);}
 
@@ -3921,9 +4007,9 @@ function iaOpenIdb(){
     req.onerror=()=>rej(req.error);
   });
 }
-function iaIdbAdd(rec){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');const req=tx.objectStore('files').add(rec);req.onsuccess=()=>res(req.result);tx.onerror=()=>rej(tx.error);});}
+function iaIdbAdd(rec){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');const req=tx.objectStore('files').add(rec);req.onsuccess=()=>{wmSyncMarkDirty();res(req.result);};tx.onerror=()=>rej(tx.error);});}
 function iaIdbGetAll(){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readonly');const req=tx.objectStore('files').getAll();req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});}
-function iaIdbDeleteId(id){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function iaIdbDeleteId(id){return new Promise((res,rej)=>{const tx=iaIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{wmSyncMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
 async function iaIdbDeleteByType(type){
   const all=await iaIdbGetAll();
   for(const r of all) if(r.type===type) await iaIdbDeleteId(r.id);
