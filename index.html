@@ -163,6 +163,23 @@ tr.row-h td{background:var(--gh-light)}
 .hidden{display:none}
 .text-left{text-align:left!important}
 
+/* ───── Grade Dashboard 색상 (PPT 2페이지 GRADE SYSTEM 기준) ───── */
+#page-grade-dash {
+  --ga:#F5B400; --ga-light:#FFF7DF; --ga-text:#9A7100;
+  --gb:#4CAF7E; --gb-light:#E3F5EB; --gb-text:#2D6E4E;
+  --gc:#DC3545; --gc-light:#FCE8EB; --gc-text:#9B1D2A;
+  --gh:#4472C4; --gh-light:#E3EAF6; --gh-text:#2A4D8A;
+}
+/* Group cards gradient — PPT 솔리드 컬러 기반 */
+#page-grade-dash .gcard.ga{background:linear-gradient(135deg,#F5B400,#F7C846)}
+#page-grade-dash .gcard.gb{background:linear-gradient(135deg,#4CAF7E,#6BC295)}
+#page-grade-dash .gcard.gc{background:linear-gradient(135deg,#DC3545,#E45A68)}
+#page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4472C4,#6286D0)}
+/* Streak — H 임박 경고 색상 (PPT C와 동일한 빨강) */
+#page-grade-dash .streak.s1{background:#F0920E}
+#page-grade-dash .streak.s2{background:#E45D2E}
+#page-grade-dash .streak.s3{background:#DC3545}
+
 /* Tab Navigation */
 .tab-nav{background:#fff;border-bottom:2px solid var(--border);display:flex;align-items:stretch;padding:0 32px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .tab-item{padding:14px 28px;font-size:15px;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;user-select:none}
@@ -1292,7 +1309,8 @@ tr.row-h td{background:var(--gh-light)}
   <div id="gdEmptyState" style="text-align:center;padding:80px 20px;color:var(--gray)">
     <div style="font-size:48px;margin-bottom:16px;opacity:.5">🏅</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:8px">차등 성과 대시보드</div>
-    <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 4종 파일 + 초기 등급 설정 → 대시보드 생성</div>
+    <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 4종 파일(DB·계약·취소·명단) 업로드 → 대시보드 생성<br>
+    <span style="font-size:12px;color:#999">CMS 그룹 W·E·A 멤버 모두 포함 · 초기 등급 파일은 선택 사항</span></div>
   </div>
   <div id="gdDashboard" class="hidden">
     <div class="period-bar">
@@ -5509,6 +5527,7 @@ let gdAllFiles=[];
 let gdResult=null;
 let gdGroupEditMode=false;
 let gdMemberHireDates={};
+let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고용)
 
 const GD_CANCEL_COL={manager:13, returnDate:42};   // 신청자관리 N=13(담당자), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
@@ -5749,17 +5768,26 @@ async function gdDeleteInit(){
 }
 
 // ─── KPI 집계 ───────────────────────────────
+// CMS 그룹 → 차등 등급 자동 매핑 (W=A, E=B, A=C)
+function gdInferGradeFromCms(cmsGrp){
+  if(cmsGrp==='W') return 'A';
+  if(cmsGrp==='E') return 'B';
+  if(cmsGrp==='A') return 'C';
+  return null;
+}
+
 function gdGetMembers(data){
-  const members=[]; gdMemberHireDates={};
+  const members=[]; gdMemberHireDates={}; const cmsGroups={};
   for(const r of data){
     const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
-    if(dept==='뇌새김영어'&&grp==='A그룹'&&name){
+    if(dept==='뇌새김영어' && ['W그룹','E그룹','A그룹'].includes(grp) && name){
       members.push(name);
+      cmsGroups[name]=grp.replace('그룹','');   // 'W'|'E'|'A'
       const hd=r['입사일'];
       if(hd) gdMemberHireDates[name]=parseDate(hd)||parseDate(str(hd));
     }
   }
-  return members;
+  return {members, cmsGroups};
 }
 
 function gdCountDb(data, members){
@@ -5873,8 +5901,6 @@ function gdSortRows(rows){
 
 async function gdGenerate(dbFileId){
   try{
-    const initSheet=localStorage.getItem(GD_INIT_KEY);
-    if(!initSheet){alert('먼저 초기 등급 파일을 업로드해주세요.');return;}
     const attendFile=gdGetLatest('attend');
     const cancelFile=gdGetLatest('cancel');
     const dbFile=dbFileId?gdAllFiles.find(f=>f.id===dbFileId):gdGetLatest('db');
@@ -5885,8 +5911,9 @@ async function gdGenerate(dbFileId){
     if(!attendFile||!cancelFile||!dbFile||!contFile){
       alert('4종 파일이 모두 필요합니다 (DB수, 계약수, 취소수, 명단)');return;
     }
-    const members=gdGetMembers(attendFile.data);
-    if(members.length===0) throw new Error('A그룹 뇌새김영어 멤버를 찾을 수 없습니다.');
+    const {members, cmsGroups}=gdGetMembers(attendFile.data);
+    gdMemberCmsGroups=cmsGroups;
+    if(members.length===0) throw new Error('뇌새김영어 W/E/A 그룹 멤버를 찾을 수 없습니다.');
 
     let minDistDate=null,maxDistDate=null;
     for(let i=1;i<dbFile.data.length;i++){
@@ -5934,7 +5961,8 @@ async function gdGenerate(dbFileId){
       }
     }
 
-    // C 연속 카운트 + 4연속 → H 진입 (manualGroup으로 덮어씌워진 건은 아래 적용 X — 위 manualGroup 복원 시점부터 group이 고정됨)
+    // C 연속 카운트 + 4연속 후 5번째에 H 진입
+    // (initFile 회차는 streak 카운트에서 제외 — 베이스라인이지 실측 회차 아님)
     const streakAdj=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
     const streaks={};
     for(const name of members){
@@ -5944,6 +5972,7 @@ async function gdGenerate(dbFileId){
       } else if(groups[name]==='C'||groups[name]==='H'){
         count=1;
         for(const prev of olderResults){
+          if(prev.isInit) continue;  // 초기등급 회차는 streak 미포함
           const pr=prev.rows.find(r=>r.name===name);
           if(pr&&(pr.group==='C'||pr.group==='H')) count++;
           else break;
@@ -5951,8 +5980,8 @@ async function gdGenerate(dbFileId){
       }
       if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
-      // 4 연속 C → H (수동 그룹 수정/H탈출자는 C가 아니므로 자연 회피)
-      if(groups[name]==='C' && count>=4) groups[name]='H';
+      // C 4연속 후 5번째 회차에 H 진입 (count = 1 current + 4 prior C = 5)
+      if(groups[name]==='C' && count>=5) groups[name]='H';
     }
 
     gdResult={members, stats, groups, streaks, cutlines,
@@ -6034,10 +6063,10 @@ function gdRenderGroupSummary(){
   for(const [n,g] of Object.entries(gdResult.groups)){if(gc[g])gc[g].push(n);}
   const cl=gdResult.cutlines;
   const cards=[
-    {key:'A',cls:'ga',label:'A등급',sub:'상위',cut:cl.aToBVal?`커트라인: ${pct2(cl.aToBVal)} 이상`:''},
-    {key:'B',cls:'gb',label:'B등급',sub:'중위',cut:cl.bToCVal?`커트라인: ${pct2(cl.bToCVal)} 이상`:''},
-    {key:'C',cls:'gc',label:'C등급',sub:'하위',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만`:''},
-    {key:'H',cls:'gh',label:'H등급',sub:'C 4연속',cut:''},
+    {key:'A',cls:'ga',label:'A등급',sub:'TOP · 상위 25%',cut:cl.aToBVal?`커트라인: ${pct2(cl.aToBVal)} 이상`:''},
+    {key:'B',cls:'gb',label:'B등급',sub:'MID · 중위 40%',cut:cl.bToCVal?`커트라인: ${pct2(cl.bToCVal)} 이상`:''},
+    {key:'C',cls:'gc',label:'C등급',sub:'LOW · 하위 35%',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만`:''},
+    {key:'H',cls:'gh',label:'H등급',sub:'4회 연속 C',cut:''},
   ];
   document.getElementById('gdGroupSummary').innerHTML=cards.map(c=>{
     const m=gc[c.key]||[];
@@ -6060,7 +6089,8 @@ function gdRenderTable(){
     <td${totalAdjNeg?' style="color:var(--danger)"':''}>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td></tr>`;
   rows.forEach(r=>{
     const gc=r.group;
-    const sc=r.streak>=3?'s3':r.streak>=2?'s2':r.streak>=1?'s1':'s0';
+    // streak >= 4 = 다음 C 1회 → H (위험), 2-3 경고, 1 주의
+    const sc=r.streak>=4?'s3':r.streak>=2?'s2':r.streak>=1?'s1':'s0';
     let groupCell;
     if(gdGroupEditMode){
       const opts=['A','B','C','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
@@ -6203,11 +6233,12 @@ async function gdClearHistory(){
 // ── Excel Download (누적 멀티 시트) ──
 async function gdDownloadExcel(){
   if(!gdResult){alert('먼저 대시보드를 생성해주세요.');return;}
+  // PPT 2페이지 GRADE SYSTEM 컬러 매핑
   const gColors={
-    'A':{fill:'4361EE',font:'FFFFFF',light:'E8EDFF',lf:'2A3EB0'},
-    'B':{fill:'2EC4B6',font:'FFFFFF',light:'E2F7F5',lf:'1A8A7F'},
-    'C':{fill:'F0920E',font:'FFFFFF',light:'FFF4E3',lf:'C47200'},
-    'H':{fill:'D1182B',font:'FFFFFF',light:'FDE8EB',lf:'B81429'},
+    'A':{fill:'F5B400',font:'FFFFFF',light:'FFF7DF',lf:'9A7100'},
+    'B':{fill:'4CAF7E',font:'FFFFFF',light:'E3F5EB',lf:'2D6E4E'},
+    'C':{fill:'DC3545',font:'FFFFFF',light:'FCE8EB',lf:'9B1D2A'},
+    'H':{fill:'4472C4',font:'FFFFFF',light:'E3EAF6',lf:'2A4D8A'},
   };
   const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
   const bdr={top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}};
