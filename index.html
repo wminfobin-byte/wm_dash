@@ -5891,12 +5891,17 @@ function gdAssignGroups(stats){
 }
 
 function gdSortRows(rows){
-  // H 그룹 최하단, 나머지 refAdjRate DESC
+  // H 그룹 최하단, 신입 보호자는 B 그룹 마지막에 배치, 나머지 refAdjRate DESC
   const hRows=rows.filter(r=>r.group==='H');
   const nonH=rows.filter(r=>r.group!=='H');
+  const normal=nonH.filter(r=>!r.isProtected);
+  const protect=nonH.filter(r=>r.isProtected);
   const sortFn=(a,b)=>b.refAdjRate-a.refAdjRate;
-  nonH.sort(sortFn); hRows.sort(sortFn);
-  return [...nonH, ...hRows];
+  normal.sort(sortFn); protect.sort(sortFn); hRows.sort(sortFn);
+  let lastBIdx=normal.reduce((last,r,i)=>r.group==='B'?i:last,-1);
+  if(lastBIdx===-1) lastBIdx=normal.reduce((last,r,i)=>r.group==='A'?i:last,-1);
+  const insertAt=lastBIdx+1;
+  return [...normal.slice(0,insertAt), ...protect, ...normal.slice(insertAt), ...hRows];
 }
 
 async function gdGenerate(dbFileId){
@@ -5936,11 +5941,17 @@ async function gdGenerate(dbFileId){
     const {groups,cutlines}=gdAssignGroups(stats);
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // 동일 회차 manualGroup 복원 (이전에 수동 수정한 인원)
+    // ── 적용 순서: ① assign → ② H 탈출 → ③ streak/H 진입 → ④ 신입 보호 → ⑤ 수동 그룹 (최종)
+    // 수동 그룹 정보 미리 수집 (자동 룰에서 제외하기 위함)
     const savedPeriod=await gdGetResultBySheet(sheetName);
+    const manualSet=new Set();
+    const manualGroups={};
     if(savedPeriod){
       for(const r of savedPeriod.rows){
-        if(r.manualGroup && members.includes(r.name)) groups[r.name]=r.group;
+        if(r.manualGroup && members.includes(r.name)){
+          manualSet.add(r.name);
+          manualGroups[r.name]=r.group;
+        }
       }
     }
 
@@ -5949,10 +5960,11 @@ async function gdGenerate(dbFileId){
     const olderResults=allResults.filter(r=>r.sheetName<sheetName);
     const latestPrev=olderResults[0];
 
-    // H 탈출: 직전 회차 H + 이번 실계약 ≥ 2건 → C
+    // ② H 탈출: 직전 회차 H + 이번 실계약 ≥ 2건 → C
     const escapedFromH={};
     if(latestPrev){
       for(const name of members){
+        if(manualSet.has(name)) continue;
         const prevRow=latestPrev.rows.find(r=>r.name===name);
         if(prevRow && prevRow.group==='H' && (stats[name].contract||0)>=2){
           groups[name]='C';
@@ -5980,25 +5992,44 @@ async function gdGenerate(dbFileId){
       }
       if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
-      // C 4연속 후 5번째 회차에 H 진입 (count = 1 current + 4 prior C = 5)
-      if(groups[name]==='C' && count>=5) groups[name]='H';
+      // C 4연속 후 5번째 회차에 H 진입 (수동 그룹 제외)
+      if(!manualSet.has(name) && groups[name]==='C' && count>=5) groups[name]='H';
+    }
+
+    // ④ 신입 보호 — 입사 +60일 이내 C/H → B 상향 (수동 그룹 제외)
+    const HIRE_PROTECT_DAYS=60;
+    const now=new Date();
+    const protectedMembers=new Set();
+    for(const name of members){
+      if(manualSet.has(name)) continue;
+      const hireDate=gdMemberHireDates[name];
+      if(!hireDate) continue;
+      const protectEnd=new Date(hireDate);
+      protectEnd.setDate(protectEnd.getDate()+HIRE_PROTECT_DAYS);
+      protectEnd.setHours(23,59,59,999);
+      if(now<=protectEnd){
+        if(groups[name]==='C'||groups[name]==='H'){
+          groups[name]='B';
+          protectedMembers.add(name);
+          streaks[name]=0; // 보호로 B가 되었으므로 streak 0
+        }
+      }
+    }
+
+    // ⑤ 수동 그룹 최종 적용 (자동 룰을 모두 거친 후 덮어씌움 — 이력에도 수동 값 저장)
+    for(const name of manualSet){
+      groups[name]=manualGroups[name];
     }
 
     gdResult={members, stats, groups, streaks, cutlines,
-      protectedMembers:new Set(),
+      protectedMembers,
       minDistDate, maxDistDate,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // IDB 저장: manualGroup 플래그 보존
-    const manualNames=new Set();
-    if(savedPeriod){
-      for(const r of savedPeriod.rows){
-        if(r.manualGroup && members.includes(r.name)) manualNames.add(r.name);
-      }
-    }
+    // IDB 저장: manualGroup·isProtected 플래그 보존
     const allRows=Object.entries(stats).map(([name,s])=>({
-      group:groups[name], name, isProtected:false, manualGroup:manualNames.has(name),
+      group:groups[name], name, isProtected:protectedMembers.has(name), manualGroup:manualSet.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:streaks[name]||0
@@ -6076,8 +6107,10 @@ function gdRenderGroupSummary(){
 }
 
 function gdRenderTable(){
+  const prot=gdResult.protectedMembers||new Set();
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
-    name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0, ...s
+    name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
+    isProtected:prot.has(name), ...s
   }));
   rows=gdSortRows(rows);
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
@@ -6096,7 +6129,7 @@ function gdRenderTable(){
       const opts=['A','B','C','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
       groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
     } else {
-      groupCell=`<span class="group-label ${gc}">${gc}등급</span>`;
+      groupCell=`<span class="group-label ${gc}">${gc}등급</span>${r.isProtected?' <span style="font-size:10px;color:var(--gray);font-weight:600" title="신규 입사자 보호 (입사 +60일 이내)">신규</span>':''}`;
     }
     const adjNeg=r.refAdjContract<0;
     const safeName=r.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -6151,8 +6184,13 @@ async function gdApplyGroupEdit(){
   document.getElementById('gdBtnEditGroup').style.color='';
   if(Object.keys(changes).length>0){
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
+    // 수동 변경된 인원은 보호 해제 (사용자가 명시적으로 등급 정함)
+    if(gdResult.protectedMembers){
+      for(const name of Object.keys(changes)) gdResult.protectedMembers.delete(name);
+    }
+    const prot=gdResult.protectedMembers||new Set();
     const allRows=Object.entries(gdResult.stats).map(([name,s])=>({
-      group:gdResult.groups[name], name, isProtected:false, manualGroup:!!changes[name],
+      group:gdResult.groups[name], name, isProtected:prot.has(name), manualGroup:!!changes[name],
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:gdResult.streaks[name]||0
