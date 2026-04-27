@@ -6063,15 +6063,15 @@ function gdRenderGroupSummary(){
   for(const [n,g] of Object.entries(gdResult.groups)){if(gc[g])gc[g].push(n);}
   const cl=gdResult.cutlines;
   const cards=[
-    {key:'A',cls:'ga',label:'A등급',sub:'TOP · 상위 25%',cut:cl.aToBVal?`커트라인: ${pct2(cl.aToBVal)} 이상`:''},
-    {key:'B',cls:'gb',label:'B등급',sub:'MID · 중위 40%',cut:cl.bToCVal?`커트라인: ${pct2(cl.bToCVal)} 이상`:''},
-    {key:'C',cls:'gc',label:'C등급',sub:'LOW · 하위 35%',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만`:''},
-    {key:'H',cls:'gh',label:'H등급',sub:'4회 연속 C',cut:''},
+    {key:'A',cls:'ga',label:'A등급',cut:cl.aToBVal?`커트라인: ${pct2(cl.aToBVal)} 이상`:''},
+    {key:'B',cls:'gb',label:'B등급',cut:cl.bToCVal?`커트라인: ${pct2(cl.bToCVal)} 이상`:''},
+    {key:'C',cls:'gc',label:'C등급',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만`:''},
+    {key:'H',cls:'gh',label:'H등급',cut:''},
   ];
   document.getElementById('gdGroupSummary').innerHTML=cards.map(c=>{
     const m=gc[c.key]||[];
     const avg=m.length>0?m.reduce((a,n)=>a+(gdResult.stats[n]?.refAdjRate||0),0)/m.length:0;
-    return `<div class="gcard ${c.cls}"><div class="gt">${c.label} (${c.sub})</div><div class="gn">${m.length.toLocaleString()}명</div><div class="gs">평균 ${pct(avg)}</div>${c.cut?`<div class="gc-cut">${c.cut}</div>`:''}</div>`;
+    return `<div class="gcard ${c.cls}"><div class="gt">${c.label}</div><div class="gn">${m.length.toLocaleString()}명</div><div class="gs">평균 ${pct(avg)}</div>${c.cut?`<div class="gc-cut">${c.cut}</div>`:''}</div>`;
   }).join('');
 }
 
