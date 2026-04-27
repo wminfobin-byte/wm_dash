@@ -1340,6 +1340,7 @@ tr.row-h td{background:var(--gh-light)}
           <th>취소반영 계약수</th>
           <th>취소반영 계약률</th>
           <th>C등급 연속</th>
+          <th>비고</th>
         </tr></thead>
         <tbody id="gdMainBody"></tbody>
       </table>
@@ -6223,10 +6224,14 @@ async function gdGenerate(dbFileId){
       groups[pool[0]]=newGrp;
       return pool[0];
     }
+    let promoBtoA=null, promoCtoB=null;
     if(promoEnabled){
-      gdPromote('B','A');
-      gdPromote('C','B');
+      promoBtoA=gdPromote('B','A');
+      promoCtoB=gdPromote('C','B');
     }
+    const promotedSet=new Set();
+    if(promoBtoA) promotedSet.add(promoBtoA);
+    if(promoCtoB) promotedSet.add(promoCtoB);
 
     // ⑤ 수동 그룹 최종 적용 (자동 룰을 모두 거친 후 덮어씌움 — 이력에도 수동 값 저장)
     for(const name of manualSet){
@@ -6239,11 +6244,12 @@ async function gdGenerate(dbFileId){
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // IDB 저장: manualGroup·isProtected·isLegitimate·attendIssues 플래그 보존
+    // IDB 저장: manualGroup·isProtected·isLegitimate·attendIssues·promoted 플래그 보존
     const allRows=Object.entries(stats).map(([name,s])=>({
       group:groups[name], name, isProtected:protectedMembers.has(name), manualGroup:manualSet.has(name),
       isLegitimate:legitimateMembers.has(name),
       attendIssues:periodAttend[name]?.penaltyCount||0,
+      promoted:promotedSet.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:streaks[name]||0
@@ -6352,13 +6358,14 @@ function gdRenderTable(){
   const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const periodMeta={};
   if(sheetName && gdResult.savedRows){
-    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0};
+    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, promoted:!!r.promoted};
   }
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
     name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
     isProtected:prot.has(name),
     isLegitimate:periodMeta[name]?.isLegitimate||false,
     attendIssues:periodMeta[name]?.attendIssues||0,
+    promoted:periodMeta[name]?.promoted||false,
     ...s
   }));
   rows=gdSortRows(rows);
@@ -6368,7 +6375,7 @@ function gdRenderTable(){
     <td>${t.db.toLocaleString()}</td><td>${t.cont.toLocaleString()}</td><td>${t.db>0?pct(t.cont/t.db):'-'}</td>
     <td${t.cx>0?' style="color:var(--danger)"':''}>${t.cx.toLocaleString()}</td>
     <td${totalAdjNeg?' style="color:var(--danger)"':''}>${t.adj.toLocaleString()}</td>
-    <td${totalAdjNeg?' style="color:var(--danger)"':''}>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td></tr>`;
+    <td${totalAdjNeg?' style="color:var(--danger)"':''}>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td><td></td></tr>`;
   rows.forEach(r=>{
     const gc=r.group;
     // streak >= 4 = 다음 C 1회 → H (위험), 2-3 경고, 1 주의
@@ -6396,10 +6403,11 @@ function gdRenderTable(){
       <td${r.cancelCount>0?' style="color:var(--danger);font-weight:700"':''}>${r.cancelCount.toLocaleString()}</td>
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
-      <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: ±N 조정" onclick="gdAdjustStreak('${safeName}')">${r.streak}</span></td></tr>`;
+      <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: ±N 조정" onclick="gdAdjustStreak('${safeName}')">${r.streak}</span></td>
+      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
   });
   if(gdGroupEditMode){
-    html+=`<tr><td colspan="9"><div class="edit-actions">
+    html+=`<tr><td colspan="10"><div class="edit-actions">
       <button class="btn btn-success btn-sm" onclick="gdApplyGroupEdit()">적용</button>
       <button class="btn btn-outline btn-sm" onclick="gdCancelGroupEdit()">취소</button>
     </div></td></tr>`;
@@ -6464,8 +6472,15 @@ async function gdApplyGroupEdit(){
       for(const name of Object.keys(changes)) gdResult.protectedMembers.delete(name);
     }
     const prot=gdResult.protectedMembers||new Set();
+    const prevSavedMeta={};
+    if(gdResult.savedRows){
+      for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,promoted:!!r.promoted};
+    }
     const allRows=Object.entries(gdResult.stats).map(([name,s])=>({
       group:gdResult.groups[name], name, isProtected:prot.has(name), manualGroup:!!changes[name],
+      isLegitimate:prevSavedMeta[name]?.isLegitimate||false,
+      attendIssues:prevSavedMeta[name]?.attendIssues||0,
+      promoted:prevSavedMeta[name]?.promoted||false,
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:gdResult.streaks[name]||0
@@ -6565,25 +6580,26 @@ async function gdDownloadExcel(){
   const bdr={top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}};
   const totalS={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
   const colW=14;
-  const headers=['등급','코디명','DB수','실계약수','실계약률','취소수','취소반영\n계약수','취소반영\n계약률','C등급\n연속'];
+  const headers=['등급','코디명','DB수','실계약수','실계약률','취소수','취소반영\n계약수','취소반영\n계약률','C등급\n연속','비고'];
 
   function buildSheet(periodData){
     const rows=[...periodData.rows].map(r=>({...r}));
     const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
     const pStart=periodData.startStr||'';
     const pEnd=periodData.endStr||'';
+    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');return ns.join(', ');};
     const aoa=[
-      Array(11).fill(''),
-      ['','시작일자 :',pStart,'','','','','','','',''],
-      ['','종료일자 :',pEnd,'','','','','','','',''],
-      Array(11).fill(''),
+      Array(12).fill(''),
+      ['','시작일자 :',pStart,'','','','','','','','',''],
+      ['','종료일자 :',pEnd,'','','','','','','','',''],
+      Array(12).fill(''),
       ['',...headers,''],
-      ['','합계','',t.db,t.cont,t.db>0?t.cont/t.db:0,t.cx,+t.adj.toFixed(2),t.db>0?t.adj/t.db:0,'',''],
-      ...rows.map(r=>['',r.group+'등급',r.name,r.db,r.contract,r.contractRate,r.cancelCount,+r.refAdjContract.toFixed(2),r.refAdjRate,r.streak||0,'']),
-      Array(11).fill('')
+      ['','합계','',t.db,t.cont,t.db>0?t.cont/t.db:0,t.cx,+t.adj.toFixed(2),t.db>0?t.adj/t.db:0,'','',''],
+      ...rows.map(r=>['',r.group+'등급',r.name,r.db,r.contract,r.contractRate,r.cancelCount,+r.refAdjContract.toFixed(2),r.refAdjRate,r.streak||0,noteOf(r),'']),
+      Array(12).fill('')
     ];
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:1},{wch:12},{wch:18},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:1}];
+    ws['!cols']=[{wch:1},{wch:12},{wch:18},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:colW},{wch:24},{wch:1}];
     const titleCell=XLSX.utils.encode_cell({r:1,c:3});
     ws[titleCell]={v:'WM 차등 성과',t:'s',s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}}};
     if(!ws['!merges']) ws['!merges']=[];
@@ -6598,23 +6614,24 @@ async function gdDownloadExcel(){
       if(ws[lbl]) ws[lbl].s=periodLblS;
       if(ws[val]) ws[val].s=periodValS;
     }
-    for(let c=1;c<=9;c++){const a=XLSX.utils.encode_cell({r:4,c});if(ws[a])ws[a].s=hdrS;}
-    for(let c=1;c<=9;c++){const a=XLSX.utils.encode_cell({r:5,c});if(ws[a])ws[a].s=totalS;}
+    for(let c=1;c<=10;c++){const a=XLSX.utils.encode_cell({r:4,c});if(ws[a])ws[a].s=hdrS;}
+    for(let c=1;c<=10;c++){const a=XLSX.utils.encode_cell({r:5,c});if(ws[a])ws[a].s=totalS;}
     [5,8].forEach(c=>{const a=XLSX.utils.encode_cell({r:5,c});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='0.0%';});
     [3,4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r:5,c});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='#,##0';});
     {const a=XLSX.utils.encode_cell({r:5,c:7});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='#,##0.0';}
     rows.forEach((r,i)=>{
       const ri=6+i;
       const gc=gColors[r.group]||gColors['C'];
-      for(let c=1;c<=9;c++){
+      for(let c=1;c<=10;c++){
         const a=XLSX.utils.encode_cell({r:ri,c}); if(!ws[a])continue;
-        const isG=c===1, isN=c===2;
+        const isG=c===1, isN=c===2, isNote=c===10;
         const val=ws[a].v;
         const isNeg=typeof val==='number'&&val<0;
         ws[a].s={
           font:{bold:isG||isN||isNeg,sz:10,name:'맑은 고딕',color:{rgb:isG?gc.font:isN?gc.lf:isNeg?'D1182B':'333333'}},
           fill:{fgColor:{rgb:isG?gc.fill:gc.light}},
-          alignment:{horizontal:'center',vertical:'center'},border:bdr,
+          alignment:{horizontal:isNote?'left':'center',vertical:'center',wrapText:isNote},
+          border:bdr,
         };
       }
       [5,8].forEach(c=>{const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].z='0.0%';});
