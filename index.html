@@ -6205,6 +6205,16 @@ async function gdGenerate(dbFileId){
     // 제외: 신입보호자 / 정당사유 / H탈출자 / DB0 강제 / 수동 / 근태이슈 ≥ 2
     // localStorage GD_PROMO_KEY === '0' 이면 프로모션 OFF
     const promoEnabled=localStorage.getItem(GD_PROMO_KEY)!=='0';
+
+    // 프로모션 실행 직전 — 멤버별 현재 그룹 + 실계약수 분포 로그
+    console.log('───── [프로모션 실행 전 상태] ─────');
+    ['A','B','C','H'].forEach(g=>{
+      const list=members.filter(n=>groups[n]===g)
+        .sort((a,b)=>(stats[b].contract||0)-(stats[a].contract||0))
+        .map(n=>`${n}(실계약${stats[n].contract||0},${((stats[n].refAdjRate||0)*100).toFixed(1)}%)`);
+      console.log(`  ${g}그룹 ${list.length}명: ${list.join(' / ')||'(없음)'}`);
+    });
+
     function gdPromote(targetGrp, newGrp){
       const allOfGrp=members.filter(name=>groups[name]===targetGrp);
       const excluded={};
@@ -6224,7 +6234,11 @@ async function gdGenerate(dbFileId){
       });
       console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 → 후보 ${pool.length}명 (실계약수 desc):`);
       console.log('  ',pool.map(n=>`${n}(실계약${stats[n].contract}건/${(stats[n].refAdjRate*100).toFixed(1)}%)`).join(' / ')||'(빈 풀)');
-      if(Object.keys(excluded).length>0) console.log('  제외:',excluded);
+      if(Object.keys(excluded).length>0){
+        for(const [reason,names] of Object.entries(excluded)){
+          console.log(`    [제외 - ${reason}]`, names.join(', '));
+        }
+      }
       if(pool.length===0) return null;
       groups[pool[0]]=newGrp;
       console.log(`  → ${pool[0]} 승급 (실계약 ${stats[pool[0]].contract}건)`);
