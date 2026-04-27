@@ -1264,6 +1264,7 @@ tr.row-h td{background:var(--gh-light)}
           <label style="font-size:12px;color:var(--gray);font-weight:600;display:block;margin-bottom:4px">기준일자 (필수: 파일 업로드 전 선택)</label>
           <input type="date" id="gd-init-date" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;width:100%">
         </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="gdDownloadInitTemplate()" style="white-space:nowrap">📥 템플릿 다운로드</button>
       </div>
       <div class="upload-box" id="box-gd-init" style="margin-bottom:0">
         <input type="file" accept=".xlsx,.xls" id="file-gd-init">
@@ -5585,6 +5586,29 @@ function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remo
   box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
   box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;input.dispatchEvent(new Event('change'))}});
 });
+
+// ── 초기 등급 템플릿 다운로드 ──
+function gdDownloadInitTemplate(){
+  const aoa=[
+    ['이름','등급'],
+    ['홍길동','A'],
+    ['이순신','A'],
+    ['김유신','B'],
+    ['김철수','B'],
+    ['박영희','C'],
+    ['최민수','C'],
+    ['정수진','H'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:18},{wch:10}];
+  const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:11,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
+  const cellS={font:{sz:11,name:'맑은 고딕'},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}}};
+  for(let c=0;c<2;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws[a])ws[a].s=hdrS;}
+  for(let r=1;r<aoa.length;r++)for(let c=0;c<2;c++){const a=XLSX.utils.encode_cell({r,c});if(ws[a])ws[a].s=cellS;}
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'초기등급');
+  XLSX.writeFile(wb,'차등성과_초기등급_템플릿.xlsx');
+}
 
 // ── Init group file (1회성, 이름+등급) ──
 (function bindGdInitInput(){
