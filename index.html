@@ -5784,6 +5784,50 @@ const GD_ATTEND_STATUSES = new Set([
   '오전 반차','오후 반차','퇴사','연차','장기공석','대체휴무','휴가'
 ]);
 
+// 정당 사유 (회차 3일 전체 정당사유 + 출근 0일 → 직전 회차 등급 유지)
+const GD_LEGITIMATE_ABSENCE = new Set([
+  '연차','휴가','공가','경조','대체휴무','오전 반차','오후 반차'
+]);
+
+// 근태이슈 (회차당 카운트 → 2회 이상 한 단계 강등)
+const GD_ATTEND_PENALTY = new Set([
+  '결근','오전 결근','오후 결근','조퇴',
+  '지각','지각 10분','지각 20분','지각 20분 초과'
+]);
+
+// 컬럼 키를 날짜로 파싱 (YYYY-MM-DD / M/D / D / Date 객체 / D일 등)
+function gdParseColKeyAsDate(key, periodHint){
+  if(key instanceof Date && !isNaN(key)) return key;
+  const s=String(key).trim();
+  let m=s.match(/(\d{4})[\-./](\d{1,2})[\-./](\d{1,2})/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  // M/D 또는 MM/DD (year는 periodHint에서)
+  m=s.match(/^(\d{1,2})[\-./](\d{1,2})(?:\D|$)/);
+  if(m && periodHint) return new Date(periodHint.getFullYear(), +m[1]-1, +m[2]);
+  // 일자만 (예: "21" 또는 "21일")
+  m=s.match(/^(\d{1,2})(?:일)?$/);
+  if(m && periodHint) return new Date(periodHint.getFullYear(), periodHint.getMonth(), +m[1]);
+  return null;
+}
+
+// 회차(periodStart~periodEnd) 내 한 멤버의 일자별 근태 분석
+function gdAnalyzePeriodAttend(memberRow, periodStart, periodEnd){
+  const ps=new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate());
+  const pe=new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999);
+  let workCount=0, legitCount=0, penaltyCount=0, totalDays=0;
+  for(const k of Object.keys(memberRow)){
+    const v=str(memberRow[k]);
+    if(!GD_ATTEND_STATUSES.has(v)) continue;
+    const d=gdParseColKeyAsDate(k, periodStart);
+    if(!d || d<ps || d>pe) continue;
+    totalDays++;
+    if(v==='출근') workCount++;
+    if(GD_LEGITIMATE_ABSENCE.has(v)) legitCount++;
+    if(GD_ATTEND_PENALTY.has(v)) penaltyCount++;
+  }
+  return {workCount, legitCount, penaltyCount, totalDays};
+}
+
 // 명단 파일의 한 행에서 일자별 근태 시퀀스를 좌→우(과거→최신) 순으로 추출
 function gdExtractAttendSeq(memberRow){
   const seq=[];
@@ -5983,7 +6027,8 @@ async function gdGenerate(dbFileId){
     const {groups,cutlines}=gdAssignGroups(stats);
     const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
 
-    // ── 적용 순서: ① assign → ② H 탈출 → ③ streak/H 진입 → ④ 신입 보호 → ⑤ 수동 그룹 (최종)
+    // ── 적용 순서: ① assign → 회차근태분석 → 정당사유 → ② H 탈출 → ③ streak/H 진입
+    //              → 근태강등 → ④ 신입 보호 → ⑤ 수동 그룹 (최종)
     // 수동 그룹 정보 미리 수집 (자동 룰에서 제외하기 위함)
     const savedPeriod=await gdGetResultBySheet(sheetName);
     const manualSet=new Set();
@@ -6002,11 +6047,40 @@ async function gdGenerate(dbFileId){
     const olderResults=allResults.filter(r=>r.sheetName<sheetName);
     const latestPrev=olderResults[0];
 
-    // ② H 탈출: 직전 회차 H + 이번 실계약 ≥ 2건 → C
+    // 회차 근태 분석 (각 멤버별 출근/정당/이슈 카운트)
+    const periodAttend={}; // {name: {workCount, legitCount, penaltyCount, totalDays}}
+    const legitimateMembers=new Set();
+    const memberRowByName={};
+    for(const r of attendFile.data){
+      const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
+      if(dept!=='뇌새김영어') continue;
+      if(!members.includes(name)) continue;
+      memberRowByName[name]=r;
+    }
+    if(minDistDate && maxDistDate){
+      for(const name of members){
+        const r=memberRowByName[name];
+        if(!r){ periodAttend[name]={workCount:0,legitCount:0,penaltyCount:0,totalDays:0}; continue; }
+        const a=gdAnalyzePeriodAttend(r, minDistDate, maxDistDate);
+        periodAttend[name]=a;
+        // 정당사유 회차 = 회차 내 출근 0일 + 정당사유 ≥ 1일
+        if(a.totalDays>0 && a.workCount===0 && a.legitCount>0) legitimateMembers.add(name);
+      }
+    }
+
+    // 정당사유 회차: 직전 회차 등급/streak 그대로 유지 (수동·자동 룰 모두 skip)
+    for(const name of legitimateMembers){
+      if(manualSet.has(name)) continue;
+      const prev=latestPrev?.rows.find(r=>r.name===name);
+      if(prev) groups[name]=prev.group;
+    }
+
+    // ② H 탈출: 직전 회차 H + 이번 실계약 ≥ 2건 → C (정당사유·수동 제외)
     const escapedFromH={};
     if(latestPrev){
       for(const name of members){
         if(manualSet.has(name)) continue;
+        if(legitimateMembers.has(name)) continue;
         const prevRow=latestPrev.rows.find(r=>r.name===name);
         if(prevRow && prevRow.group==='H' && (stats[name].contract||0)>=2){
           groups[name]='C';
@@ -6015,27 +6089,47 @@ async function gdGenerate(dbFileId){
       }
     }
 
-    // C 연속 카운트 + 4연속 후 5번째에 H 진입
-    // (initFile 회차는 streak 카운트에서 제외 — 베이스라인이지 실측 회차 아님)
+    // ③ C 연속 카운트 + 4연속 후 5번째에 H 진입
+    // (initFile / 정당사유 회차는 streak 카운트에서 제외)
     const streakAdj=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
     const streaks={};
     for(const name of members){
+      // 정당사유 회차: 직전 회차 streak 그대로
+      if(legitimateMembers.has(name)){
+        const prev=latestPrev?.rows.find(r=>r.name===name);
+        let s=prev?.streak||0;
+        if(streakAdj[name]) s=Math.max(0,s+streakAdj[name]);
+        streaks[name]=s;
+        continue;
+      }
       let count=0;
       if(escapedFromH[name]){
         count=0; // H 탈출 시 streak 리셋
       } else if(groups[name]==='C'||groups[name]==='H'){
         count=1;
         for(const prev of olderResults){
-          if(prev.isInit) continue;  // 초기등급 회차는 streak 미포함
+          if(prev.isInit) continue;
           const pr=prev.rows.find(r=>r.name===name);
-          if(pr&&(pr.group==='C'||pr.group==='H')) count++;
+          if(!pr) continue;
+          if(pr.isLegitimate) continue;  // 정당사유 회차는 카운트 제외
+          if(pr.group==='C'||pr.group==='H') count++;
           else break;
         }
       }
       if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
-      // C 4연속 후 5번째 회차에 H 진입 (수동 그룹 제외)
       if(!manualSet.has(name) && groups[name]==='C' && count>=5) groups[name]='H';
+    }
+
+    // 근태이슈 강등: 회차 내 근태이슈 ≥ 2건 → 한 단계 강등 (정당사유·수동 제외)
+    // A→B, B→C, C→C 유지, H→H 유지
+    for(const name of members){
+      if(manualSet.has(name)) continue;
+      if(legitimateMembers.has(name)) continue;
+      const a=periodAttend[name];
+      if(!a || a.penaltyCount<2) continue;
+      if(groups[name]==='A') groups[name]='B';
+      else if(groups[name]==='B') groups[name]='C';
     }
 
     // ④ 신입 보호 — 입사 +60일 이내 C/H → B 상향 (수동 그룹 제외)
@@ -6069,14 +6163,17 @@ async function gdGenerate(dbFileId){
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // IDB 저장: manualGroup·isProtected 플래그 보존
+    // IDB 저장: manualGroup·isProtected·isLegitimate·attendIssues 플래그 보존
     const allRows=Object.entries(stats).map(([name,s])=>({
       group:groups[name], name, isProtected:protectedMembers.has(name), manualGroup:manualSet.has(name),
+      isLegitimate:legitimateMembers.has(name),
+      attendIssues:periodAttend[name]?.penaltyCount||0,
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:streaks[name]||0
     }));
     const periodRows=gdSortRows(allRows);
+    gdResult.savedRows=periodRows;
     const _day=['일','월','화','수','목','금','토'];
     const _fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
     await gdSaveResult({sheetName, startStr:minDistDate?_fd(minDistDate):'', endStr:maxDistDate?_fd(maxDistDate):'', rows:periodRows});
@@ -6174,9 +6271,18 @@ function gdRenderGroupSummary(){
 
 function gdRenderTable(){
   const prot=gdResult.protectedMembers||new Set();
+  // 회차 결과(legitimate / attendIssues)는 IDB 저장된 row에서 조회
+  const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
+  const periodMeta={};
+  if(sheetName && gdResult.savedRows){
+    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0};
+  }
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
     name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
-    isProtected:prot.has(name), ...s
+    isProtected:prot.has(name),
+    isLegitimate:periodMeta[name]?.isLegitimate||false,
+    attendIssues:periodMeta[name]?.attendIssues||0,
+    ...s
   }));
   rows=gdSortRows(rows);
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
@@ -6195,7 +6301,12 @@ function gdRenderTable(){
       const opts=['A','B','C','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
       groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
     } else {
-      groupCell=`<span class="group-label ${gc}">${gc}등급</span>${r.isProtected?' <span style="font-size:10px;color:var(--gray);font-weight:600" title="신규 입사자 보호 (입사 +60일 이내)">신규</span>':''}`;
+      let badges='';
+      if(r.isProtected) badges+=' <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="신규 입사자 보호 (입사 +60일 이내)">신규</span>';
+      if(r.isLegitimate) badges+=' <span style="font-size:10px;color:#3451d1;background:#e8edff;padding:1px 6px;border-radius:8px;font-weight:600" title="정당사유 (회차 3일 전체 휴가/연차/공가/경조/반차 등) — 직전 회차 등급 유지">정당사유</span>';
+      if(r.attendIssues>=2) badges+=` <span style="font-size:10px;color:#fff;background:#dc3545;padding:1px 6px;border-radius:8px;font-weight:700" title="근태이슈 ${r.attendIssues}회 — 한 단계 강등 적용">⚠ 근태 ${r.attendIssues}</span>`;
+      else if(r.attendIssues===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="근태이슈 1회 — 1회 더 발생 시 강등">근태 1</span>`;
+      groupCell=`<span class="group-label ${gc}">${gc}등급</span>${badges}`;
     }
     const adjNeg=r.refAdjContract<0;
     const safeName=r.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
