@@ -6206,22 +6206,28 @@ async function gdGenerate(dbFileId){
     // localStorage GD_PROMO_KEY === '0' 이면 프로모션 OFF
     const promoEnabled=localStorage.getItem(GD_PROMO_KEY)!=='0';
     function gdPromote(targetGrp, newGrp){
-      const pool=members.filter(name=>
-        groups[name]===targetGrp &&
-        !manualSet.has(name) &&
-        !legitimateMembers.has(name) &&
-        !escapedFromH[name] &&
-        !protectedMembers.has(name) &&
-        !zeroDbForced.has(name) &&
-        ((periodAttend[name]?.penaltyCount||0)<2)
-      );
-      if(pool.length===0) return null;
+      const allOfGrp=members.filter(name=>groups[name]===targetGrp);
+      const excluded={};
+      const pool=allOfGrp.filter(name=>{
+        if(manualSet.has(name)){(excluded.manual=excluded.manual||[]).push(name);return false;}
+        if(legitimateMembers.has(name)){(excluded.legitimate=excluded.legitimate||[]).push(name);return false;}
+        if(escapedFromH[name]){(excluded.hExit=excluded.hExit||[]).push(name);return false;}
+        if(protectedMembers.has(name)){(excluded.newbie=excluded.newbie||[]).push(name);return false;}
+        if(zeroDbForced.has(name)){(excluded.zeroDb=excluded.zeroDb||[]).push(name);return false;}
+        if((periodAttend[name]?.penaltyCount||0)>=2){(excluded.attend=excluded.attend||[]).push(name);return false;}
+        return true;
+      });
       pool.sort((a,b)=>{
         const dc=(stats[b].contract||0)-(stats[a].contract||0);
         if(dc!==0) return dc;
         return (stats[b].refAdjRate||0)-(stats[a].refAdjRate||0);
       });
+      console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 → 후보 ${pool.length}명 (실계약수 desc):`);
+      console.log('  ',pool.map(n=>`${n}(실계약${stats[n].contract}건/${(stats[n].refAdjRate*100).toFixed(1)}%)`).join(' / ')||'(빈 풀)');
+      if(Object.keys(excluded).length>0) console.log('  제외:',excluded);
+      if(pool.length===0) return null;
       groups[pool[0]]=newGrp;
+      console.log(`  → ${pool[0]} 승급 (실계약 ${stats[pool[0]].contract}건)`);
       return pool[0];
     }
     let promoBtoA=null, promoCtoB=null;
