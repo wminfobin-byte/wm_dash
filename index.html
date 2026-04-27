@@ -1322,6 +1322,7 @@ tr.row-h td{background:var(--gh-light)}
     <div class="kpi-grid" id="gdKpiGrid"></div>
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
+      <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (총계약수 기준) 룰 ON/OFF">프로모션: ON</button>
       <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">그룹 수정</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
     </div>
@@ -5533,6 +5534,7 @@ let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고
 const GD_CANCEL_COL={customerKey:3, manager:13, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
+const GD_PROMO_KEY='gd_promotion_enabled';
 
 function gdOpenIDB(){
   return new Promise((res,rej)=>{
@@ -6007,17 +6009,22 @@ function gdAssignGroups(stats){
 }
 
 function gdSortRows(rows){
-  // H 그룹 최하단, 신입 보호자는 B 그룹 마지막에 배치, 나머지 refAdjRate DESC
-  const hRows=rows.filter(r=>r.group==='H');
-  const nonH=rows.filter(r=>r.group!=='H');
-  const normal=nonH.filter(r=>!r.isProtected);
-  const protect=nonH.filter(r=>r.isProtected);
-  const sortFn=(a,b)=>b.refAdjRate-a.refAdjRate;
-  normal.sort(sortFn); protect.sort(sortFn); hRows.sort(sortFn);
+  // 등급순(A→B→C→H) 묶기 → 등급 내에서 취소반영 계약률 DESC
+  // 신입 보호자는 B 그룹 마지막에 배치
+  const groupOrder={A:0, B:1, C:2, H:3};
+  const sortFn=(a,b)=>{
+    const dg=(groupOrder[a.group]??9)-(groupOrder[b.group]??9);
+    if(dg!==0) return dg;
+    return (b.refAdjRate||0)-(a.refAdjRate||0);
+  };
+  const normal=rows.filter(r=>!r.isProtected);
+  const protect=rows.filter(r=>r.isProtected);
+  normal.sort(sortFn); protect.sort(sortFn);
+  // 신규 보호자는 B 그룹 마지막에 삽입 (B 없으면 A 마지막)
   let lastBIdx=normal.reduce((last,r,i)=>r.group==='B'?i:last,-1);
   if(lastBIdx===-1) lastBIdx=normal.reduce((last,r,i)=>r.group==='A'?i:last,-1);
   const insertAt=lastBIdx+1;
-  return [...normal.slice(0,insertAt), ...protect, ...normal.slice(insertAt), ...hRows];
+  return [...normal.slice(0,insertAt), ...protect, ...normal.slice(insertAt)];
 }
 
 async function gdGenerate(dbFileId){
@@ -6195,6 +6202,8 @@ async function gdGenerate(dbFileId){
 
     // 프로모션: B/C 1위 → 한 단계 위로 승급 (총계약수=실계약수 기준, 동률 시 취소반영계약률)
     // 제외: 신입보호자 / 정당사유 / H탈출자 / DB0 강제 / 수동 / 근태이슈 ≥ 2
+    // localStorage GD_PROMO_KEY === '0' 이면 프로모션 OFF
+    const promoEnabled=localStorage.getItem(GD_PROMO_KEY)!=='0';
     function gdPromote(targetGrp, newGrp){
       const pool=members.filter(name=>
         groups[name]===targetGrp &&
@@ -6214,8 +6223,10 @@ async function gdGenerate(dbFileId){
       groups[pool[0]]=newGrp;
       return pool[0];
     }
-    const promoBtoA=gdPromote('B','A');
-    const promoCtoB=gdPromote('C','B');
+    if(promoEnabled){
+      gdPromote('B','A');
+      gdPromote('C','B');
+    }
 
     // ⑤ 수동 그룹 최종 적용 (자동 룰을 모두 거친 후 덮어씌움 — 이력에도 수동 값 저장)
     for(const name of manualSet){
@@ -6268,6 +6279,7 @@ function gdOnPeriodChange(){
 
 function gdRenderDashboard(){
   gdRenderPeriodRange(); gdRenderExcludedBanner(); gdRenderKPI(); gdRenderGroupSummary(); gdRenderTable(); gdRenderHistory();
+  gdSyncPromoBtnLabel();
 }
 
 function gdRenderExcludedBanner(){
@@ -6403,6 +6415,27 @@ function gdRenderTable(){
       if(last && g!==last && i>0){trs[i-1].style.borderBottom='3px solid var(--primary)';}
       last=g;
     });
+  }
+}
+
+function gdSyncPromoBtnLabel(){
+  const btn=document.getElementById('gdBtnPromo');
+  if(!btn) return;
+  const on=localStorage.getItem(GD_PROMO_KEY)!=='0';
+  btn.textContent='프로모션: '+(on?'ON':'OFF');
+  btn.style.color=on?'':'var(--gray)';
+  btn.style.borderColor=on?'':'#cbd5e1';
+}
+
+function gdTogglePromotion(){
+  const cur=localStorage.getItem(GD_PROMO_KEY)!=='0';
+  const next=!cur;
+  localStorage.setItem(GD_PROMO_KEY, next?'1':'0');
+  gdSyncPromoBtnLabel();
+  wmSyncMarkDirty();
+  // 즉시 재계산
+  if(gdResult && gdResult.dbFileId){
+    gdGenerate(gdResult.dbFileId);
   }
 }
 
