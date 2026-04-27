@@ -6378,7 +6378,7 @@ function gdRenderTable(){
   const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const periodMeta={};
   if(sheetName && gdResult.savedRows){
-    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, promoted:!!r.promoted};
+    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, promoted:!!r.promoted, manualGroup:!!r.manualGroup};
   }
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
     name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
@@ -6386,6 +6386,7 @@ function gdRenderTable(){
     isLegitimate:periodMeta[name]?.isLegitimate||false,
     attendIssues:periodMeta[name]?.attendIssues||0,
     promoted:periodMeta[name]?.promoted||false,
+    manualGroup:periodMeta[name]?.manualGroup||false,
     ...s
   }));
   rows=gdSortRows(rows);
@@ -6424,7 +6425,7 @@ function gdRenderTable(){
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
       <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: ±N 조정" onclick="gdAdjustStreak('${safeName}')">${r.streak}</span></td>
-      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
+      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');if(r.manualGroup)ns.push(`<span style="color:#dc3545;font-weight:600">수동 변경</span> <a href="#" onclick="event.preventDefault();gdClearManual('${safeName}')" style="color:#3451d1;text-decoration:underline;font-size:11px;cursor:pointer">[자동복원]</a>`);return ns.join(', ');})()}</td></tr>`;
   });
   if(gdGroupEditMode){
     html+=`<tr><td colspan="10"><div class="edit-actions">
@@ -6527,6 +6528,23 @@ function gdCancelGroupEdit(){
   document.getElementById('gdBtnEditGroup').textContent='그룹 수정';
   document.getElementById('gdBtnEditGroup').style.color='';
   gdRenderTable();
+}
+
+async function gdClearManual(name){
+  if(!confirm(`${name}\n수동 그룹 표시를 해제하고 자동 산정으로 복원합니다.\n진행하시겠습니까?`)) return;
+  const sheetName=gdResult?.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
+  if(!sheetName){ alert('현재 회차 정보를 찾을 수 없습니다.'); return; }
+  const saved=await gdGetResultBySheet(sheetName);
+  if(!saved){ alert('저장된 회차 데이터가 없습니다.'); return; }
+  let found=false;
+  for(const r of saved.rows){
+    if(r.name===name && r.manualGroup){ r.manualGroup=false; found=true; }
+  }
+  if(!found){ alert('해당 인원은 수동 표시 상태가 아닙니다.'); return; }
+  await gdSaveResult(saved);
+  wmSyncMarkDirty();
+  // 즉시 재계산
+  if(gdResult.dbFileId) gdGenerate(gdResult.dbFileId);
 }
 
 function gdAdjustStreak(name, presetDelta){
