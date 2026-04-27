@@ -668,16 +668,16 @@ tr.row-h td{background:var(--gh-light)}
 
 <!-- Tab Navigation -->
 <div class="tab-nav">
-  <div class="tab-item active" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
-  <div class="tab-item" data-page="grade-dash" onclick="switchPage('grade-dash')">차등성과</div>
+  <div class="tab-item active" data-page="grade-dash" onclick="switchPage('grade-dash')">차등성과</div>
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
   <div class="tab-item" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
+  <div class="tab-item" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
 <!-- ═══ Page: N그룹 성과 ═══ -->
-<div class="page active" id="page-ngroup">
+<div class="page" id="page-ngroup">
 
 <!-- Modal -->
 <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
@@ -1219,7 +1219,7 @@ tr.row-h td{background:var(--gh-light)}
 </div><!-- /page-daily-perf -->
 
 <!-- ═══ Page: 차등성과 ═══ -->
-<div class="page" id="page-grade-dash">
+<div class="page active" id="page-grade-dash">
 
 <div class="modal-overlay" id="gdModalOverlay" onclick="if(event.target===this)gdCloseModal()">
   <div class="modal">
@@ -1337,7 +1337,7 @@ tr.row-h td{background:var(--gh-light)}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['ngroup','grade-dash','cancel-dash','inflow','daily-perf']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','inflow','daily-perf']},
 ];
 let authUser=null;
