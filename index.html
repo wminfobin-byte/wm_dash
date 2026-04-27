@@ -5950,7 +5950,7 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
   const ps=new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate());
   const pe=new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999);
 
-  let unmatched=0, oldContractSkip=0, noKeySkip=0;
+  let unmatched=0, oldContractSkip=0, noKeySkip=0, holidaySkip=0;
   for(let i=1;i<cancelData.length;i++){
     const row=cancelData[i];
     if(!row) continue;
@@ -5959,6 +5959,7 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
     const returnDt=parseDate(row[GD_CANCEL_COL.returnDate]);
     if(!returnDt) continue;
     if(returnDt<ps||returnDt>pe) continue;
+    if(isHoliday(returnDt)){ holidaySkip++; continue; } // 주말/공휴일 반품은 카운트 제외
 
     // 고객키 매칭: 계약 파일에서 해당 키의 가장 최근 계약 찾기
     const matched=ck?contIndex[ck]:null;
@@ -5973,8 +5974,8 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
     if(set.has(stripped)) counts[stripped]++;
     else unmatched++;
   }
-  if(unmatched>0||oldContractSkip>0||noKeySkip>0){
-    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 3개월 외 계약 ${oldContractSkip}건 / 계약매칭실패 ${noKeySkip}건`);
+  if(unmatched>0||oldContractSkip>0||noKeySkip>0||holidaySkip>0){
+    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 3개월 외 계약 ${oldContractSkip}건 / 계약매칭실패 ${noKeySkip}건 / 주말·공휴일 반품 ${holidaySkip}건`);
   }
   return counts;
 }
