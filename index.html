@@ -6068,6 +6068,7 @@ async function gdGenerate(dbFileId){
     // ── 적용 순서: ① assign → 회차근태분석 → 정당사유 → ② H 탈출 → ③ streak/H 진입
     //              → 근태강등 → ④ 신입 보호 → ⑤ 수동 그룹 (최종)
     // 수동 그룹 정보 미리 수집 (자동 룰에서 제외하기 위함)
+    // manualBaseGroup이 있으면 그것을 사용 (사용자 지정 baseline), 없으면 group 사용 (구버전 호환)
     const savedPeriod=await gdGetResultBySheet(sheetName);
     const manualSet=new Set();
     const manualGroups={};
@@ -6075,7 +6076,7 @@ async function gdGenerate(dbFileId){
       for(const r of savedPeriod.rows){
         if(r.manualGroup && members.includes(r.name)){
           manualSet.add(r.name);
-          manualGroups[r.name]=r.group;
+          manualGroups[r.name]=r.manualBaseGroup||r.group;
         }
       }
     }
@@ -6201,8 +6202,14 @@ async function gdGenerate(dbFileId){
       }
     }
 
+    // 수동 그룹 베이스라인 적용 (프로모션 직전) — 자동 룰은 모두 거친 후, 사용자 베이스라인을 반영하고
+    // 그 위에서 프로모션 룰이 한 번 더 1위를 끌어올릴 수 있게 함
+    for(const name of manualSet){
+      groups[name]=manualGroups[name];
+    }
+
     // 프로모션: B/C 1위 → 한 단계 위로 승급 (총계약수=실계약수 기준, 동률 시 취소반영계약률)
-    // 제외: 신입보호자 / 정당사유 / H탈출자 / DB0 강제 / 수동 / 근태이슈 ≥ 2
+    // 제외: 신입보호자 / 정당사유 / H탈출자 / DB0 강제 / 근태이슈 ≥ 2  (수동은 포함)
     // localStorage GD_PROMO_KEY === '0' 이면 프로모션 OFF
     const promoEnabled=localStorage.getItem(GD_PROMO_KEY)!=='0';
 
@@ -6219,7 +6226,7 @@ async function gdGenerate(dbFileId){
       const allOfGrp=members.filter(name=>groups[name]===targetGrp);
       const excluded={};
       const pool=allOfGrp.filter(name=>{
-        if(manualSet.has(name)){(excluded.manual=excluded.manual||[]).push(name);return false;}
+        // 수동 그룹은 풀에 포함 (사용자 의도: 수동 베이스라인 + 프로모션 동시 적용)
         if(legitimateMembers.has(name)){(excluded.legitimate=excluded.legitimate||[]).push(name);return false;}
         if(escapedFromH[name]){(excluded.hExit=excluded.hExit||[]).push(name);return false;}
         if(protectedMembers.has(name)){(excluded.newbie=excluded.newbie||[]).push(name);return false;}
@@ -6253,20 +6260,26 @@ async function gdGenerate(dbFileId){
     if(promoBtoA){ promotedSet.add(promoBtoA); streaks[promoBtoA]=0; }
     if(promoCtoB){ promotedSet.add(promoCtoB); streaks[promoCtoB]=0; } // C→B 승급 시 C 연속 리셋
 
-    // ⑤ 수동 그룹 최종 적용 (자동 룰을 모두 거친 후 덮어씌움 — 이력에도 수동 값 저장)
-    for(const name of manualSet){
-      groups[name]=manualGroups[name];
-    }
+    // 커트라인 재계산 (모든 룰 적용 후) — 신입 보호자 + 프로모션 1등 제외하고 자연 커트라인
+    const cutPool=members.filter(n=>!protectedMembers.has(n) && !promotedSet.has(n));
+    const aSubset=cutPool.filter(n=>groups[n]==='A').map(n=>stats[n].refAdjRate);
+    const bSubset=cutPool.filter(n=>groups[n]==='B').map(n=>stats[n].refAdjRate);
+    const finalCutlines={
+      aToBIdx:cutlines.aToBIdx, bToCIdx:cutlines.bToCIdx,
+      aToBVal: aSubset.length>0 ? Math.min(...aSubset) : 0,
+      bToCVal: bSubset.length>0 ? Math.min(...bSubset) : 0,
+    };
 
-    gdResult={members, stats, groups, streaks, cutlines,
+    gdResult={members, stats, groups, streaks, cutlines:finalCutlines,
       protectedMembers, excluded,
       minDistDate, maxDistDate,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
-    // IDB 저장: manualGroup·isProtected·isLegitimate·attendIssues·promoted 플래그 보존
+    // IDB 저장: manualGroup·manualBaseGroup·isProtected·isLegitimate·attendIssues·promoted 플래그 보존
     const allRows=Object.entries(stats).map(([name,s])=>({
       group:groups[name], name, isProtected:protectedMembers.has(name), manualGroup:manualSet.has(name),
+      manualBaseGroup:manualSet.has(name)?manualGroups[name]:null,
       isLegitimate:legitimateMembers.has(name),
       attendIssues:periodAttend[name]?.penaltyCount||0,
       promoted:promotedSet.has(name),
@@ -6495,31 +6508,33 @@ async function gdApplyGroupEdit(){
     const prot=gdResult.protectedMembers||new Set();
     const prevSavedMeta={};
     if(gdResult.savedRows){
-      for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,promoted:!!r.promoted};
+      for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,promoted:!!r.promoted,manualBaseGroup:r.manualBaseGroup||null,wasManual:!!r.manualGroup};
     }
-    const allRows=Object.entries(gdResult.stats).map(([name,s])=>({
-      group:gdResult.groups[name], name, isProtected:prot.has(name), manualGroup:!!changes[name],
-      isLegitimate:prevSavedMeta[name]?.isLegitimate||false,
-      attendIssues:prevSavedMeta[name]?.attendIssues||0,
-      promoted:prevSavedMeta[name]?.promoted||false,
-      db:s.db, contract:s.contract, contractRate:s.contractRate,
-      cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
-      streak:gdResult.streaks[name]||0
-    }));
-    const prev=await gdGetResultBySheet(sheetName);
-    if(prev){
-      for(const pr of prev.rows){
-        if(pr.manualGroup && !changes[pr.name]){
-          const r=allRows.find(r=>r.name===pr.name);
-          if(r) r.manualGroup=true;
-        }
-      }
-    }
+    const allRows=Object.entries(gdResult.stats).map(([name,s])=>{
+      const isManual=!!changes[name] || (prevSavedMeta[name]?.wasManual);
+      // 새로 변경된 그룹은 그것이 baseline이 됨, 기존 manualBaseGroup이 있으면 그것 유지
+      const baseGroup=changes[name] || prevSavedMeta[name]?.manualBaseGroup || (prevSavedMeta[name]?.wasManual ? gdResult.groups[name] : null);
+      return {
+        group:gdResult.groups[name], name, isProtected:prot.has(name),
+        manualGroup:isManual, manualBaseGroup:isManual?baseGroup:null,
+        isLegitimate:prevSavedMeta[name]?.isLegitimate||false,
+        attendIssues:prevSavedMeta[name]?.attendIssues||0,
+        promoted:prevSavedMeta[name]?.promoted||false,
+        db:s.db, contract:s.contract, contractRate:s.contractRate,
+        cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
+        streak:gdResult.streaks[name]||0
+      };
+    });
     const periodRows=gdSortRows(allRows);
     const _day=['일','월','화','수','목','금','토'];
     const _fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
     await gdSaveResult({sheetName, startStr:gdResult.minDistDate?_fd(gdResult.minDistDate):'', endStr:gdResult.maxDistDate?_fd(gdResult.maxDistDate):'', rows:periodRows});
     wmSyncMarkDirty();
+    // 즉시 재계산 — 수동 변경된 그룹을 베이스라인으로 프로모션 등 자동 룰 다시 적용
+    if(gdResult.dbFileId){
+      gdGenerate(gdResult.dbFileId);
+      return;
+    }
   }
   gdRenderDashboard();
 }
