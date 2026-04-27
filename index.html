@@ -1322,7 +1322,7 @@ tr.row-h td{background:var(--gh-light)}
     <div class="kpi-grid" id="gdKpiGrid"></div>
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
-      <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (총계약수 기준) 룰 ON/OFF">프로모션: ON</button>
+      <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (실계약수 기준) 룰 ON/OFF">프로모션: ON</button>
       <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">그룹 수정</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
     </div>
@@ -6230,8 +6230,8 @@ async function gdGenerate(dbFileId){
       promoCtoB=gdPromote('C','B');
     }
     const promotedSet=new Set();
-    if(promoBtoA) promotedSet.add(promoBtoA);
-    if(promoCtoB) promotedSet.add(promoCtoB);
+    if(promoBtoA){ promotedSet.add(promoBtoA); streaks[promoBtoA]=0; }
+    if(promoCtoB){ promotedSet.add(promoCtoB); streaks[promoCtoB]=0; } // C→B 승급 시 C 연속 리셋
 
     // ⑤ 수동 그룹 최종 적용 (자동 룰을 모두 거친 후 덮어씌움 — 이력에도 수동 값 저장)
     for(const name of manualSet){
@@ -6386,7 +6386,7 @@ function gdRenderTable(){
       groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
     } else {
       let badges='';
-      if(r.isProtected) badges+=' <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="신규 입사자 보호 (입사 +60일 이내)">신규</span>';
+      // 신규 뱃지는 비고 컬럼에서 표시 (중복 제거)
       if(r.isLegitimate) badges+=' <span style="font-size:10px;color:#3451d1;background:#e8edff;padding:1px 6px;border-radius:8px;font-weight:600" title="정당사유 (회차 3일 전체 휴가/연차/공가/경조/반차 등) — 직전 회차 등급 유지">정당사유</span>';
       if(r.attendIssues>=2) badges+=` <span style="font-size:10px;color:#fff;background:#dc3545;padding:1px 6px;border-radius:8px;font-weight:700" title="근태이슈 ${r.attendIssues}회 — 한 단계 강등 적용">⚠ 근태 ${r.attendIssues}</span>`;
       else if(r.attendIssues===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="근태이슈 1회 — 1회 더 발생 시 강등">근태 1</span>`;
@@ -6404,7 +6404,7 @@ function gdRenderTable(){
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
       <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: ±N 조정" onclick="gdAdjustStreak('${safeName}')">${r.streak}</span></td>
-      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
+      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
   });
   if(gdGroupEditMode){
     html+=`<tr><td colspan="10"><div class="edit-actions">
@@ -6587,7 +6587,7 @@ async function gdDownloadExcel(){
     const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
     const pStart=periodData.startStr||'';
     const pEnd=periodData.endStr||'';
-    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');return ns.join(', ');};
+    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('실계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');return ns.join(', ');};
     const aoa=[
       Array(12).fill(''),
       ['','시작일자 :',pStart,'','','','','','','','',''],
