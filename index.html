@@ -1270,7 +1270,7 @@ tr.row-h td{background:var(--gh-light)}
         <input type="file" accept=".xlsx,.xls" id="file-gd-init">
         <div class="icon">⚙️</div>
         <div class="label">초기 등급 파일</div>
-        <div class="desc">엑셀 첫 시트, 컬럼: 이름 | 등급 (A/B/C/H)<br>이 기준일자가 첫 회차 이력으로 저장됨</div>
+        <div class="desc">엑셀 첫 시트, 컬럼: 이름 | 등급 (A/B/C)<br>※ H는 초기에 없음 (C 4연속 후 5회차에 자동 생성)</div>
         <div class="filename" id="fname-gd-init"></div>
       </div>
       <div class="modal-footer">
@@ -5597,7 +5597,6 @@ function gdDownloadInitTemplate(){
     ['김철수','B'],
     ['박영희','C'],
     ['최민수','C'],
-    ['정수진','H'],
   ];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=[{wch:18},{wch:10}];
@@ -5631,19 +5630,28 @@ function gdDownloadInitTemplate(){
       const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
       if(rows.length===0) throw new Error('빈 파일입니다.');
       const periodRows=[];
+      const hRejected=[];
       for(const r of rows){
         const vals=Object.values(r);
         const name=str(r['이름']||r['코디명']||r['담당']||vals[0]);
         let grade=str(r['등급']||r['그룹']||vals[1]||'').toUpperCase().replace(/N_/g,'').replace(/그룹/g,'').trim();
         if(grade==='A등급'||grade==='B등급'||grade==='C등급'||grade==='H등급') grade=grade[0];
-        if(!name||!['A','B','C','H'].includes(grade)) continue;
+        if(!name) continue;
+        // H는 초기 등급으로 허용 X (C 4연속 후 자동 생성되는 등급)
+        if(grade==='H'){ hRejected.push(name); continue; }
+        if(!['A','B','C'].includes(grade)) continue;
         periodRows.push({
           group:grade, name, isProtected:false, manualGroup:false,
           db:0, contract:0, contractRate:0,
           cancelCount:0, refAdjContract:0, refAdjRate:0, streak:0
         });
       }
-      if(periodRows.length===0) throw new Error('이름/등급 컬럼을 찾을 수 없습니다. 헤더에 "이름"·"등급" 또는 첫 두 컬럼에 작성해주세요.');
+      if(periodRows.length===0) throw new Error('이름/등급 컬럼을 찾을 수 없습니다. 헤더에 "이름"·"등급" 또는 첫 두 컬럼에 작성해주세요. (등급은 A/B/C만 허용)');
+      if(hRejected.length>0){
+        if(!confirm(`H 등급은 초기 설정 시 사용할 수 없습니다 (C 4연속 후 자동 생성).\n다음 ${hRejected.length}명이 무시됩니다:\n${hRejected.slice(0,10).join(', ')}${hRejected.length>10?' ...':''}\n\n이대로 진행하시겠습니까?`)){
+          e.target.value=''; return;
+        }
+      }
       const _day=['일','월','화','수','목','금','토'];
       const fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
       // Remove old init period if exists
