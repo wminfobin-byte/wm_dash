@@ -1318,6 +1318,7 @@ tr.row-h td{background:var(--gh-light)}
       <select class="period-select" id="gdPeriodSelect" onchange="gdOnPeriodChange()"></select>
       <span class="period-info" id="gdPeriodInfo"></span>
     </div>
+    <div id="gdExcludedBanner"></div>
     <div class="kpi-grid" id="gdKpiGrid"></div>
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
@@ -5776,18 +5777,59 @@ function gdInferGradeFromCms(cmsGrp){
   return null;
 }
 
+// CMS 2-8 근태 상태 (명단 파일의 일자별 컬럼에 들어있는 값)
+const GD_ATTEND_STATUSES = new Set([
+  '출근','경조','공가','오전 결근','오후 결근','결근','조퇴',
+  '지각 20분 초과','지각 20분','지각 10분','지각',
+  '오전 반차','오후 반차','퇴사','연차','장기공석','대체휴무','휴가'
+]);
+
+// 명단 파일의 한 행에서 일자별 근태 시퀀스를 좌→우(과거→최신) 순으로 추출
+function gdExtractAttendSeq(memberRow){
+  const seq=[];
+  for(const k of Object.keys(memberRow)){
+    const v=str(memberRow[k]);
+    if(GD_ATTEND_STATUSES.has(v)) seq.push(v);
+  }
+  return seq;
+}
+
+// 퇴사 / 장기공석 판정
+function gdDetectExclusion(memberRow){
+  const seq=gdExtractAttendSeq(memberRow);
+  if(seq.length===0) return null;
+  const latest=seq[seq.length-1];
+  if(latest==='퇴사') return {reason:'퇴사', days:0};
+  if(latest==='장기공석'){
+    let count=0;
+    for(let i=seq.length-1;i>=0;i--){
+      if(seq[i]==='장기공석') count++;
+      else break;
+    }
+    return {reason:'장기공석', days:count};
+  }
+  return null;
+}
+
 function gdGetMembers(data){
   const members=[]; gdMemberHireDates={}; const cmsGroups={};
+  const excluded=[];
   for(const r of data){
     const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
-    if(dept==='뇌새김영어' && ['W그룹','E그룹','A그룹'].includes(grp) && name){
-      members.push(name);
-      cmsGroups[name]=grp.replace('그룹','');   // 'W'|'E'|'A'
-      const hd=r['입사일'];
-      if(hd) gdMemberHireDates[name]=parseDate(hd)||parseDate(str(hd));
+    if(dept!=='뇌새김영어') continue;
+    if(!['W그룹','E그룹','A그룹'].includes(grp)) continue;
+    if(!name) continue;
+    const ex=gdDetectExclusion(r);
+    if(ex){
+      excluded.push({name, cmsGroup:grp.replace('그룹',''), ...ex});
+      continue;  // 등급 산정 풀에서 제외
     }
+    members.push(name);
+    cmsGroups[name]=grp.replace('그룹','');
+    const hd=r['입사일'];
+    if(hd) gdMemberHireDates[name]=parseDate(hd)||parseDate(str(hd));
   }
-  return {members, cmsGroups};
+  return {members, cmsGroups, excluded};
 }
 
 function gdCountDb(data, members){
@@ -5916,7 +5958,7 @@ async function gdGenerate(dbFileId){
     if(!attendFile||!cancelFile||!dbFile||!contFile){
       alert('4종 파일이 모두 필요합니다 (DB수, 계약수, 취소수, 명단)');return;
     }
-    const {members, cmsGroups}=gdGetMembers(attendFile.data);
+    const {members, cmsGroups, excluded}=gdGetMembers(attendFile.data);
     gdMemberCmsGroups=cmsGroups;
     if(members.length===0) throw new Error('뇌새김영어 W/E/A 그룹 멤버를 찾을 수 없습니다.');
 
@@ -6022,7 +6064,7 @@ async function gdGenerate(dbFileId){
     }
 
     gdResult={members, stats, groups, streaks, cutlines,
-      protectedMembers,
+      protectedMembers, excluded,
       minDistDate, maxDistDate,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
@@ -6063,7 +6105,31 @@ function gdOnPeriodChange(){
 }
 
 function gdRenderDashboard(){
-  gdRenderPeriodRange(); gdRenderKPI(); gdRenderGroupSummary(); gdRenderTable(); gdRenderHistory();
+  gdRenderPeriodRange(); gdRenderExcludedBanner(); gdRenderKPI(); gdRenderGroupSummary(); gdRenderTable(); gdRenderHistory();
+}
+
+function gdRenderExcludedBanner(){
+  const el=document.getElementById('gdExcludedBanner');
+  if(!el) return;
+  const ex=gdResult?.excluded||[];
+  if(ex.length===0){ el.innerHTML=''; return; }
+  const resigned=ex.filter(e=>e.reason==='퇴사');
+  const absent=ex.filter(e=>e.reason==='장기공석').sort((a,b)=>b.days-a.days);
+  let parts=[];
+  if(resigned.length){
+    parts.push(`<div style="margin-top:4px"><b style="color:#6b7280">퇴사 ${resigned.length}명</b> · ${resigned.map(e=>`<span>${e.name}<span style="color:#94a3b8;font-size:11px">(${e.cmsGroup})</span></span>`).join(', ')}</div>`);
+  }
+  if(absent.length){
+    parts.push(`<div style="margin-top:4px"><b style="color:#92400e">장기공석 ${absent.length}명</b> · ${absent.map(e=>{
+      const danger=e.days>=30;
+      const cls=danger?'style="color:#dc3545;font-weight:700"':'style="color:#475569"';
+      return `<span><span style="font-weight:600">${e.name}</span><span style="color:#94a3b8;font-size:11px">(${e.cmsGroup})</span> <span ${cls}>${e.days}일째${danger?' ⚠':''}</span></span>`;
+    }).join(', ')}</div>`);
+  }
+  el.innerHTML=`<div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.65">
+    <div style="font-weight:700;color:#92400e">ℹ️ 등급 산정 제외 인원 ${ex.length}명</div>
+    ${parts.join('')}
+  </div>`;
 }
 
 function gdRenderPeriodRange(){
