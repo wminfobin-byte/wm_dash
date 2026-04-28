@@ -136,14 +136,16 @@ tr.row-total td{font-weight:800;background:#f8f9fc;border-top:2px solid #ccc;bor
 tr.row-a td{background:var(--ga-light)}
 tr.row-b td{background:var(--gb-light)}
 tr.row-c td{background:var(--gc-light)}
+tr.row-d td{background:var(--gd-light)}
 tr.row-h td{background:var(--gh-light)}
 .group-label{font-weight:800;font-size:14px;padding:4px 12px;border-radius:6px;display:inline-block}
 .group-label.A{background:var(--ga);color:#fff}
 .group-label.B{background:var(--gb);color:#fff}
 .group-label.C{background:var(--gc);color:#fff}
+.group-label.D{background:var(--gd);color:#fff}
 .group-label.H{background:var(--gh);color:#fff}
 .name-cell{text-align:left;font-weight:700;padding-left:16px}
-.name-cell.A{color:var(--ga-text)}.name-cell.B{color:var(--gb-text)}.name-cell.C{color:var(--gc-text)}.name-cell.H{color:var(--gh-text)}
+.name-cell.A{color:var(--ga-text)}.name-cell.B{color:var(--gb-text)}.name-cell.C{color:var(--gc-text)}.name-cell.D{color:var(--gd-text)}.name-cell.H{color:var(--gh-text)}
 
 .streak{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;font-size:13px;font-weight:800;color:#fff}
 .streak.s0{background:#d0d0d0}.streak.s1{background:var(--gc)}.streak.s2{background:#f08030}.streak.s3{background:var(--gh)}
@@ -155,7 +157,7 @@ tr.row-h td{background:var(--gh-light)}
 .history-list th{font-size:13px;padding:8px 10px}
 .history-list td{font-size:13px;padding:7px 10px}
 .hbadge{display:inline-block;width:24px;height:24px;border-radius:5px;font-size:11px;font-weight:800;color:#fff;line-height:24px;text-align:center;margin:0 1px}
-.hbadge.A{background:var(--ga)}.hbadge.B{background:var(--gb)}.hbadge.C{background:var(--gc)}.hbadge.H{background:var(--gh)}
+.hbadge.A{background:var(--ga)}.hbadge.B{background:var(--gb)}.hbadge.C{background:var(--gc)}.hbadge.D{background:var(--gd)}.hbadge.H{background:var(--gh)}
 
 .group-select{font-size:13px;font-weight:700;padding:3px 6px;border-radius:6px;border:2px solid var(--primary);cursor:pointer;font-family:inherit}
 .edit-actions{display:flex;gap:8px;margin:12px 0 0;justify-content:flex-end}
@@ -163,19 +165,21 @@ tr.row-h td{background:var(--gh-light)}
 .hidden{display:none}
 .text-left{text-align:left!important}
 
-/* ───── Grade Dashboard 색상 (PPT 2페이지 GRADE SYSTEM 기준) ───── */
+/* ───── Grade Dashboard 색상 (5등급 체계: A/B/C/D/H) ───── */
 #page-grade-dash {
   --ga:#F5B400; --ga-light:#FFF7DF; --ga-text:#9A7100;
   --gb:#4CAF7E; --gb-light:#E3F5EB; --gb-text:#2D6E4E;
-  --gc:#DC3545; --gc-light:#FCE8EB; --gc-text:#9B1D2A;
+  --gc:#F0920E; --gc-light:#FFF4E3; --gc-text:#9A5C00;
+  --gd:#DC3545; --gd-light:#FCE8EB; --gd-text:#9B1D2A;
   --gh:#4472C4; --gh-light:#E3EAF6; --gh-text:#2A4D8A;
 }
-/* Group cards gradient — PPT 솔리드 컬러 기반 */
+/* Group cards gradient */
 #page-grade-dash .gcard.ga{background:linear-gradient(135deg,#F5B400,#F7C846)}
 #page-grade-dash .gcard.gb{background:linear-gradient(135deg,#4CAF7E,#6BC295)}
-#page-grade-dash .gcard.gc{background:linear-gradient(135deg,#DC3545,#E45A68)}
+#page-grade-dash .gcard.gc{background:linear-gradient(135deg,#F0920E,#FFB84D)}
+#page-grade-dash .gcard.gd{background:linear-gradient(135deg,#DC3545,#E45A68)}
 #page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4472C4,#6286D0)}
-/* Streak — H 임박 경고 색상 (PPT C와 동일한 빨강) */
+/* Streak — H 임박 경고 색상 (D 누적 → H) */
 #page-grade-dash .streak.s1{background:#F0920E}
 #page-grade-dash .streak.s2{background:#E45D2E}
 #page-grade-dash .streak.s3{background:#DC3545}
@@ -5653,15 +5657,15 @@ function gdDownloadInitTemplate(){
       const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
       if(rows.length===0) throw new Error('빈 파일입니다.');
       const periodRows=[];
-      const hRejected=[];
+      const autoOnlyRejected=[];
       for(const r of rows){
         const vals=Object.values(r);
         const name=str(r['이름']||r['코디명']||r['담당']||vals[0]);
         let grade=str(r['등급']||r['그룹']||vals[1]||'').toUpperCase().replace(/N_/g,'').replace(/그룹/g,'').trim();
-        if(grade==='A등급'||grade==='B등급'||grade==='C등급'||grade==='H등급') grade=grade[0];
+        if(grade==='A등급'||grade==='B등급'||grade==='C등급'||grade==='D등급'||grade==='H등급') grade=grade[0];
         if(!name) continue;
-        // H는 초기 등급으로 허용 X (C 4연속 후 자동 생성되는 등급)
-        if(grade==='H'){ hRejected.push(name); continue; }
+        // D/H는 초기 등급으로 허용 X (자동 산정으로만 부여되는 등급)
+        if(grade==='D'||grade==='H'){ autoOnlyRejected.push(`${name}(${grade})`); continue; }
         if(!['A','B','C'].includes(grade)) continue;
         periodRows.push({
           group:grade, name, isProtected:false, manualGroup:false,
@@ -5670,8 +5674,8 @@ function gdDownloadInitTemplate(){
         });
       }
       if(periodRows.length===0) throw new Error('이름/등급 컬럼을 찾을 수 없습니다. 헤더에 "이름"·"등급" 또는 첫 두 컬럼에 작성해주세요. (등급은 A/B/C만 허용)');
-      if(hRejected.length>0){
-        if(!confirm(`H 등급은 초기 설정 시 사용할 수 없습니다 (C 4연속 후 자동 생성).\n다음 ${hRejected.length}명이 무시됩니다:\n${hRejected.slice(0,10).join(', ')}${hRejected.length>10?' ...':''}\n\n이대로 진행하시겠습니까?`)){
+      if(autoOnlyRejected.length>0){
+        if(!confirm(`D/H 등급은 초기 설정 시 사용할 수 없습니다 (자동 산정 결과로만 부여됨).\n다음 ${autoOnlyRejected.length}명이 무시됩니다:\n${autoOnlyRejected.slice(0,10).join(', ')}${autoOnlyRejected.length>10?' ...':''}\n\n이대로 진행하시겠습니까?`)){
           e.target.value=''; return;
         }
       }
@@ -5984,35 +5988,41 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
 }
 
 function gdAssignGroups(stats){
-  // 취소반영 계약률 desc → A/B/C 1/3 분할 + 동점자 보정
-  const entries=Object.entries(stats).map(([name,s])=>({name,rate:s.refAdjRate})).sort((a,b)=>b.rate-a.rate);
-  const n=entries.length;
+  // ① 취소반영 계약수 ≤ 0 → D 등급 (성과 0 이하)
+  // ② 나머지를 취소반영 계약률 desc → A/B/C 1/3 분할 + 동점자 보정
   const groups={};
   let cutlines={aToBIdx:-1,bToCIdx:-1,aToBVal:0,bToCVal:0};
+  const positiveEntries=[];
+  for(const [name,s] of Object.entries(stats)){
+    if((s.refAdjContract||0)<=0) groups[name]='D';
+    else positiveEntries.push({name,rate:s.refAdjRate});
+  }
+  positiveEntries.sort((a,b)=>b.rate-a.rate);
+  const n=positiveEntries.length;
   if(n===0) return {groups,cutlines};
   if(n<=3){
-    entries.forEach((e,i)=>{groups[e.name]=i===0?'A':i===1?'B':'C';});
+    positiveEntries.forEach((e,i)=>{groups[e.name]=i===0?'A':i===1?'B':'C';});
     return {groups,cutlines};
   }
   let cut1=Math.ceil(n/3);
   let cut2=Math.ceil(2*n/3);
-  while(cut1<n && cut1>0 && roundRate(entries[cut1].rate)===roundRate(entries[cut1-1].rate)) cut1++;
-  while(cut2<n && cut2>0 && roundRate(entries[cut2].rate)===roundRate(entries[cut2-1].rate)) cut2++;
+  while(cut1<n && cut1>0 && roundRate(positiveEntries[cut1].rate)===roundRate(positiveEntries[cut1-1].rate)) cut1++;
+  while(cut2<n && cut2>0 && roundRate(positiveEntries[cut2].rate)===roundRate(positiveEntries[cut2-1].rate)) cut2++;
   if(cut2<=cut1) cut2=cut1+1;
   if(cut2>n) cut2=n;
-  entries.forEach((e,i)=>{
+  positiveEntries.forEach((e,i)=>{
     if(i<cut1) groups[e.name]='A';
     else if(i<cut2) groups[e.name]='B';
     else groups[e.name]='C';
   });
-  cutlines={aToBIdx:cut1,bToCIdx:cut2,aToBVal:entries[cut1-1]?.rate||0,bToCVal:entries[cut2-1]?.rate||0};
+  cutlines={aToBIdx:cut1,bToCIdx:cut2,aToBVal:positiveEntries[cut1-1]?.rate||0,bToCVal:positiveEntries[cut2-1]?.rate||0};
   return {groups,cutlines};
 }
 
 function gdSortRows(rows){
-  // 등급순(A→B→C→H) 묶기 → 등급 내에서 취소반영 계약률 DESC
+  // 등급순(A→B→C→D→H) 묶기 → 등급 내에서 취소반영 계약률 DESC
   // 신입 보호자는 B 그룹 마지막에 배치
-  const groupOrder={A:0, B:1, C:2, H:3};
+  const groupOrder={A:0, B:1, C:2, D:3, H:4};
   const sortFn=(a,b)=>{
     const dg=(groupOrder[a.group]??9)-(groupOrder[b.group]??9);
     if(dg!==0) return dg;
@@ -6102,8 +6112,10 @@ async function gdGenerate(dbFileId){
         if(!r){ periodAttend[name]={workCount:0,legitCount:0,penaltyCount:0,totalDays:0}; continue; }
         const a=gdAnalyzePeriodAttend(r, minDistDate, maxDistDate);
         periodAttend[name]=a;
-        // 정당사유 회차 = 회차 내 출근 0일 + 정당사유 ≥ 1일
-        if(a.totalDays>0 && a.workCount===0 && a.legitCount>0) legitimateMembers.add(name);
+        // 정당사유 회차 = 회차 내 모든 일자가 정당사유로 처리된 경우만 (직전 회차 등급 유지)
+        // - 출근이 1일이라도 있으면 정상 평가 (정당사유 X)
+        // - 근태이슈(결근·지각 등)가 1일이라도 섞이면 근태이슈 우선 적용 → 정당사유 X, 정상 평가
+        if(a.totalDays>0 && a.legitCount===a.totalDays && a.workCount===0 && a.penaltyCount===0) legitimateMembers.add(name);
       }
     }
 
@@ -6128,7 +6140,7 @@ async function gdGenerate(dbFileId){
       }
     }
 
-    // ③ C 연속 카운트 + 4연속 후 5번째에 H 진입
+    // ③ D 연속 카운트 + 3연속 후 4번째 D에 H 진입
     // (initFile / 정당사유 회차는 streak 카운트에서 제외)
     const streakAdj=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
     const streaks={};
@@ -6143,21 +6155,21 @@ async function gdGenerate(dbFileId){
       }
       let count=0;
       if(escapedFromH[name]){
-        count=0; // H 탈출 시 streak 리셋
-      } else if(groups[name]==='C'||groups[name]==='H'){
+        count=0; // H 탈출 시 streak 리셋 (탈출 후 등급은 C)
+      } else if(groups[name]==='D'||groups[name]==='H'){
         count=1;
         for(const prev of olderResults){
           if(prev.isInit) continue;
           const pr=prev.rows.find(r=>r.name===name);
           if(!pr) continue;
           if(pr.isLegitimate) continue;  // 정당사유 회차는 카운트 제외
-          if(pr.group==='C'||pr.group==='H') count++;
+          if(pr.group==='D'||pr.group==='H') count++;
           else break;
         }
       }
       if(streakAdj[name]) count=Math.max(0,count+streakAdj[name]);
       streaks[name]=count;
-      if(!manualSet.has(name) && groups[name]==='C' && count>=5) groups[name]='H';
+      if(!manualSet.has(name) && groups[name]==='D' && count>=4) groups[name]='H';
     }
 
     // 근태이슈 강등: 회차 내 근태이슈 ≥ 2건 → 한 단계 강등 (정당사유·수동 제외)
@@ -6171,18 +6183,14 @@ async function gdGenerate(dbFileId){
       else if(groups[name]==='B') groups[name]='C';
     }
 
-    // DB 0건 처리: 분배 자체를 받지 못한 인원 → C 등급 강제 (정당사유·수동 제외)
-    const zeroDbForced=new Set();
+    // DB 0건 처리: 분배 자체를 받지 못한 인원은 실계약 0이므로 자동으로 D 분류됨
+    // (별도 강제 룰 불필요 — gdAssignGroups의 refAdjContract<=0 분기로 처리)
+    const zeroDbForced=new Set(); // 호환용 — 프로모션 풀 제외 시 참조 위해 유지
     for(const name of members){
-      if(manualSet.has(name)) continue;
-      if(legitimateMembers.has(name)) continue;
-      if((stats[name].db||0)===0){
-        groups[name]='C';
-        zeroDbForced.add(name);
-      }
+      if((stats[name].db||0)===0) zeroDbForced.add(name);
     }
 
-    // ④ 신입 보호 — 입사 +60일 이내 C/H → B 상향 (수동 그룹 제외)
+    // ④ 신입 보호 — 입사 +60일 이내 C/D/H → B 상향 (수동 그룹 제외)
     const HIRE_PROTECT_DAYS=60;
     const now=new Date();
     const protectedMembers=new Set();
@@ -6194,7 +6202,7 @@ async function gdGenerate(dbFileId){
       protectEnd.setDate(protectEnd.getDate()+HIRE_PROTECT_DAYS);
       protectEnd.setHours(23,59,59,999);
       if(now<=protectEnd){
-        if(groups[name]==='C'||groups[name]==='H'){
+        if(groups[name]==='C'||groups[name]==='D'||groups[name]==='H'){
           groups[name]='B';
           protectedMembers.add(name);
           streaks[name]=0; // 보호로 B가 되었으므로 streak 0
@@ -6369,14 +6377,15 @@ function gdRenderKPI(){
 }
 
 function gdRenderGroupSummary(){
-  const gc={'A':[],'B':[],'C':[],'H':[]};
+  const gc={'A':[],'B':[],'C':[],'D':[],'H':[]};
   for(const [n,g] of Object.entries(gdResult.groups)){if(gc[g])gc[g].push(n);}
   const cl=gdResult.cutlines;
   const cards=[
     {key:'A',cls:'ga',label:'A등급',cut:cl.aToBVal?`커트라인: ${pct2(cl.aToBVal)} 이상`:''},
     {key:'B',cls:'gb',label:'B등급',cut:cl.bToCVal?`커트라인: ${pct2(cl.bToCVal)} 이상`:''},
-    {key:'C',cls:'gc',label:'C등급',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만`:''},
-    {key:'H',cls:'gh',label:'H등급',cut:''},
+    {key:'C',cls:'gc',label:'C등급',cut:cl.bToCVal?`${pct2(cl.bToCVal)} 미만 (계약수>0)`:'계약수>0'},
+    {key:'D',cls:'gd',label:'D등급',cut:'취소반영 계약수 ≤ 0'},
+    {key:'H',cls:'gh',label:'H등급',cut:'D 4회 누적'},
   ];
   document.getElementById('gdGroupSummary').innerHTML=cards.map(c=>{
     const m=gc[c.key]||[];
@@ -6412,11 +6421,11 @@ function gdRenderTable(){
     <td${totalAdjNeg?' style="color:var(--danger)"':''}>${t.db>0?pct(t.adj/t.db):'-'}</td><td></td><td></td></tr>`;
   rows.forEach(r=>{
     const gc=r.group;
-    // streak >= 4 = 다음 C 1회 → H (위험), 2-3 경고, 1 주의
-    const sc=r.streak>=4?'s3':r.streak>=2?'s2':r.streak>=1?'s1':'s0';
+    // streak == 3 = 다음 D 1회 → H (위험·빨강), 2 = 경고(주황), 1 = 주의(노랑)
+    const sc=r.streak>=3?'s3':r.streak>=2?'s2':r.streak>=1?'s1':'s0';
     let groupCell;
     if(gdGroupEditMode){
-      const opts=['A','B','C','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
+      const opts=['A','B','C','D','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
       groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
     } else {
       let badges='';
@@ -6622,11 +6631,12 @@ async function gdClearHistory(){
 // ── Excel Download (누적 멀티 시트) ──
 async function gdDownloadExcel(){
   if(!gdResult){alert('먼저 대시보드를 생성해주세요.');return;}
-  // PPT 2페이지 GRADE SYSTEM 컬러 매핑
+  // 5등급 체계 (A/B/C/D/H) 컬러 매핑
   const gColors={
     'A':{fill:'F5B400',font:'FFFFFF',light:'FFF7DF',lf:'9A7100'},
     'B':{fill:'4CAF7E',font:'FFFFFF',light:'E3F5EB',lf:'2D6E4E'},
-    'C':{fill:'DC3545',font:'FFFFFF',light:'FCE8EB',lf:'9B1D2A'},
+    'C':{fill:'F0920E',font:'FFFFFF',light:'FFF4E3',lf:'9A5C00'},
+    'D':{fill:'DC3545',font:'FFFFFF',light:'FCE8EB',lf:'9B1D2A'},
     'H':{fill:'4472C4',font:'FFFFFF',light:'E3EAF6',lf:'2A4D8A'},
   };
   const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
