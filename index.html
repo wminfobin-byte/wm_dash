@@ -6021,7 +6021,7 @@ function gdAssignGroups(stats){
 
 function gdSortRows(rows){
   // 등급순(A→B→C→D→H) 묶기 → 등급 내에서 취소반영 계약률 DESC
-  // 신입 보호자는 B 그룹 마지막에 배치
+  // 신입 보호자는 C 그룹 마지막에 배치
   const groupOrder={A:0, B:1, C:2, D:3, H:4};
   const sortFn=(a,b)=>{
     const dg=(groupOrder[a.group]??9)-(groupOrder[b.group]??9);
@@ -6031,10 +6031,11 @@ function gdSortRows(rows){
   const normal=rows.filter(r=>!r.isProtected);
   const protect=rows.filter(r=>r.isProtected);
   normal.sort(sortFn); protect.sort(sortFn);
-  // 신규 보호자는 B 그룹 마지막에 삽입 (B 없으면 A 마지막)
-  let lastBIdx=normal.reduce((last,r,i)=>r.group==='B'?i:last,-1);
-  if(lastBIdx===-1) lastBIdx=normal.reduce((last,r,i)=>r.group==='A'?i:last,-1);
-  const insertAt=lastBIdx+1;
+  // 신규 보호자는 C 그룹 마지막에 삽입 (C 없으면 B, B도 없으면 A 마지막)
+  let lastIdx=normal.reduce((last,r,i)=>r.group==='C'?i:last,-1);
+  if(lastIdx===-1) lastIdx=normal.reduce((last,r,i)=>r.group==='B'?i:last,-1);
+  if(lastIdx===-1) lastIdx=normal.reduce((last,r,i)=>r.group==='A'?i:last,-1);
+  const insertAt=lastIdx+1;
   return [...normal.slice(0,insertAt), ...protect, ...normal.slice(insertAt)];
 }
 
@@ -6192,7 +6193,7 @@ async function gdGenerate(dbFileId){
       if((stats[name].db||0)===0) zeroDbForced.add(name);
     }
 
-    // ④ 신입 보호 — 입사 +60일 이내 C/D/H → B 상향 (수동 그룹 제외)
+    // ④ 신입 보호 — 입사 +60일 이내 D/H → C 상향 (수동 그룹 제외)
     const HIRE_PROTECT_DAYS=60;
     const now=new Date();
     const protectedMembers=new Set();
@@ -6204,10 +6205,10 @@ async function gdGenerate(dbFileId){
       protectEnd.setDate(protectEnd.getDate()+HIRE_PROTECT_DAYS);
       protectEnd.setHours(23,59,59,999);
       if(now<=protectEnd){
-        if(groups[name]==='C'||groups[name]==='D'||groups[name]==='H'){
-          groups[name]='B';
+        if(groups[name]==='D'||groups[name]==='H'){
+          groups[name]='C';
           protectedMembers.add(name);
-          streaks[name]=0; // 보호로 B가 되었으므로 streak 0
+          streaks[name]=0; // 보호로 C가 되었으므로 D 누적 0
         }
       }
     }
