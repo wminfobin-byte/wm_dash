@@ -170,15 +170,15 @@ tr.row-h td{background:var(--gh-light)}
   --ga:#F5B400; --ga-light:#FFF7DF; --ga-text:#9A7100;
   --gb:#4CAF7E; --gb-light:#E3F5EB; --gb-text:#2D6E4E;
   --gc:#F0920E; --gc-light:#FFF4E3; --gc-text:#9A5C00;
-  --gd:#DC3545; --gd-light:#FCE8EB; --gd-text:#9B1D2A;
-  --gh:#4472C4; --gh-light:#E3EAF6; --gh-text:#2A4D8A;
+  --gd:#4472C4; --gd-light:#E3EAF6; --gd-text:#2A4D8A;
+  --gh:#4B5563; --gh-light:#F3F4F6; --gh-text:#1F2937;
 }
 /* Group cards gradient */
 #page-grade-dash .gcard.ga{background:linear-gradient(135deg,#F5B400,#F7C846)}
 #page-grade-dash .gcard.gb{background:linear-gradient(135deg,#4CAF7E,#6BC295)}
 #page-grade-dash .gcard.gc{background:linear-gradient(135deg,#F0920E,#FFB84D)}
-#page-grade-dash .gcard.gd{background:linear-gradient(135deg,#DC3545,#E45A68)}
-#page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4472C4,#6286D0)}
+#page-grade-dash .gcard.gd{background:linear-gradient(135deg,#4472C4,#6286D0)}
+#page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4B5563,#6B7280)}
 /* Streak — H 임박 경고 색상 (D 누적 → H) */
 #page-grade-dash .streak.s1{background:#F0920E}
 #page-grade-dash .streak.s2{background:#E45D2E}
@@ -6636,8 +6636,8 @@ async function gdDownloadExcel(){
     'A':{fill:'F5B400',font:'FFFFFF',light:'FFF7DF',lf:'9A7100'},
     'B':{fill:'4CAF7E',font:'FFFFFF',light:'E3F5EB',lf:'2D6E4E'},
     'C':{fill:'F0920E',font:'FFFFFF',light:'FFF4E3',lf:'9A5C00'},
-    'D':{fill:'DC3545',font:'FFFFFF',light:'FCE8EB',lf:'9B1D2A'},
-    'H':{fill:'4472C4',font:'FFFFFF',light:'E3EAF6',lf:'2A4D8A'},
+    'D':{fill:'4472C4',font:'FFFFFF',light:'E3EAF6',lf:'2A4D8A'},
+    'H':{fill:'4B5563',font:'FFFFFF',light:'F3F4F6',lf:'1F2937'},
   };
   const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
   const bdr={top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}};
