@@ -2799,7 +2799,7 @@ function renderTable(){
       <td>${r.db.toLocaleString()}</td><td>${r.contract.toLocaleString()}</td><td>${pct(r.contractRate)}</td>
       <td>${pct2(r.refCancelRate)}</td><td>${r.refAdjContract.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</td>
       <td style="font-weight:800">${pct2(r.refAdjRate)}</td>
-      <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: -1" onclick="adjustStreak('${r.name}',-1)">${r.streak}</span></td></tr>`;
+      <td><span class="streak ${sc}" style="cursor:pointer" title="좌클릭: -1 / 우클릭: +1" onclick="adjustStreak('${r.name}',-1)" oncontextmenu="adjustStreak('${r.name}',1);return false;">${r.streak}</span></td></tr>`;
   });
 
   if(groupEditMode){
@@ -2892,7 +2892,8 @@ async function applyGroupEdit(){
 }
 
 function adjustStreak(name,delta){
-  if(!confirm(`${name}의 N_C 연속 횟수를 -1 하시겠습니까?`)) return;
+  const sign=delta>0?'+':'';
+  if(!confirm(`${name}의 N_C 연속 횟수를 ${sign}${delta} 하시겠습니까?`)) return;
   const adj=JSON.parse(localStorage.getItem('ngroup_streak_adj')||'{}');
   adj[name]=(adj[name]||0)+delta;
   if(adj[name]===0) delete adj[name];
