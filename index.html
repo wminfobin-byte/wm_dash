@@ -6333,6 +6333,18 @@ async function gdGenerate(dbFileId){
       else if(groups[name]==='C') groups[name]='D';
     }
 
+    // 1일 출근 cap: 3일 회차 중 출근이 1일이면 A 절대 불가 (B 상한)
+    // 정당사유로 다른 2일이 처리된 경우라도 동일 적용. 정당사유 회차(workCount=0)·수동 그룹은 제외.
+    for(const name of members){
+      if(manualSet.has(name)) continue;
+      if(legitimateMembers.has(name)) continue;
+      const a=periodAttend[name];
+      if(!a) continue;
+      if(a.totalDays===3 && a.workCount===1 && groups[name]==='A'){
+        groups[name]='B';
+      }
+    }
+
     // ③ D 연속 카운트 + 3연속 후 4번째 D에 H 진입
     // (initFile / 정당사유 회차는 streak 카운트에서 제외)
     const streakAdj=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
@@ -6422,6 +6434,10 @@ async function gdGenerate(dbFileId){
         if(protectedMembers.has(name)){(excluded.newbie=excluded.newbie||[]).push(name);return false;}
         if(zeroDbForced.has(name)){(excluded.zeroDb=excluded.zeroDb||[]).push(name);return false;}
         if((periodAttend[name]?.penaltyCount||0)>=2){(excluded.attend=excluded.attend||[]).push(name);return false;}
+        // 1일 출근 cap: B→A 승급 풀에서 제외 (3일 중 1일 출근 → A 절대 불가)
+        if(newGrp==='A' && periodAttend[name]?.totalDays===3 && periodAttend[name]?.workCount===1){
+          (excluded.oneDayWork=excluded.oneDayWork||[]).push(name); return false;
+        }
         return true;
       });
       pool.sort((a,b)=>{
@@ -6472,6 +6488,8 @@ async function gdGenerate(dbFileId){
       manualBaseGroup:manualSet.has(name)?manualGroups[name]:null,
       isLegitimate:legitimateMembers.has(name),
       attendIssues:periodAttend[name]?.penaltyCount||0,
+      workCount:periodAttend[name]?.workCount||0,
+      totalDays:periodAttend[name]?.totalDays||0,
       promoted:promotedSet.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
@@ -6582,13 +6600,15 @@ function gdRenderTable(){
   const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const periodMeta={};
   if(sheetName && gdResult.savedRows){
-    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, promoted:!!r.promoted, manualGroup:!!r.manualGroup};
+    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, workCount:r.workCount||0, totalDays:r.totalDays||0, promoted:!!r.promoted, manualGroup:!!r.manualGroup};
   }
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
     name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
     isProtected:prot.has(name),
     isLegitimate:periodMeta[name]?.isLegitimate||false,
     attendIssues:periodMeta[name]?.attendIssues||0,
+    workCount:periodMeta[name]?.workCount||0,
+    totalDays:periodMeta[name]?.totalDays||0,
     promoted:periodMeta[name]?.promoted||false,
     manualGroup:periodMeta[name]?.manualGroup||false,
     ...s
@@ -6615,6 +6635,7 @@ function gdRenderTable(){
       if(r.isLegitimate) badges+=' <span style="font-size:10px;color:#3451d1;background:#e8edff;padding:1px 6px;border-radius:8px;font-weight:600" title="정당사유 (회차 3일 전체 휴가/연차/공가/경조/반차 등) — 직전 회차 등급 유지">정당사유</span>';
       if(r.attendIssues>=2) badges+=` <span style="font-size:10px;color:#fff;background:#dc3545;padding:1px 6px;border-radius:8px;font-weight:700" title="근태이슈 ${r.attendIssues}회 — 한 단계 강등 적용">⚠ 근태 ${r.attendIssues}</span>`;
       else if(r.attendIssues===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="근태이슈 1회 — 1회 더 발생 시 강등">근태 1</span>`;
+      if(r.totalDays===3 && r.workCount===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;padding:1px 6px;border-radius:8px;font-weight:600" title="회차 3일 중 출근 1일 — A 등급 절대 불가 (B 상한)">출근 1일 · B상한</span>`;
       groupCell=`<span class="group-label ${gc}">${gc}등급</span>${badges}`;
     }
     const adjNeg=r.refAdjContract<0;
@@ -6699,7 +6720,7 @@ async function gdApplyGroupEdit(){
     const prot=gdResult.protectedMembers||new Set();
     const prevSavedMeta={};
     if(gdResult.savedRows){
-      for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,promoted:!!r.promoted,manualBaseGroup:r.manualBaseGroup||null,wasManual:!!r.manualGroup};
+      for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,workCount:r.workCount||0,totalDays:r.totalDays||0,promoted:!!r.promoted,manualBaseGroup:r.manualBaseGroup||null,wasManual:!!r.manualGroup};
     }
     const allRows=Object.entries(gdResult.stats).map(([name,s])=>{
       const isManual=!!changes[name] || (prevSavedMeta[name]?.wasManual);
@@ -6710,6 +6731,8 @@ async function gdApplyGroupEdit(){
         manualGroup:isManual, manualBaseGroup:isManual?baseGroup:null,
         isLegitimate:prevSavedMeta[name]?.isLegitimate||false,
         attendIssues:prevSavedMeta[name]?.attendIssues||0,
+        workCount:prevSavedMeta[name]?.workCount||0,
+        totalDays:prevSavedMeta[name]?.totalDays||0,
         promoted:prevSavedMeta[name]?.promoted||false,
         db:s.db, contract:s.contract, contractRate:s.contractRate,
         cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
@@ -6832,7 +6855,7 @@ async function gdDownloadExcel(){
     const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
     const pStart=periodData.startStr||'';
     const pEnd=periodData.endStr||'';
-    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('실계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');return ns.join(', ');};
+    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('실계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');if(r.totalDays===3 && r.workCount===1)ns.push('출근 1일·B상한');return ns.join(', ');};
     const aoa=[
       Array(12).fill(''),
       ['','시작일자 :',pStart,'','','','','','','','',''],
