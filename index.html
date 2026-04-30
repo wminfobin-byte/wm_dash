@@ -1323,6 +1323,7 @@ tr.row-h td{background:var(--gh-light)}
         </div>
       </div>
       <button type="button" class="btn btn-primary" onclick="gdGenerateInitFromApril()" style="width:100%">📊 4월 실적 자동 산정 → 초기등급 저장</button>
+      <div id="gd-april-result" style="margin-top:14px"></div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="gdCloseModal()">닫기</button>
         <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdGenerate();gdCloseModal()">대시보드 생성</button>
@@ -5851,8 +5852,55 @@ async function gdGenerateInitFromApril(){
     const aN=periodRows.filter(r=>r.group==='A').length;
     const bN=periodRows.filter(r=>r.group==='B').length;
     const cN=periodRows.filter(r=>r.group==='C').length;
-    const exMsg=excluded.length>0?`\n(제외: 퇴사·장기공석 ${excluded.length}명)`:'';
-    alert(`4월 실적 자동 초기등급 산정 완료!\n\n대상: ${periodRows.length}명\nA: ${aN}명 / B: ${bN}명 / C: ${cN}명\n시트명: ${sheetName}${exMsg}`);
+
+    // 결과 리스트 렌더 (모달 내부)
+    const resBox=document.getElementById('gd-april-result');
+    if(resBox){
+      const gColor=g=>g==='A'?'#4361EE':g==='B'?'#2EC4B6':'#F0920E';
+      const gBg=g=>g==='A'?'#e8edff':g==='B'?'#e2f7f5':'#fff4e3';
+      const rankRows=periodRows.map((r,i)=>{
+        const rate=r.db>0?(r.contract/r.db*100):0;
+        return `<tr>
+          <td style="padding:4px 8px;text-align:center;color:#64748b;font-size:11px">${i+1}</td>
+          <td style="padding:4px 8px;font-weight:600">${r.name}</td>
+          <td style="padding:4px 8px;text-align:center"><span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:6px;background:${gBg(r.group)};color:${gColor(r.group)};font-weight:700;font-size:11px">${r.group}</span></td>
+          <td style="padding:4px 8px;text-align:right;color:#475569">${r.db.toLocaleString()}</td>
+          <td style="padding:4px 8px;text-align:right;color:#475569">${r.contract.toLocaleString()}</td>
+          <td style="padding:4px 8px;text-align:right;font-weight:700">${rate.toFixed(1)}%</td>
+        </tr>`;
+      }).join('');
+      const exHtml=excluded.length>0
+        ? `<details style="margin-top:8px;font-size:12px"><summary style="cursor:pointer;color:#64748b">제외된 ${excluded.length}명 보기</summary><div style="margin-top:6px;color:#64748b;line-height:1.7">${excluded.map(e=>`${e.name}(${e.reason}${e.days?` ${e.days}일`:''})`).join(', ')}</div></details>`
+        : '';
+      resBox.innerHTML=`
+        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-weight:700;color:#0f172a">✅ 자동 산정 완료</span>
+            <span style="font-size:12px;color:#475569">시트 ${sheetName} · 총 ${periodRows.length}명</span>
+            <span style="font-size:11px;display:inline-flex;gap:6px;margin-left:auto">
+              <span style="padding:2px 8px;border-radius:6px;background:#e8edff;color:#4361EE;font-weight:700">A ${aN}</span>
+              <span style="padding:2px 8px;border-radius:6px;background:#e2f7f5;color:#2EC4B6;font-weight:700">B ${bN}</span>
+              <span style="padding:2px 8px;border-radius:6px;background:#fff4e3;color:#F0920E;font-weight:700">C ${cN}</span>
+            </span>
+          </div>
+          <div style="max-height:340px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead style="position:sticky;top:0;background:#fff;box-shadow:0 1px 0 var(--border)">
+                <tr style="color:#475569">
+                  <th style="padding:6px 8px;text-align:center;font-weight:600;width:36px">#</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600">이름</th>
+                  <th style="padding:6px 8px;text-align:center;font-weight:600;width:60px">등급</th>
+                  <th style="padding:6px 8px;text-align:right;font-weight:600;width:60px">DB</th>
+                  <th style="padding:6px 8px;text-align:right;font-weight:600;width:60px">계약</th>
+                  <th style="padding:6px 8px;text-align:right;font-weight:600;width:70px">계약률</th>
+                </tr>
+              </thead>
+              <tbody>${rankRows}</tbody>
+            </table>
+          </div>
+          ${exHtml?`<div style="padding:8px 14px;background:#f8fafc;border-top:1px solid var(--border)">${exHtml}</div>`:''}
+        </div>`;
+    }
 
     // 입력 비움
     ['april-db','april-cont','april-attend'].forEach(k=>{
