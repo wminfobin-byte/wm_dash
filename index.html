@@ -5575,6 +5575,7 @@ let gdResult=null;
 let gdGroupEditMode=false;
 let gdMemberHireDates={};
 let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고용)
+let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
 const GD_CANCEL_COL={customerKey:3, manager:13, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
@@ -5853,6 +5854,13 @@ async function gdGenerateInitFromApril(){
     const bN=periodRows.filter(r=>r.group==='B').length;
     const cN=periodRows.filter(r=>r.group==='C').length;
 
+    gdAprilInitLast={
+      periodRows:periodRows.map(r=>({...r})),
+      excluded:excluded.slice(),
+      sheetName, startStr:fd(startD), endStr:fd(endD),
+      aN, bN, cN
+    };
+
     // 결과 리스트 렌더 (모달 내부)
     const resBox=document.getElementById('gd-april-result');
     if(resBox){
@@ -5882,6 +5890,7 @@ async function gdGenerateInitFromApril(){
               <span style="padding:2px 8px;border-radius:6px;background:#e2f7f5;color:#2EC4B6;font-weight:700">B ${bN}</span>
               <span style="padding:2px 8px;border-radius:6px;background:#fff4e3;color:#F0920E;font-weight:700">C ${cN}</span>
             </span>
+            <button type="button" class="btn btn-outline btn-sm" onclick="gdDownloadAprilInitExcel()" style="font-size:11px;padding:4px 10px">📥 엑셀 다운로드</button>
           </div>
           <div style="max-height:340px;overflow-y:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -6972,6 +6981,132 @@ async function gdDownloadExcel(){
     const d=gdResult.maxDistDate;
     excelName=`(공유) 차등 성과_${String(d.getFullYear()).slice(2)}년 ${d.getMonth()+1}월.xlsx`;
   }
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){
+      if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+        const xml=await zip.file(path).async('string');
+        zip.file(path,xml.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));
+      }
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=excelName; a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    console.warn('눈금선 제거 실패, 기본 방식으로 저장',e);
+    XLSX.writeFile(wb,excelName,{bookSST:true});
+  }
+}
+
+// ── 방식2 4월 자동 산정 결과 엑셀 다운로드 (디자인 통일) ──
+async function gdDownloadAprilInitExcel(){
+  if(!gdAprilInitLast){alert('먼저 자동 산정을 실행해주세요.');return;}
+  const {periodRows, excluded, sheetName, startStr, endStr, aN, bN, cN}=gdAprilInitLast;
+  const gColors={
+    'A':{fill:'F5B400',font:'FFFFFF',light:'FFF7DF',lf:'9A7100'},
+    'B':{fill:'4CAF7E',font:'FFFFFF',light:'E3F5EB',lf:'2D6E4E'},
+    'C':{fill:'F0920E',font:'FFFFFF',light:'FFF4E3',lf:'9A5C00'},
+  };
+  const thinDk={style:'thin',color:{rgb:'999999'}};
+  const thinLt={style:'thin',color:{rgb:'DDDDDD'}};
+  const bdr={top:thinLt,bottom:thinLt,left:thinLt,right:thinLt};
+  const bdrDk={top:thinDk,bottom:thinDk,left:thinDk,right:thinDk};
+  const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:bdrDk};
+  const totalS={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+  const titleS={font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:bdrDk};
+  const periodLblS={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:bdrDk};
+  const periodValS={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'000000'}},fill:{fgColor:{rgb:'E8EDFF'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'3451D1'}},bottom:{style:'thin',color:{rgb:'3451D1'}},left:{style:'thin',color:{rgb:'3451D1'}},right:{style:'thin',color:{rgb:'3451D1'}}}};
+  const sumLblS={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:bdrDk};
+  const headers=['순위','등급','코디명','DB수','실계약수','실계약률'];
+
+  const rows=periodRows.map((r,i)=>{
+    const rate=r.db>0?r.contract/r.db:0;
+    return {rank:i+1, group:r.group, name:r.name, db:r.db, contract:r.contract, rate};
+  });
+  const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract}),{db:0,cont:0});
+  const colW=14;
+  const aoa=[
+    Array(8).fill(''),
+    ['','시작일자 :',startStr,'','','','',''],
+    ['','종료일자 :',endStr,'','','','',''],
+    Array(8).fill(''),
+    ['','집계 :','','',`A ${aN}명`,`B ${bN}명`,`C ${cN}명`,''],
+    Array(8).fill(''),
+    ['',...headers,''],
+    ['','','합계',t.db,t.cont,t.db>0?t.cont/t.db:0,'',''],
+    ...rows.map(r=>['',r.rank,r.group+'등급',r.name,r.db,r.contract,r.rate,'']),
+    Array(8).fill(''),
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:1},{wch:8},{wch:12},{wch:18},{wch:colW},{wch:colW},{wch:colW},{wch:1}];
+  // 타이틀 — D2:F3 병합
+  const titleCell=XLSX.utils.encode_cell({r:1,c:3});
+  ws[titleCell]={v:'WM 차등 성과 — 초기 등급 (방식2 자동 산정)',t:'s',s:titleS};
+  if(!ws['!merges']) ws['!merges']=[];
+  ws['!merges'].push({s:{r:1,c:3},e:{r:2,c:6}});
+  if(!ws['!rows']) ws['!rows']=[];
+  ws['!rows'][6]={hpt:30};
+  // 시작/종료 라벨·값 스타일
+  for(let r=1;r<=2;r++){
+    const lbl=XLSX.utils.encode_cell({r,c:1});
+    const val=XLSX.utils.encode_cell({r,c:2});
+    if(ws[lbl]) ws[lbl].s=periodLblS;
+    if(ws[val]) ws[val].s=periodValS;
+  }
+  // 집계 라벨/배지
+  {
+    const lbl=XLSX.utils.encode_cell({r:4,c:1}); if(ws[lbl]) ws[lbl].s=sumLblS;
+    const aA=XLSX.utils.encode_cell({r:4,c:4}); if(ws[aA]) ws[aA].s={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:gColors.A.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+    const aB=XLSX.utils.encode_cell({r:4,c:5}); if(ws[aB]) ws[aB].s={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:gColors.B.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+    const aC=XLSX.utils.encode_cell({r:4,c:6}); if(ws[aC]) ws[aC].s={font:{bold:true,sz:10,name:'맑은 고딕',color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:gColors.C.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+  }
+  // 헤더 (row 6)
+  for(let c=1;c<=6;c++){const a=XLSX.utils.encode_cell({r:6,c});if(ws[a])ws[a].s=hdrS;}
+  // 합계 (row 7)
+  for(let c=1;c<=6;c++){const a=XLSX.utils.encode_cell({r:7,c});if(ws[a])ws[a].s=totalS;}
+  {const a=XLSX.utils.encode_cell({r:7,c:5});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='0.0%';}
+  [3,4].forEach(c=>{const a=XLSX.utils.encode_cell({r:7,c+1});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='#,##0';});
+  // 데이터 행 (row 8~)
+  rows.forEach((r,i)=>{
+    const ri=8+i;
+    const gc=gColors[r.group]||gColors['C'];
+    for(let c=1;c<=6;c++){
+      const a=XLSX.utils.encode_cell({r:ri,c}); if(!ws[a])continue;
+      const isRank=c===1, isG=c===2, isN=c===3;
+      ws[a].s={
+        font:{bold:isG||isN,sz:10,name:'맑은 고딕',color:{rgb:isG?gc.font:isN?gc.lf:'333333'}},
+        fill:{fgColor:{rgb:isG?gc.fill:gc.light}},
+        alignment:{horizontal:'center',vertical:'center'},
+        border:bdr,
+      };
+      if(isRank) ws[a].z='#,##0';
+    }
+    {const a=XLSX.utils.encode_cell({r:ri,c:6});if(ws[a])ws[a].z='0.0%';}
+    [4,5].forEach(c=>{const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].z='#,##0';});
+  });
+
+  // 제외자 시트 (있는 경우만)
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  if(excluded&&excluded.length>0){
+    const exHdrs=['이름','CMS그룹','사유','연속일수'];
+    const exAoa=[Array(6).fill(''),['',...exHdrs,''],...excluded.map(e=>['',e.name,e.cmsGroup||'',e.reason||'',e.days||0,''])];
+    const ws2=XLSX.utils.aoa_to_sheet(exAoa);
+    ws2['!cols']=[{wch:1},{wch:18},{wch:10},{wch:14},{wch:12},{wch:1}];
+    for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:1,c});if(ws2[a])ws2[a].s=hdrS;}
+    excluded.forEach((_,i)=>{
+      const ri=2+i;
+      for(let c=1;c<=4;c++){
+        const a=XLSX.utils.encode_cell({r:ri,c}); if(!ws2[a])continue;
+        ws2[a].s={font:{sz:10,name:'맑은 고딕',color:{rgb:'333333'}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+      }
+    });
+    XLSX.utils.book_append_sheet(wb,ws2,'제외자');
+  }
+
+  const excelName=`(공유) 차등 성과_초기등급_${sheetName}.xlsx`;
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
   try{
     const zip=await JSZip.loadAsync(wbBuf);
