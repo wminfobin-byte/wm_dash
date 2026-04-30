@@ -7067,7 +7067,7 @@ async function gdDownloadAprilInitExcel(){
   // 합계 (row 7)
   for(let c=1;c<=6;c++){const a=XLSX.utils.encode_cell({r:7,c});if(ws[a])ws[a].s=totalS;}
   {const a=XLSX.utils.encode_cell({r:7,c:5});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='0.0%';}
-  [3,4].forEach(c=>{const a=XLSX.utils.encode_cell({r:7,c+1});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='#,##0';});
+  [4,5].forEach(c=>{const a=XLSX.utils.encode_cell({r:7,c});if(ws[a]&&typeof ws[a].v==='number')ws[a].z='#,##0';});
   // 데이터 행 (row 8~)
   rows.forEach((r,i)=>{
     const ri=8+i;
