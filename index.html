@@ -1267,8 +1267,9 @@ tr.row-h td{background:var(--gh-light)}
         <div class="upload-box" id="box-gd-cancel">
           <input type="file" accept=".xlsx,.xls" id="file-gd-cancel">
           <div class="icon">📉</div><div class="label">취소수</div>
-          <div class="desc">신청자관리(오더일: 최근 3개월)<br>최신 1건 유지</div>
+          <div class="desc">신청자관리(오더일: 최근 3개월)<br>누적 저장 (3일 주기)</div>
           <div class="filename" id="fname-gd-cancel"></div>
+          <div class="badge-count hidden" id="count-gd-cancel"></div>
           <div class="progress-bar hidden" id="prog-gd-cancel"><div class="progress-fill"></div></div>
         </div>
         <div class="upload-box" id="box-gd-attend">
@@ -5634,8 +5635,8 @@ function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remo
       let parsed;
       if(key==='attend') parsed=XLSX.utils.sheet_to_json(ws,{defval:''});
       else parsed=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-      // Latest-1 for cancel/attend; cumulative for db/cont
-      if(key==='cancel'||key==='attend'){
+      // Latest-1 for attend; cumulative for db/cont/cancel (회차마다 새 스냅샷 누적)
+      if(key==='attend'){
         const old=gdAllFiles.filter(g=>g.type===key);
         for(const o of old) await gdIdbDelete(o.id);
         gdAllFiles=gdAllFiles.filter(g=>g.type!==key);
@@ -5971,7 +5972,7 @@ function gdRenderFileHistory(){
   let html='';
   for(const t of types){
     const files=gdGetFilesByType(t.key);
-    const accum=t.key==='db'||t.key==='cont';
+    const accum=t.key==='db'||t.key==='cont'||t.key==='cancel';
     html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${files.length}건${accum?' (누적)':' (최신 1건 유지)'}</div>`;
     if(files.length===0) html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';
     else files.forEach((f,i)=>{
@@ -6279,12 +6280,14 @@ function gdSortRows(rows){
 async function gdGenerate(dbFileId){
   try{
     const attendFile=gdGetLatest('attend');
-    const cancelFile=gdGetLatest('cancel');
     const dbFile=dbFileId?gdAllFiles.find(f=>f.id===dbFileId):gdGetLatest('db');
-    // contFile = dbFile 업로드 시점과 가장 가까운 cont
+    // contFile / cancelFile = dbFile 업로드 시점과 가장 가까운 회차 스냅샷
     const contFiles=gdGetFilesByType('cont');
     let contFile=null,bestDiff=Infinity;
     for(const c of contFiles){const diff=Math.abs(c.uploadTime-(dbFile?.uploadTime||0));if(diff<bestDiff){bestDiff=diff;contFile=c;}}
+    const cancelFiles=gdGetFilesByType('cancel');
+    let cancelFile=null,bestCxDiff=Infinity;
+    for(const c of cancelFiles){const diff=Math.abs(c.uploadTime-(dbFile?.uploadTime||0));if(diff<bestCxDiff){bestCxDiff=diff;cancelFile=c;}}
     if(!attendFile||!cancelFile||!dbFile||!contFile){
       alert('4종 파일이 모두 필요합니다 (DB수, 계약수, 취소수, 명단)');return;
     }
