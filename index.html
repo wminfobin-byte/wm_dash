@@ -5585,6 +5585,7 @@ let gdResult=null;
 let gdGroupEditMode=false;
 let gdMemberHireDates={};
 let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고용)
+let gdMemberCenters={};     // {name: '센터명'}
 let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
 const GD_CANCEL_COL={customerKey:3, manager:13, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), AQ=42(반품일)
@@ -6109,7 +6110,7 @@ function gdDetectExclusion(memberRow){
 }
 
 function gdGetMembers(data){
-  const members=[]; gdMemberHireDates={}; const cmsGroups={};
+  const members=[]; gdMemberHireDates={}; gdMemberCenters={}; const cmsGroups={};
   const excluded=[];
   for(const r of data){
     const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
@@ -6126,6 +6127,8 @@ function gdGetMembers(data){
     cmsGroups[name]=grp.replace('그룹','');
     const hd=r['입사일'];
     if(hd) gdMemberHireDates[name]=parseDate(hd)||parseDate(str(hd));
+    const ct=str(r['센터']);
+    if(ct) gdMemberCenters[name]=ct;
   }
   return {members, cmsGroups, excluded};
 }
@@ -6965,12 +6968,21 @@ async function gdRenderHistory(){
   const namesSet=new Set();
   all.forEach(p=>p.rows.forEach(r=>namesSet.add(r.name)));
   const names=gdResult?[...gdResult.members]:[...namesSet];
+  // 입사일 오름차순 (오래된 순). 입사일 없는 인원은 맨 뒤
+  names.sort((a,b)=>{
+    const da=gdMemberHireDates[a], db=gdMemberHireDates[b];
+    if(!da && !db) return a.localeCompare(b,'ko');
+    if(!da) return 1;
+    if(!db) return -1;
+    return da-db;
+  });
   const maxLen=Math.min(10, all.length);
-  let html='<table><thead><tr><th style="text-align:left">코디명</th>';
+  let html='<table><thead><tr><th style="text-align:left">센터</th><th style="text-align:left">코디명</th>';
   for(let i=0;i<maxLen;i++) html+=`<th>${all[i].sheetName}</th>`;
   html+='</tr></thead><tbody>';
   for(const name of names){
-    html+=`<tr><td class="text-left" style="font-weight:700">${shortName(name)}</td>`;
+    const ct=gdMemberCenters[name]||'-';
+    html+=`<tr><td class="text-left" style="font-size:12px;color:#475569">${ct}</td><td class="text-left" style="font-weight:700">${shortName(name)}</td>`;
     for(let i=0;i<maxLen;i++){
       const row=all[i].rows.find(r=>r.name===name);
       if(!row) html+='<td>-</td>';
