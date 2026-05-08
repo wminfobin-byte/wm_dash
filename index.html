@@ -1358,11 +1358,11 @@ tr.row-h td{background:var(--gh-light)}
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
       <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (실계약수 기준) 룰 ON/OFF">프로모션: ON</button>
-      <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">[수정]</button>
+      <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">수정</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
     </div>
-    <div class="table-section">
+    <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
       <div id="gdPeriodRange" style="display:flex;gap:24px;margin-bottom:12px;font-size:14px;font-weight:600;color:var(--dark)"></div>
       <table id="gdMainTable">
@@ -6763,9 +6763,19 @@ function gdSyncPromoBtnLabel(){
   const btn=document.getElementById('gdBtnPromo');
   if(!btn) return;
   const on=localStorage.getItem(GD_PROMO_KEY)!=='0';
-  btn.textContent='프로모션: '+(on?'ON':'OFF');
-  btn.style.color=on?'':'var(--gray)';
-  btn.style.borderColor=on?'':'#cbd5e1';
+  const dot=on?'<span style="color:#22c55e;font-size:14px;line-height:1;text-shadow:0 0 4px rgba(34,197,94,.6);margin-right:6px">●</span>':'<span style="color:#94a3b8;font-size:14px;line-height:1;margin-right:6px">○</span>';
+  btn.innerHTML=dot+'프로모션 '+(on?'ON':'OFF');
+  if(on){
+    btn.style.background='#dcfce7';
+    btn.style.color='#15803d';
+    btn.style.borderColor='#86efac';
+    btn.style.fontWeight='700';
+  } else {
+    btn.style.background='#f1f5f9';
+    btn.style.color='#94a3b8';
+    btn.style.borderColor='#cbd5e1';
+    btn.style.fontWeight='';
+  }
 }
 
 function gdTogglePromotion(){
@@ -6784,7 +6794,7 @@ function gdToggleGroupEdit(){
   if(!gdResult) return;
   gdGroupEditMode=!gdGroupEditMode;
   const btn=document.getElementById('gdBtnEditGroup');
-  btn.textContent=gdGroupEditMode?'수정 중...':'[수정]';
+  btn.textContent=gdGroupEditMode?'수정 중...':'수정';
   btn.style.color=gdGroupEditMode?'var(--danger)':'';
   gdRenderTable();
 }
@@ -6796,7 +6806,7 @@ async function gdApplyGroupEdit(){
     if(gdResult.groups[name]!==s.value){changes[name]=s.value;gdResult.groups[name]=s.value;}
   });
   gdGroupEditMode=false;
-  document.getElementById('gdBtnEditGroup').textContent='[수정]';
+  document.getElementById('gdBtnEditGroup').textContent='수정';
   document.getElementById('gdBtnEditGroup').style.color='';
   if(Object.keys(changes).length>0){
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
@@ -6841,7 +6851,7 @@ async function gdApplyGroupEdit(){
 }
 function gdCancelGroupEdit(){
   gdGroupEditMode=false;
-  document.getElementById('gdBtnEditGroup').textContent='[수정]';
+  document.getElementById('gdBtnEditGroup').textContent='수정';
   document.getElementById('gdBtnEditGroup').style.color='';
   gdRenderTable();
 }
@@ -6961,13 +6971,9 @@ async function gdClearHistory(){
 // ── PNG Download (차등성과 대시보드만) ──
 function gdDownloadPNG(){
   if(!gdResult){alert('먼저 대시보드를 생성해주세요.');return;}
-  const target=document.getElementById('gdDashboard');
-  html2canvas(target,{
-    scale:2,
-    backgroundColor:'#fff',
-    useCORS:true,
-    ignoreElements:(el)=>el.classList && el.classList.contains('download-bar')
-  }).then(c=>{
+  const target=document.getElementById('gdCaptureArea');
+  if(!target){alert('캡처 대상을 찾을 수 없습니다.');return;}
+  html2canvas(target,{scale:2,backgroundColor:'#fff',useCORS:true}).then(c=>{
     const a=document.createElement('a');
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
     a.download=`차등성과_${sheetName}.png`;
