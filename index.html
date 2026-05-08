@@ -1358,7 +1358,8 @@ tr.row-h td{background:var(--gh-light)}
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
       <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (실계약수 기준) 룰 ON/OFF">프로모션: ON</button>
-      <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">그룹 수정</button>
+      <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">[수정]</button>
+      <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
     </div>
     <div class="table-section">
@@ -6688,6 +6689,8 @@ function gdRenderTable(){
   const _adjSheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const _allContractAdjMap=JSON.parse(localStorage.getItem(GD_CONTRACT_ADJ_KEY)||'{}');
   const contractAdjMap=(_adjSheetName&&_allContractAdjMap[_adjSheetName])||{};
+  // streak 수동 조정값 맵 (글로벌)
+  const streakAdjMap=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
   const totalAdjNeg=t.adj<0;
   let html=`<tr class="row-total"><td></td><td style="text-align:left;padding-left:16px">합계</td>
@@ -6717,8 +6720,13 @@ function gdRenderTable(){
     const cAdj=contractAdjMap[r.name]||0;
     const cAdjBadge=cAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${cAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetContractAdj('${safeName}')">${cAdj>0?'+':''}${cAdj}</span>`:'';
     const contractCell=gdGroupEditMode
-      ? r.contract.toLocaleString()
-      : `<button title="실계약수 -1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px">${r.contract.toLocaleString()}</span><button title="실계약수 +1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',+1)">+</button>${cAdjBadge}`;
+      ? `<button title="실계약수 -1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px">${r.contract.toLocaleString()}</span><button title="실계약수 +1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',+1)">+</button>${cAdjBadge}`
+      : r.contract.toLocaleString();
+    const sAdj=streakAdjMap[r.name]||0;
+    const sAdjBadge=sAdj!==0?` <span title="streak 수동 조정값" style="margin-left:4px;font-size:10px;color:#fff;background:${sAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700">${sAdj>0?'+':''}${sAdj}</span>`:'';
+    const streakCell=gdGroupEditMode
+      ? `<button title="C등급 연속 -1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px;font-weight:700">${r.streak}</span><button title="C등급 연속 +1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',+1)">+</button>${sAdjBadge}`
+      : `<span class="streak ${sc}">${r.streak}</span>`;
     html+=`<tr class="row-${gc.toLowerCase()}">
       <td>${groupCell}</td>
       <td class="name-cell ${gc}">${r.name}</td>
@@ -6728,7 +6736,7 @@ function gdRenderTable(){
       <td${r.cancelCount>0?' style="color:var(--danger);font-weight:700"':''}>${r.cancelCount.toLocaleString()}</td>
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
-      <td><span class="streak ${sc}" style="cursor:pointer" title="클릭: ±N 조정" onclick="gdAdjustStreak('${safeName}')">${r.streak}</span></td>
+      <td>${streakCell}</td>
       <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
   });
   if(gdGroupEditMode){
@@ -6776,7 +6784,7 @@ function gdToggleGroupEdit(){
   if(!gdResult) return;
   gdGroupEditMode=!gdGroupEditMode;
   const btn=document.getElementById('gdBtnEditGroup');
-  btn.textContent=gdGroupEditMode?'수정 중...':'그룹 수정';
+  btn.textContent=gdGroupEditMode?'수정 중...':'[수정]';
   btn.style.color=gdGroupEditMode?'var(--danger)':'';
   gdRenderTable();
 }
@@ -6788,7 +6796,7 @@ async function gdApplyGroupEdit(){
     if(gdResult.groups[name]!==s.value){changes[name]=s.value;gdResult.groups[name]=s.value;}
   });
   gdGroupEditMode=false;
-  document.getElementById('gdBtnEditGroup').textContent='그룹 수정';
+  document.getElementById('gdBtnEditGroup').textContent='[수정]';
   document.getElementById('gdBtnEditGroup').style.color='';
   if(Object.keys(changes).length>0){
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
@@ -6833,7 +6841,7 @@ async function gdApplyGroupEdit(){
 }
 function gdCancelGroupEdit(){
   gdGroupEditMode=false;
-  document.getElementById('gdBtnEditGroup').textContent='그룹 수정';
+  document.getElementById('gdBtnEditGroup').textContent='[수정]';
   document.getElementById('gdBtnEditGroup').style.color='';
   gdRenderTable();
 }
@@ -6948,6 +6956,23 @@ async function gdClearHistory(){
   localStorage.removeItem(GD_CONTRACT_ADJ_KEY);
   alert('이력이 초기화되었습니다.');
   if(gdResult) gdRenderHistory();
+}
+
+// ── PNG Download (차등성과 대시보드만) ──
+function gdDownloadPNG(){
+  if(!gdResult){alert('먼저 대시보드를 생성해주세요.');return;}
+  const target=document.getElementById('gdDashboard');
+  html2canvas(target,{
+    scale:2,
+    backgroundColor:'#fff',
+    useCORS:true,
+    ignoreElements:(el)=>el.classList && el.classList.contains('download-bar')
+  }).then(c=>{
+    const a=document.createElement('a');
+    const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
+    a.download=`차등성과_${sheetName}.png`;
+    a.href=c.toDataURL('image/png');a.click();
+  });
 }
 
 // ── Excel Download (누적 멀티 시트) ──
