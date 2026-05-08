@@ -179,6 +179,14 @@ tr.row-h td{background:var(--gh-light)}
 #page-grade-dash .gcard.gc{background:linear-gradient(135deg,#F0920E,#FFB84D)}
 #page-grade-dash .gcard.gd{background:linear-gradient(135deg,#4472C4,#6286D0)}
 #page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4B5563,#6B7280)}
+/* 차등성과: 5개 등급(A/B/C/D/H) 한 행에 들어가도록 압축 */
+#page-grade-dash .group-summary{grid-template-columns:repeat(5,1fr);gap:10px}
+#page-grade-dash .gcard{padding:14px 12px;border-radius:12px}
+#page-grade-dash .gcard::after{width:56px;height:56px;top:-14px;right:-14px}
+#page-grade-dash .gcard .gt{font-size:13px;margin-bottom:6px}
+#page-grade-dash .gcard .gn{font-size:22px}
+#page-grade-dash .gcard .gs{font-size:12px;margin-top:3px}
+#page-grade-dash .gcard .gc-cut{font-size:11px;margin-top:2px;line-height:1.35}
 /* Streak — H 임박 경고 색상 (D 누적 → H) */
 #page-grade-dash .streak.s1{background:#F0920E}
 #page-grade-dash .streak.s2{background:#E45D2E}
