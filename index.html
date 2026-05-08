@@ -6523,19 +6523,26 @@ async function gdGenerate(dbFileId){
           console.log(`    [제외 - ${reason}]`, names.join(', '));
         }
       }
-      if(pool.length===0) return null;
-      groups[pool[0]]=newGrp;
-      console.log(`  → ${pool[0]} 승급 (실계약 ${stats[pool[0]].contract}건)`);
-      return pool[0];
+      if(pool.length===0) return [];
+      // 1등과 핵심 지표(DB수·실계약수·취소수·취소반영계약수)가 모두 동일하면 동률로 함께 승급
+      const top=stats[pool[0]];
+      const eq=(a,b)=>Math.abs((a||0)-(b||0))<1e-9;
+      const winners=pool.filter(n=>{
+        const s=stats[n];
+        return s.db===top.db && s.contract===top.contract && (s.cancelCount||0)===(top.cancelCount||0) && eq(s.refAdjContract,top.refAdjContract);
+      });
+      winners.forEach(n=>{groups[n]=newGrp;});
+      console.log(`  → ${winners.join(', ')} 승급 (실계약 ${top.contract}건${winners.length>1?`, 동률 ${winners.length}명`:''})`);
+      return winners;
     }
-    let promoBtoA=null, promoCtoB=null;
+    let promoBtoA=[], promoCtoB=[];
     if(promoEnabled){
       promoBtoA=gdPromote('B','A');
       promoCtoB=gdPromote('C','B');
     }
     const promotedSet=new Set();
-    if(promoBtoA){ promotedSet.add(promoBtoA); streaks[promoBtoA]=0; }
-    if(promoCtoB){ promotedSet.add(promoCtoB); streaks[promoCtoB]=0; } // C→B 승급 시 C 연속 리셋
+    promoBtoA.forEach(n=>{ promotedSet.add(n); streaks[n]=0; });
+    promoCtoB.forEach(n=>{ promotedSet.add(n); streaks[n]=0; }); // C→B 승급 시 C 연속 리셋
 
     // 커트라인 재계산 (모든 룰 적용 후) — 신입 보호자 + 프로모션 1등 제외하고 자연 커트라인
     const cutPool=members.filter(n=>!protectedMembers.has(n) && !promotedSet.has(n));
