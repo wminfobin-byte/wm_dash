@@ -6761,8 +6761,8 @@ function gdRenderTable(){
         if(r.isLegitimate) ns.push('<span style="color:#3451d1;font-weight:600">직전 회차 유지</span>');
         if(r.attendIssues>=2) ns.push('<span style="color:#dc3545;font-weight:700">근태이슈 강등</span>');
         if(r.totalDays===3 && r.workCount===1) ns.push('<span style="color:#92400e;font-weight:600">출근 1일 · B상한</span>');
-        if(r.promoted) ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');
-        if(r.isProtected) ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');
+        if(r.promoted) ns.push('<span style="color:#6d28d9;font-weight:700">실계약수 프로모션 1등</span>');
+        if(r.isProtected) ns.push('<span style="color:#0e7490;font-weight:700">신규입사자</span>');
         return ns.join(', ');
       })()}</td></tr>`;
   });
