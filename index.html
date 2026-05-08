@@ -7277,8 +7277,7 @@ async function gdDownloadAprilInitExcel(){
     gdAllFiles=await gdIdbGetAll();
     gdUpdateStatusDots(); gdUpdateUploadStatus();
     const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
-    const hasInit=!!localStorage.getItem(GD_INIT_KEY);
-    if(ready && hasInit){
+    if(ready){
       gdGenerate();
     } else {
       // 결과만 있어도 이력 표시 가능하게
