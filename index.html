@@ -1383,7 +1383,7 @@ tr.row-h td{background:var(--gh-light)}
           <th>취소수</th>
           <th>취소반영 계약수</th>
           <th>취소반영 계약률</th>
-          <th>C등급 연속</th>
+          <th>D등급 연속</th>
           <th>비고</th>
         </tr></thead>
         <tbody id="gdMainBody"></tbody>
@@ -6535,7 +6535,7 @@ async function gdGenerate(dbFileId){
         }
       }
       if(pool.length===0) return [];
-      // 1등과 표시 데이터(DB수·실계약수·실계약률·취소수·취소반영계약수·취소반영계약률·C등급연속)가
+      // 1등과 표시 데이터(DB수·실계약수·실계약률·취소수·취소반영계약수·취소반영계약률·D등급연속)가
       // 모두 동일한 멤버 전원 동시 승급
       const topName=pool[0];
       const top=stats[topName];
@@ -6747,7 +6747,7 @@ function gdRenderTable(){
     const sAdj=streakAdjMap[r.name]||0;
     const sAdjBadge=sAdj!==0?` <span title="streak 수동 조정값" style="margin-left:4px;font-size:10px;color:#fff;background:${sAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700">${sAdj>0?'+':''}${sAdj}</span>`:'';
     const streakCell=gdGroupEditMode
-      ? `<button title="C등급 연속 -1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px;font-weight:700">${r.streak}</span><button title="C등급 연속 +1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',+1)">+</button>${sAdjBadge}`
+      ? `<button title="D등급 연속 -1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px;font-weight:700">${r.streak}</span><button title="D등급 연속 +1" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustStreak('${safeName}',+1)">+</button>${sAdjBadge}`
       : `<span class="streak ${sc}">${r.streak}</span>`;
     html+=`<tr class="row-${gc.toLowerCase()}">
       <td>${groupCell}</td>
@@ -6907,7 +6907,7 @@ function gdAdjustStreak(name, presetDelta){
   const cur=gdResult.streaks[name]||0;
   let delta=presetDelta;
   if(delta===undefined||delta===null){
-    const inputStr=prompt(`${name}의 C등급 연속 횟수 조정\n현재 값: ${cur}\n\n조정값 입력 (예: -1, +1, -3)\n빈 값 또는 0 입력 시 취소`, '-1');
+    const inputStr=prompt(`${name}의 D등급 연속 횟수 조정\n현재 값: ${cur}\n\n조정값 입력 (예: -1, +1, -3)\n빈 값 또는 0 입력 시 취소`, '-1');
     if(inputStr===null) return;
     delta=parseInt(String(inputStr).trim(),10);
     if(isNaN(delta)||delta===0) return;
@@ -7041,7 +7041,7 @@ async function gdDownloadExcel(){
   const bdr={top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}};
   const totalS={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
   const colW=14;
-  const headers=['등급','코디명','DB수','실계약수','실계약률','취소수','취소반영\n계약수','취소반영\n계약률','C등급\n연속','비고'];
+  const headers=['등급','코디명','DB수','실계약수','실계약률','취소수','취소반영\n계약수','취소반영\n계약률','D등급\n연속','비고'];
 
   function buildSheet(periodData){
     const rows=[...periodData.rows].map(r=>({...r}));
