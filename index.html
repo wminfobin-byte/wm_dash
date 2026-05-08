@@ -6979,7 +6979,7 @@ async function gdRenderHistory(){
   const HISTORY_SLOTS=10;
   const SLOT_W=72;
   const actualLen=Math.min(HISTORY_SLOTS, all.length);
-  let html='<table style="width:auto"><thead><tr><th style="text-align:left;width:120px;min-width:120px">센터</th><th style="text-align:left;width:90px;min-width:90px">코디명</th>';
+  let html='<table><thead><tr><th style="text-align:left;width:120px;min-width:120px">센터</th><th style="text-align:left;width:90px;min-width:90px">코디명</th>';
   for(let i=0;i<HISTORY_SLOTS;i++){
     if(i<actualLen) html+=`<th style="width:${SLOT_W}px;min-width:${SLOT_W}px">${all[i].sheetName}</th>`;
     else html+=`<th style="width:${SLOT_W}px;min-width:${SLOT_W}px;color:#cbd5e1;font-weight:400;background:#fafbfc">·</th>`;
