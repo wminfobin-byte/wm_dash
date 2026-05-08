@@ -6977,7 +6977,7 @@ async function gdRenderHistory(){
     return da-db;
   });
   const maxLen=Math.min(10, all.length);
-  let html='<table><thead><tr><th style="text-align:left">센터</th><th style="text-align:left">코디명</th>';
+  let html='<table><thead><tr><th style="text-align:left;width:120px;min-width:120px">센터</th><th style="text-align:left;width:90px;min-width:90px">코디명</th>';
   for(let i=0;i<maxLen;i++) html+=`<th>${all[i].sheetName}</th>`;
   html+='</tr></thead><tbody>';
   for(const name of names){
