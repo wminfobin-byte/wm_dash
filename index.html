@@ -6524,12 +6524,21 @@ async function gdGenerate(dbFileId){
         }
       }
       if(pool.length===0) return [];
-      // 1등과 핵심 지표(DB수·실계약수·취소수·취소반영계약수)가 모두 동일하면 동률로 함께 승급
-      const top=stats[pool[0]];
+      // 1등과 표시 데이터(DB수·실계약수·실계약률·취소수·취소반영계약수·취소반영계약률·C등급연속)가
+      // 모두 동일한 멤버 전원 동시 승급
+      const topName=pool[0];
+      const top=stats[topName];
+      const topStreak=streaks[topName]||0;
       const eq=(a,b)=>Math.abs((a||0)-(b||0))<1e-9;
       const winners=pool.filter(n=>{
         const s=stats[n];
-        return s.db===top.db && s.contract===top.contract && (s.cancelCount||0)===(top.cancelCount||0) && eq(s.refAdjContract,top.refAdjContract);
+        return s.db===top.db
+          && s.contract===top.contract
+          && eq(s.contractRate,top.contractRate)
+          && (s.cancelCount||0)===(top.cancelCount||0)
+          && eq(s.refAdjContract,top.refAdjContract)
+          && eq(s.refAdjRate,top.refAdjRate)
+          && (streaks[n]||0)===topStreak;
       });
       winners.forEach(n=>{groups[n]=newGrp;});
       console.log(`  → ${winners.join(', ')} 승급 (실계약 ${top.contract}건${winners.length>1?`, 동률 ${winners.length}명`:''})`);
