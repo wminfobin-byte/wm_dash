@@ -6731,13 +6731,8 @@ function gdRenderTable(){
       const opts=['A','B','C','D','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
       groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
     } else {
-      let badges='';
-      // 신규 뱃지는 비고 컬럼에서 표시 (중복 제거)
-      if(r.isLegitimate) badges+=' <span style="font-size:10px;color:#3451d1;background:#e8edff;padding:1px 6px;border-radius:8px;font-weight:600" title="정당사유 (회차 3일 전체 휴가/연차/공가/경조/반차 등) — 직전 회차 등급 유지">정당사유</span>';
-      if(r.attendIssues>=2) badges+=` <span style="font-size:10px;color:#fff;background:#dc3545;padding:1px 6px;border-radius:8px;font-weight:700" title="근태이슈 ${r.attendIssues}회 — 한 단계 강등 적용">⚠ 근태 ${r.attendIssues}</span>`;
-      else if(r.attendIssues===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fff8e1;padding:1px 6px;border-radius:8px;font-weight:600" title="근태이슈 1회 — 1회 더 발생 시 강등">근태 1</span>`;
-      if(r.totalDays===3 && r.workCount===1) badges+=` <span style="font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #fbbf24;padding:1px 6px;border-radius:8px;font-weight:600" title="회차 3일 중 출근 1일 — A 등급 절대 불가 (B 상한)">출근 1일 · B상한</span>`;
-      groupCell=`<span class="group-label ${gc}">${gc}등급</span>${badges}`;
+      // 근태/정당사유/B상한 사유는 모두 비고 컬럼에 텍스트로 표기 (등급 셀에는 등급 라벨만)
+      groupCell=`<span class="group-label ${gc}">${gc}등급</span>`;
     }
     const adjNeg=r.refAdjContract<0;
     const safeName=r.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -6761,7 +6756,15 @@ function gdRenderTable(){
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
       <td>${streakCell}</td>
-      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{const ns=[];if(r.promoted)ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');if(r.isProtected)ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');return ns.join(', ');})()}</td></tr>`;
+      <td style="font-size:12px;color:#475569;text-align:left;padding-left:14px">${(()=>{
+        const ns=[];
+        if(r.isLegitimate) ns.push('<span style="color:#3451d1;font-weight:600">직전 회차 유지</span>');
+        if(r.attendIssues>=2) ns.push('<span style="color:#dc3545;font-weight:700">근태이슈 강등</span>');
+        if(r.totalDays===3 && r.workCount===1) ns.push('<span style="color:#92400e;font-weight:600">출근 1일 · B상한</span>');
+        if(r.promoted) ns.push('<span style="color:#2a3eb0;font-weight:600">실계약수 프로모션 1등</span>');
+        if(r.isProtected) ns.push('<span style="color:#92400e;font-weight:600">신규입사자</span>');
+        return ns.join(', ');
+      })()}</td></tr>`;
   });
   if(gdGroupEditMode){
     html+=`<tr><td colspan="10"><div class="edit-actions">
@@ -7027,7 +7030,15 @@ async function gdDownloadExcel(){
     const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
     const pStart=periodData.startStr||'';
     const pEnd=periodData.endStr||'';
-    const noteOf=r=>{const ns=[];if(r.promoted)ns.push('실계약수 프로모션 1등');if(r.isProtected)ns.push('신규입사자');if(r.totalDays===3 && r.workCount===1)ns.push('출근 1일·B상한');return ns.join(', ');};
+    const noteOf=r=>{
+      const ns=[];
+      if(r.isLegitimate) ns.push('직전 회차 유지');
+      if((r.attendIssues||0)>=2) ns.push('근태이슈 강등');
+      if(r.totalDays===3 && r.workCount===1) ns.push('출근 1일 · B상한');
+      if(r.promoted) ns.push('실계약수 프로모션 1등');
+      if(r.isProtected) ns.push('신규입사자');
+      return ns.join(', ');
+    };
     const aoa=[
       Array(12).fill(''),
       ['','시작일자 :',pStart,'','','','','','','','',''],
