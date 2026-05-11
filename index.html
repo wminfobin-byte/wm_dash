@@ -2591,14 +2591,15 @@ function countContracts(data, members){
     const lastCall=str(row[COL.lastCallTime]);
     const orderDt=str(row[COL.orderDate]);
     const orderDate=parseDate(orderDt);
+    const distDate=parseDate(row[COL.distributeDate]);
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
     if(!obName) continue;
     if(!set.has(obName)) continue;
     // 1차 필터: 오더일 없으면 제외
     if(!orderDate) continue;
-    // 주말/공휴일 제외
-    if(isHoliday(orderDate)) continue;
+    // 휴일 판정: '분배일' 기준 (평일 분배 + 휴일 오더는 포함, 휴일 분배 + 평일 오더는 제외)
+    if(distDate && isHoliday(distDate)) continue;
     // OB명 필터: 군자, 관리자, 삭제요청
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     // 매체코드에 talkis 포함 시 제외
@@ -6157,6 +6158,7 @@ function gdCountDb(data, members){
 
 function gdCountContracts(data, members){
   // N그룹과 동일 — 실계약 = 계약 + 취소
+  // 휴일 판정은 '분배일' 기준 (회차가 분배일 기준이므로, 평일 분배 + 휴일 오더도 포함)
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
   for(let i=1;i<data.length;i++){
@@ -6166,12 +6168,13 @@ function gdCountContracts(data, members){
     const lastCall=str(row[COL.lastCallTime]);
     const orderDt=str(row[COL.orderDate]);
     const orderDate=parseDate(orderDt);
+    const distDate=parseDate(row[COL.distributeDate]);
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
     if(!obName) continue;
     if(!set.has(obName)) continue;
     if(!orderDate) continue;
-    if(isHoliday(orderDate)) continue;
+    if(distDate && isHoliday(distDate)) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(mediaCode.toLowerCase().includes('talkis')) continue;
     if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
