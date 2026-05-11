@@ -680,12 +680,11 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="header-right" id="headerRight-grade-dash" style="display:none">
-    <div class="status-dots" id="gdStatusDots" title="파일 상태: DB수 / 계약수 / 취소수 / 명단 / 초기등급">
+    <div class="status-dots" id="gdStatusDots" title="파일 상태: DB수 / 계약수 / 취소수 / 명단">
       <div class="status-dot" id="gd-dot-db"></div>
       <div class="status-dot" id="gd-dot-cont"></div>
       <div class="status-dot" id="gd-dot-cancel"></div>
       <div class="status-dot" id="gd-dot-attend"></div>
-      <div class="status-dot" id="gd-dot-init"></div>
     </div>
     <button class="btn-header" onclick="gdOpenModal('upload')">파일 업로드</button>
     <button class="btn-header" onclick="gdOpenModal('manage')">파일 관리</button>
@@ -5969,8 +5968,6 @@ function gdUpdateStatusDots(){
     const dot=document.getElementById(`gd-dot-${k}`);
     if(dot) dot.classList.toggle('ok', gdGetFilesByType(k).length>0);
   });
-  const initDot=document.getElementById('gd-dot-init');
-  if(initDot) initDot.classList.toggle('ok', !!localStorage.getItem(GD_INIT_KEY));
 }
 
 function gdRenderFileHistory(){
