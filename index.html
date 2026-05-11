@@ -1450,7 +1450,8 @@ async function autoSyncDownload(){
     // 로컬 데이터가 모두 있고 원격이 더 새것이 아니면 스킵
     const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||(iaFiles.cont&&iaFiles.cont.length>0)||(iaFiles.attend&&iaFiles.attend.length>0));
     const iaLoaded=!iaAccess||iaHasLocal;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded)return;
+    const gdHasLocal=gdAllFiles&&gdAllFiles.length>0;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd))return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -1501,6 +1502,21 @@ async function autoSyncDownload(){
     }
     // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
+    // 차등성과 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.gd&&(!gdHasLocal||remoteNewer)){
+      if(!gdIdb) await gdOpenIDB();
+      if(remoteNewer){const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];}
+      for(const f of (payload.gd.files||[])){
+        let data=f.data;
+        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+        const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
+        const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
+      }
+      if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
+      gdUpdateStatusDots();gdUpdateUploadStatus();
+      const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
+      if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+    }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
       if(payload.ngResults&&payload.ngResults.length>0){
@@ -1666,14 +1682,27 @@ async function doSyncUpload(token){
       iaSyncFiles.push({type:'attend',fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
     }
 
+    // 차등성과 IDB 데이터 수집 (db/cont/cancel은 필요 컬럼만, attend는 원본)
+    const GD_DBCONT_COLS=[6,7,8,15,19,21,23,29];   // 고객키/OB명/분배일/DB정보/매체코드/최종통화/오더일/고객상태
+    const GD_CX_COLS=[3,13,17,41,42];              // 신청자관리: 고객키(D)/담당자(N)/코드(R)/분배일(AP)/반품일(AQ)
+    const gdSyncFiles=[];
+    for(const f of (gdAllFiles||[])){
+      if(f.type==='attend'){gdSyncFiles.push({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});continue;}
+      const cols=f.type==='cancel'?GD_CX_COLS:GD_DBCONT_COLS;
+      const slim=f.data.map((row,i)=>i===0?row:cols.map(c=>row[c]!=null?row[c]:''));
+      gdSyncFiles.push({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols});
+    }
+    let gdResultsSync=[];try{gdResultsSync=await gdGetAllResults();}catch(e){}
+    const gdData={files:gdSyncFiles,results:gdResultsSync};
+
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_contract_adj'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
     dpLoadPrefs();
     const dpPrefs={adCost:dpAdCost||{},snapshot:dpSnapshot||{}};
-    const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,ls:lsData});
+    const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -1790,6 +1819,21 @@ async function doSyncDownloadManual(){
 
     // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
+    // 차등성과 복원 (강제 다운로드 — 항상 덮어쓰기)
+    if(payload.gd){
+      if(!gdIdb) await gdOpenIDB();
+      const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];
+      for(const f of (payload.gd.files||[])){
+        let data=f.data;
+        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+        const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
+        const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
+      }
+      if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
+      gdUpdateStatusDots();gdUpdateUploadStatus();
+      const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
+      if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+    }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
       restoreResultFromSync(payload.ngResults);
