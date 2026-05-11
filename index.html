@@ -5589,7 +5589,7 @@ let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고
 let gdMemberCenters={};     // {name: '센터명'}
 let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
-const GD_CANCEL_COL={customerKey:3, manager:13, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), AQ=42(반품일)
+const GD_CANCEL_COL={customerKey:3, manager:13, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
@@ -6184,7 +6184,7 @@ function gdCountContracts(data, members){
   return counts;
 }
 
-// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + 매칭된 계약의 오더일이 달력상 3개월 이내
+// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드에 'in' 없음 + 매칭된 계약의 오더일이 달력상 3개월 이내
 function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
@@ -6210,16 +6210,19 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
   const ps=new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate());
   const pe=new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999);
 
-  let unmatched=0, oldContractSkip=0, noKeySkip=0, holidaySkip=0;
+  let unmatched=0, oldContractSkip=0, noKeySkip=0, holidaySkip=0, inCodeSkip=0;
   for(let i=1;i<cancelData.length;i++){
     const row=cancelData[i];
     if(!row) continue;
     const ck=str(row[GD_CANCEL_COL.customerKey]);
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     const returnDt=parseDate(row[GD_CANCEL_COL.returnDate]);
-    if(!returnDt) continue;
-    if(returnDt<ps||returnDt>pe) continue;
-    if(isHoliday(returnDt)){ holidaySkip++; continue; } // 주말/공휴일 반품은 카운트 제외
+    if(!returnDt) continue;                                  // 반품일 없으면 취소 아님
+    if(returnDt<ps||returnDt>pe) continue;                   // 반품일이 회차 기간 밖
+    const cxDistDate=parseDate(row[GD_CANCEL_COL.distributeDate]);
+    if(cxDistDate && isHoliday(cxDistDate)){ holidaySkip++; continue; } // AP열 분배일이 주말/공휴일이면 제외
+    const cxCode=str(row[GD_CANCEL_COL.code]).toLowerCase();
+    if(cxCode.includes('in')){ inCodeSkip++; continue; }     // R열 코드번호에 'in' 포함 시 제외
 
     // 고객키 매칭: 계약 파일에서 해당 키의 가장 최근 계약 찾기
     const matched=ck?contIndex[ck]:null;
@@ -6234,8 +6237,8 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd){
     if(set.has(stripped)) counts[stripped]++;
     else unmatched++;
   }
-  if(unmatched>0||oldContractSkip>0||noKeySkip>0||holidaySkip>0){
-    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 3개월 외 계약 ${oldContractSkip}건 / 계약매칭실패 ${noKeySkip}건 / 주말·공휴일 반품 ${holidaySkip}건`);
+  if(unmatched>0||oldContractSkip>0||noKeySkip>0||holidaySkip>0||inCodeSkip>0){
+    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 3개월 외 계약 ${oldContractSkip}건 / 계약매칭실패 ${noKeySkip}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 코드 in 제외 ${inCodeSkip}건`);
   }
   return counts;
 }
