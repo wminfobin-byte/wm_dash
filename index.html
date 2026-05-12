@@ -1400,10 +1400,10 @@ tr.row-h td{background:var(--gh-light)}
       <div id="mcWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:14px;font-size:13px"></div>
 
       <div class="kpi-grid" style="margin-top:18px">
-        <div class="kpi-card"><div class="kl">부재 인입 콜 수</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">부재 인입 고객 수</div><div class="kv" id="mcKpiCust">-</div><div class="ks" id="mcKpiCustSub"></div></div>
-        <div class="kpi-card" style="border-left-color:#64748b"><div class="kl">전체 미수신률</div><div class="kv" id="mcKpiRateAll">-</div><div class="ks" id="mcKpiRateAllSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">유효 미수신률 ★</div><div class="kv" id="mcKpiRateValid">-</div><div class="ks" id="mcKpiRateValidSub"></div></div>
+        <div class="kpi-card"><div class="kl">전체 모수 (콜 수)</div><div class="kv" id="mcKpiDenom">-</div><div class="ks" id="mcKpiDenomSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 콜 수</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv">-</div><div class="ks" id="mcKpiRecvSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss">-</div><div class="ks" id="mcKpiMissSub"></div></div>
       </div>
 
       <div class="ia-section" style="margin-bottom:18px">
@@ -7989,15 +7989,17 @@ function mcRender(){
   const st=mcStats(scope), pst=mcStats(prevScope);
   // KPI
   const setKpi=(idV,idS,val,sub)=>{document.getElementById(idV).textContent=val;document.getElementById(idS).textContent=sub;};
-  const delta=(cur,prev,unit)=>{if(!prevScope.length)return '';const d=cur-prev;const s=d>0?'▲':d<0?'▼':'–';const col=d>0?'#e71d36':d<0?'#2ec4b6':'#6c757d';return ` <span style="color:${col}">${s}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
+  const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
+  const recvCalls=st.denomAll-st.missedCalls, recvRate=st.denomAll?recvCalls/st.denomAll*100:0;
+  const pRecvRate=pst.denomAll?(pst.denomAll-pst.missedCalls)/pst.denomAll*100:0;
+  document.getElementById('mcKpiDenom').textContent=st.denomAll.toLocaleString()+'건';
+  document.getElementById('mcKpiDenomSub').innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}건${delta(st.denomAll,pst.denomAll,'',true)}`;
   document.getElementById('mcKpiCalls').textContent=st.missedCalls.toLocaleString()+'건';
-  document.getElementById('mcKpiCallsSub').innerHTML=`전체 모수 ${st.denomAll.toLocaleString()}콜${delta(st.missedCalls,pst.missedCalls)}`;
-  document.getElementById('mcKpiCust').textContent=st.missedCust.toLocaleString()+'명';
-  document.getElementById('mcKpiCustSub').innerHTML=`전체 인입 고객 ${st.custAll.toLocaleString()}명${delta(st.missedCust,pst.missedCust)}`;
-  document.getElementById('mcKpiRateAll').textContent=st.rateAll.toFixed(1)+'%';
-  document.getElementById('mcKpiRateAllSub').innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}${delta(st.rateAll,pst.rateAll,'pp')}`;
-  document.getElementById('mcKpiRateValid').textContent=st.rateValid.toFixed(1)+'%';
-  document.getElementById('mcKpiRateValidSub').innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}콜 기준${delta(st.rateValid,pst.rateValid,'pp')}`;
+  document.getElementById('mcKpiCallsSub').innerHTML=`전체 모수 ${st.denomAll.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+  document.getElementById('mcKpiRecv').textContent=recvRate.toFixed(1)+'%';
+  document.getElementById('mcKpiRecvSub').innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+  document.getElementById('mcKpiMiss').textContent=st.rateAll.toFixed(1)+'%';
+  document.getElementById('mcKpiMissSub').innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}콜 · 유효기준 ${st.rateValid.toFixed(1)}%${delta(st.rateAll,pst.rateAll,'pp',false)}`;
   // 경고바
   const warns=[];
   if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
