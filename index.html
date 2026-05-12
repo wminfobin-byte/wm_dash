@@ -7990,7 +7990,8 @@ function mcRender(){
   mcRenderDetail();
 }
 
-function mcBucketKey(ts){return mcUnit==='day'?mcDatePart(ts).getTime():mcUnit==='week'?mcWeekKey(ts):mcMonthKey(ts);}
+function mcDayMs(ts){const d=new Date(ts);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();}
+function mcBucketKey(ts){return mcUnit==='day'?mcDayMs(ts):mcUnit==='week'?mcWeekKey(ts):mcMonthKey(ts);}
 function mcBucketLabel(k){return mcUnit==='day'?mcFmtDate(k):mcUnit==='week'?mcWeekLabel(k):mcMonthLabel(k);}
 
 function mcRenderTrend(scope,dateScope){
