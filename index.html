@@ -707,6 +707,7 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header" onclick="mcOpenModal('upload')">파일 업로드</button>
     <button class="btn-header" onclick="mcOpenModal('manage')">파일 관리</button>
     <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn6">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
@@ -1608,9 +1609,10 @@ function applyAuth(){
     else{tab.style.display='none';}
   });
   switchPage(authUser.tabs[0]);
-  // 유입분석 IDB 먼저 로드 후 자동 동기화 (iaLoaded 판정을 위해)
+  // 유입분석/부재인입 IDB 먼저 로드 후 자동 동기화 (로컬 보유 판정을 위해)
   (async ()=>{
     if(authUser.tabs.includes('inflow')) await iaLoad();
+    if(authUser.tabs.includes('missed-call') && typeof mcLoadFiles==='function') await mcLoadFiles();
     autoSyncDownload();
   })();
 }
@@ -1620,6 +1622,7 @@ async function autoSyncDownload(){
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
   const dpAccess=authUser&&authUser.tabs.includes('daily-perf');
+  const mcAccess=authUser&&authUser.tabs.includes('missed-call');
 
   // 원격 동기화 타임스탬프 비교 — 원격이 더 새로우면 항상 갱신
   const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
@@ -1635,7 +1638,9 @@ async function autoSyncDownload(){
     const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||(iaFiles.cont&&iaFiles.cont.length>0)||(iaFiles.attend&&iaFiles.attend.length>0));
     const iaLoaded=!iaAccess||iaHasLocal;
     const gdHasLocal=gdAllFiles&&gdAllFiles.length>0;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd))return;
+    const mcHasLocal=mcFiles&&mcFiles.length>0;
+    const mcOk=!mcAccess||mcHasLocal||!payload.mc;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -1700,6 +1705,10 @@ async function autoSyncDownload(){
       gdUpdateStatusDots();gdUpdateUploadStatus();
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
       if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+    }
+    // 부재인입 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.mc&&mcAccess&&(!mcHasLocal||remoteNewer)&&typeof mcRestoreSync==='function'){
+      await mcRestoreSync(payload.mc);
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -1787,8 +1796,8 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -1833,7 +1842,7 @@ function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.in
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -1886,7 +1895,15 @@ async function doSyncUpload(token){
     // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
     dpLoadPrefs();
     const dpPrefs={adCost:dpAdCost||{},snapshot:dpSnapshot||{}};
-    const payload=JSON.stringify({v:6,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,ls:lsData});
+    // 부재인입 데이터 (mcFiles가 아직 로드 안 됐으면 IDB에서 직접 읽어 동기화 누락 방지)
+    let mcSync=[];
+    try{
+      if(typeof mcCollectSync==='function'){
+        if((!mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){ if(!mcLoaded) await mcLoadFiles(); }
+        mcSync=mcCollectSync();
+      }
+    }catch(e){console.warn('mc sync collect 실패',e);}
+    const payload=JSON.stringify({v:7,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -2017,6 +2034,10 @@ async function doSyncDownloadManual(){
       gdUpdateStatusDots();gdUpdateUploadStatus();
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
       if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+    }
+    // 부재인입 복원 (강제 다운로드 — 항상 덮어쓰기)
+    if(payload.mc&&authUser&&authUser.tabs.includes('missed-call')&&typeof mcRestoreSync==='function'){
+      await mcRestoreSync(payload.mc);
     }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
@@ -7557,9 +7578,10 @@ function mcOpenIDB(){
     req.onerror=()=>rej(req.error);
   });
 }
-function mcIdbAdd(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>res(r.result);tx.onerror=()=>rej(tx.error);});}
+function mcMarkDirty(){if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}
+function mcIdbAdd(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{mcMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 function mcIdbGetAll(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-function mcIdbDel(id){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function mcIdbDel(id){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{mcMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
 async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)await mcIdbDel(r.id);}
 
 // ── 정규화 / 날짜 헬퍼 ──
@@ -8134,15 +8156,34 @@ function mcUpdateEmptyHint(){
   if(el)el.textContent=need.length?`필수 미업로드: ${need.join(', ')}`:(opt.length?`선택 미업로드(권장): ${opt.join(', ')} — 분석은 가능하나 정확도가 떨어집니다`:'');
 }
 
-async function mcOnShow(){
-  if(!mcLoaded){
-    try{
-      await mcOpenIDB();
-      mcFiles=await mcIdbGetAll();
-      mcLoaded=true;
-      mcUpdateStatusDots();mcUpdateUploadStatus();
-    }catch(e){console.error('부재인입 IDB:',e);}
+async function mcLoadFiles(){
+  try{
+    await mcOpenIDB();
+    mcFiles=await mcIdbGetAll();
+    mcLoaded=true;
+    mcUpdateStatusDots();mcUpdateUploadStatus();
+  }catch(e){console.error('부재인입 IDB 로드:',e);}
+}
+// 클라우드 동기화 연동 (sync_data.json.gz 의 payload.mc)
+function mcCollectSync(){
+  return (mcFiles||[]).map(f=>({type:f.type,corp:f.corp,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,warn:f.warn||''}));
+}
+async function mcRestoreSync(arr){
+  if(!Array.isArray(arr))return;
+  if(!mcIdb) await mcOpenIDB();
+  await mcIdbClear();
+  mcFiles=[];
+  for(const f of arr){
+    const rec={type:f.type,corp:f.corp||'',fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],warn:f.warn||''};
+    const id=await mcIdbAdd(rec);rec.id=id;mcFiles.push(rec);
   }
+  mcLoaded=true;mcJudged=null;
+  mcUpdateStatusDots();mcUpdateUploadStatus();
+  if(typeof currentPage!=='undefined'&&currentPage==='missed-call')mcOnShow();
+}
+
+async function mcOnShow(){
+  if(!mcLoaded){ await mcLoadFiles(); }
   mcUpdateEmptyHint();
   if(mcReady()){ if(!mcJudged) mcGenerate(false); else { document.getElementById('mcEmpty').classList.add('hidden'); document.getElementById('mcDashboard').classList.remove('hidden'); } }
   else { document.getElementById('mcDashboard').classList.add('hidden'); document.getElementById('mcEmpty').classList.remove('hidden'); }
