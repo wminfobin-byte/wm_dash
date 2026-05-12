@@ -1297,7 +1297,7 @@ tr.row-h td{background:var(--gh-light)}
             <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="위버스마인드">
             <div class="icon">🗂️</div>
             <div class="label">DB 데이터 — 위버스마인드</div>
-            <div class="desc">WM_고객관리 A~AE 구조<br>M·N·O 전화번호 매칭</div>
+            <div class="desc">WM_고객관리 (차등성과 DB수 형식)<br>전화번호 M열 · 고객키 G · 분배일 I</div>
             <span class="upload-badge by-name">누적 저장</span>
             <div class="filename" id="fname-mc-db-weavers"></div>
             <div class="progress-bar hidden" id="prog-mc-db-weavers"><div class="progress-fill"></div></div>
@@ -1306,7 +1306,7 @@ tr.row-h td{background:var(--gh-light)}
             <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="더블유케어">
             <div class="icon">🗂️</div>
             <div class="label">DB 데이터 — 더블유케어</div>
-            <div class="desc">WM_고객관리 A~AE 구조<br>M·N·O 전화번호 매칭</div>
+            <div class="desc">WM_고객관리 A~AE 구조<br>전화번호 M·N·O열 · 고객키 G · 분배일 I</div>
             <span class="upload-badge by-name">누적 저장</span>
             <div class="filename" id="fname-mc-db-wcare"></div>
             <div class="progress-bar hidden" id="prog-mc-db-wcare"><div class="progress-fill"></div></div>
@@ -1315,7 +1315,7 @@ tr.row-h td{background:var(--gh-light)}
             <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="위버스마인드">
             <div class="icon">📝</div>
             <div class="label">계약 데이터 — 위버스마인드</div>
-            <div class="desc">A~AE 구조 · X열(오더일) 있는 행만 유효</div>
+            <div class="desc">차등성과 계약수 형식 · 전화번호 M열<br>X열(오더일) 있는 행만 유효 계약</div>
             <span class="upload-badge by-name">누적 저장</span>
             <div class="filename" id="fname-mc-cont-weavers"></div>
             <div class="progress-bar hidden" id="prog-mc-cont-weavers"><div class="progress-fill"></div></div>
@@ -1324,7 +1324,7 @@ tr.row-h td{background:var(--gh-light)}
             <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="더블유케어">
             <div class="icon">📝</div>
             <div class="label">계약 데이터 — 더블유케어</div>
-            <div class="desc">A~AE 구조 · X열(오더일) 있는 행만 유효</div>
+            <div class="desc">A~AE 구조 · 전화번호 M·N·O열<br>X열(오더일) 있는 행만 유효 계약</div>
             <span class="upload-badge by-name">누적 저장</span>
             <div class="filename" id="fname-mc-cont-wcare"></div>
             <div class="progress-bar hidden" id="prog-mc-cont-wcare"><div class="progress-fill"></div></div>
@@ -7542,6 +7542,9 @@ const MC_TYPES=[
   {key:'contract',corp:'더블유케어',id:'cont-wcare'},
   {key:'mapping',corp:'',id:'mapping'},
 ];
+// 법인별 고객 전화번호 컬럼 (0-indexed). 위버스마인드=M열만(차등성과/표준 WM_고객관리 구조), 더블유케어=M·N·O열
+const MC_PHONE_COLS={'위버스마인드':[12],'더블유케어':[12,13,14]};
+const MC_COL_LABEL={12:'M',13:'N',14:'O'};
 
 function mcOpenIDB(){
   return new Promise((res,rej)=>{
@@ -7782,28 +7785,30 @@ function mcParseCallback(wb){
 }
 function mcParseCustomerLike(wb,type,corp){
   const rows=[];let total=0,valid=0;
+  const cols=MC_PHONE_COLS[corp]||[12];
+  const phLabel=cols.map(c=>MC_COL_LABEL[c]||('C'+(c+1))).join('·')+'열';
   for(const sn of wb.SheetNames){
     const ws=wb.Sheets[sn];if(!ws)continue;
     const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
     for(let i=1;i<aoa.length;i++){ // 1행 헤더 가정 → 2행부터
       const r=aoa[i];if(!r)continue;
-      const m=mcNormPhone(r[12]),n=mcNormPhone(r[13]),o=mcNormPhone(r[14]);
+      const phones=[];for(const c of cols){const v=mcNormPhone(r[c]);if(v)phones.push({col:MC_COL_LABEL[c]||('C'+(c+1)),v});}
+      if(!phones.length)continue;
       const custKey=String(r[6]==null?'':r[6])||String(r[5]==null?'':r[5]);
-      if(!m&&!n&&!o)continue;
       total++;
       const orderTs=mcFullTs(r[23]);
-      const distributeTs=mcFullTs(r[8])||(mcDatePart(r[8])?mcDatePart(r[8]).getTime():null);
       if(type==='contract'){
-        if(orderTs==null)continue; // 유효 계약: X열 값 있는 행만
+        if(orderTs==null)continue; // 유효 계약: X열(오더일) 값 있는 행만
         valid++;
-        rows.push({corp,m,n,o,custKey,orderTs});
+        rows.push({corp,phones,custKey,orderTs});
       }else{
-        rows.push({corp,m,n,o,custKey,distributeTs});
+        rows.push({corp,phones,custKey});
       }
     }
   }
   let warn='';
-  if(type==='contract'&&total>0&&valid===0) warn=`계약(${corp}): X열(오더일)이 채워진 행이 없습니다. 오더일 컬럼(X열) 위치를 확인하세요.`;
+  if(total===0) warn=`${type==='contract'?'계약':'DB'}(${corp}): 전화번호(${phLabel})가 채워진 행을 찾지 못했습니다. 컬럼 위치를 확인하세요.`;
+  else if(type==='contract'&&valid===0) warn=`계약(${corp}): X열(오더일)이 채워진 행이 없습니다. 오더일 컬럼(X열) 위치를 확인하세요.`;
   return {rows,warn};
 }
 function mcParseMapping(wb){
@@ -7832,10 +7837,8 @@ function mcBuildJudged(){
   // 계약 / DB lookup (법인|전화 → 레코드[])
   const contractMap=new Map(), dbSet=new Map();
   const dedupAdd=(map,corp,phone,rec)=>{if(!phone)return;const k=corp+'|'+phone;if(!map.has(k))map.set(k,[]);map.get(k).push(rec);};
-  for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])){dedupAdd(contractMap,c.corp,c.m,c);dedupAdd(contractMap,c.corp,c.n,c);dedupAdd(contractMap,c.corp,c.o,c);}
-  for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])){
-    for(const [colName,ph] of [['M',d.m],['N',d.n],['O',d.o]]){if(!ph)continue;const k=d.corp+'|'+ph;if(!dbSet.has(k))dbSet.set(k,colName);}
-  }
+  for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])) for(const p of (c.phones||[])) dedupAdd(contractMap,c.corp,p.v,c);
+  for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])) for(const p of (d.phones||[])){const k=d.corp+'|'+p.v;if(!dbSet.has(k))dbSet.set(k,p.col);}
   // IN call lookup (발신자|대표 → 레코드[]) + dedup
   const incallMap=new Map();const incSeen=new Set();
   for(const f of mcFilesByType('incall',null)) for(const ic of (f.rows||[])){
@@ -7852,7 +7855,7 @@ function mcBuildJudged(){
     const cConts=contractMap.get(corp+'|'+cb.caller)||[];
     let contractState,matchedCol='-';
     if(cConts.length){
-      const c0=cConts[0];matchedCol=c0.m===cb.caller?'M':c0.n===cb.caller?'N':c0.o===cb.caller?'O':'-';
+      const pm=(cConts[0].phones||[]).find(p=>p.v===cb.caller);matchedCol=pm?pm.col:'-';
       const hasBefore=cConts.some(c=>c.orderTs!=null&&c.orderTs<=cb.callTs);
       if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol});continue;}
       contractState='콜백 이후 계약';
@@ -7862,8 +7865,7 @@ function mcBuildJudged(){
       if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-'});continue;}
       contractState='계약 없음';matchedCol=dbCol;
     }
-    const dbCol2=dbSet.get(corp+'|'+cb.caller);
-    const dbState=dbCol2?'DB 보유':(contractState==='계약 없음'?'DB 보유':'DB 없음');
+    const dbState=(contractState==='계약 없음')?'DB 보유':(dbSet.has(corp+'|'+cb.caller)?'DB 보유':'DB 없음');
     // Step5: IN call ±2분
     const ics=(incallMap.get(cb.caller+'|'+cb.rep)||[]).filter(r=>Math.abs(r.startTs-cb.callTs)<=120000);
     let isMissed,reason;
