@@ -694,6 +694,21 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn5">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-missed-call" style="display:none">
+    <div class="status-dots" id="mcStatusDots" title="파일 상태: IN call / 콜백 / DB(위버) / DB(W케어) / 계약(위버) / 계약(W케어) / 매핑">
+      <div class="status-dot" id="mc-dot-incall"></div>
+      <div class="status-dot" id="mc-dot-callback"></div>
+      <div class="status-dot" id="mc-dot-db-weavers"></div>
+      <div class="status-dot" id="mc-dot-db-wcare"></div>
+      <div class="status-dot" id="mc-dot-cont-weavers"></div>
+      <div class="status-dot" id="mc-dot-cont-wcare"></div>
+      <div class="status-dot" id="mc-dot-mapping"></div>
+    </div>
+    <button class="btn-header" onclick="mcOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="mcOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
@@ -703,6 +718,7 @@ tr.row-h td{background:var(--gh-light)}
   <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
+  <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
@@ -1248,6 +1264,172 @@ tr.row-h td{background:var(--gh-light)}
   </div>
 </div><!-- /page-daily-perf -->
 
+<!-- ═══ Page: 부재인입 ═══ -->
+<div class="page" id="page-missed-call">
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="mcModalOverlay" onclick="if(event.target===this)mcCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="mcCloseModal()">&times;</button>
+      <div id="mcModalUpload">
+        <h2>파일 업로드 — 부재인입</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">IN call · 콜백 · DB · 계약 데이터는 누적 저장됩니다. 동일 파일 재업로드 시 자동으로 건너뜁니다.</p>
+        <div class="upload-grid">
+          <div class="upload-box" id="box-mc-incall">
+            <input type="file" accept=".xlsx,.xls" data-mctype="incall" data-mccorp="">
+            <div class="icon">📞</div>
+            <div class="label">IN call 데이터</div>
+            <div class="desc">인입 콜 로그 (시트 다수)<br>3행 헤더 · 4행부터 · I열로 법인 자동분류</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-incall"></div>
+            <div class="progress-bar hidden" id="prog-mc-incall"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-mc-callback">
+            <input type="file" accept=".xlsx,.xls,.csv" data-mctype="callback" data-mccorp="">
+            <div class="icon">📋</div>
+            <div class="label">콜백 데이터</div>
+            <div class="desc">전체 인입 모수<br>A 대표번호 · B 발신자 · E call시간</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-callback"></div>
+            <div class="progress-bar hidden" id="prog-mc-callback"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-mc-db-weavers">
+            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="위버스마인드">
+            <div class="icon">🗂️</div>
+            <div class="label">DB 데이터 — 위버스마인드</div>
+            <div class="desc">WM_고객관리 A~AE 구조<br>M·N·O 전화번호 매칭</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-db-weavers"></div>
+            <div class="progress-bar hidden" id="prog-mc-db-weavers"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-mc-db-wcare">
+            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="더블유케어">
+            <div class="icon">🗂️</div>
+            <div class="label">DB 데이터 — 더블유케어</div>
+            <div class="desc">WM_고객관리 A~AE 구조<br>M·N·O 전화번호 매칭</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-db-wcare"></div>
+            <div class="progress-bar hidden" id="prog-mc-db-wcare"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-mc-cont-weavers">
+            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="위버스마인드">
+            <div class="icon">📝</div>
+            <div class="label">계약 데이터 — 위버스마인드</div>
+            <div class="desc">A~AE 구조 · X열(오더일) 있는 행만 유효</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-cont-weavers"></div>
+            <div class="progress-bar hidden" id="prog-mc-cont-weavers"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-mc-cont-wcare">
+            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="더블유케어">
+            <div class="icon">📝</div>
+            <div class="label">계약 데이터 — 더블유케어</div>
+            <div class="desc">A~AE 구조 · X열(오더일) 있는 행만 유효</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-mc-cont-wcare"></div>
+            <div class="progress-bar hidden" id="prog-mc-cont-wcare"><div class="progress-fill"></div></div>
+          </div>
+        </div>
+        <h3 style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);font-size:15px">대표번호 ↔ 법인 매핑 (1회 등록)</h3>
+        <div class="upload-box" id="box-mc-mapping" style="margin-bottom:0">
+          <input type="file" accept=".csv,.xlsx,.xls" data-mctype="mapping" data-mccorp="">
+          <div class="icon">🔁</div>
+          <div class="label">대표번호 매핑 테이블</div>
+          <div class="desc">A: 대표번호(0 포함) · B: 법인(위버스마인드/더블유케어)<br>업로드 시 기존 매핑 덮어쓰기</div>
+          <span class="upload-badge by-name">최신 1건</span>
+          <div class="filename" id="fname-mc-mapping"></div>
+          <div class="progress-bar hidden" id="prog-mc-mapping"><div class="progress-fill"></div></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="mcCloseModal()">닫기</button>
+          <button class="btn btn-primary" id="mcBtnGenerate" onclick="mcCloseModal();mcGenerate(true);">분석 실행</button>
+        </div>
+      </div>
+      <div id="mcModalManage" class="hidden">
+        <h2>파일 관리 — 부재인입</h2>
+        <div class="file-history" id="mcFileHistory"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" style="color:var(--danger);border-color:#fecaca" onclick="mcResetAll()">전체 초기화</button>
+          <button class="btn btn-outline" onclick="mcCloseModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" style="max-width:100%;padding:28px 40px">
+    <div id="mcEmpty" style="text-align:center;padding:80px 20px;color:var(--gray)">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">📵</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">파일을 업로드하세요</div>
+      <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 콜백 + IN call + DB/계약 + 매핑 테이블 → 분석 실행</div>
+      <div id="mcEmptyHint" style="font-size:13px;margin-top:10px;color:var(--warning)"></div>
+    </div>
+
+    <div class="hidden" id="mcDashboard">
+      <div class="ia-control-bar" style="flex-wrap:wrap;gap:10px">
+        <label>기간:</label>
+        <input type="date" id="mcDateStart" onchange="mcRender()">
+        <span>~</span>
+        <input type="date" id="mcDateEnd" onchange="mcRender()">
+        <div class="ia-view-tabs" style="margin:0;gap:6px">
+          <button class="ia-view-btn" onclick="mcQuickRange('today')">오늘</button>
+          <button class="ia-view-btn" onclick="mcQuickRange('yesterday')">어제</button>
+          <button class="ia-view-btn" onclick="mcQuickRange('7d')">최근 7일</button>
+          <button class="ia-view-btn active" onclick="mcQuickRange('30d')">최근 30일</button>
+          <button class="ia-view-btn" onclick="mcQuickRange('thisMonth')">이번 달</button>
+          <button class="ia-view-btn" onclick="mcQuickRange('lastMonth')">지난 달</button>
+          <button class="ia-view-btn" onclick="mcQuickRange('all')">전체</button>
+        </div>
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <label>법인:</label>
+        <div class="ia-view-tabs" style="margin:0;gap:6px">
+          <button class="ia-view-btn active" data-mccorpf="all" onclick="mcSwitchCorp('all')">전체</button>
+          <button class="ia-view-btn" data-mccorpf="위버스마인드" onclick="mcSwitchCorp('위버스마인드')">위버스마인드</button>
+          <button class="ia-view-btn" data-mccorpf="더블유케어" onclick="mcSwitchCorp('더블유케어')">더블유케어</button>
+        </div>
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <label>집계:</label>
+        <div class="ia-view-tabs" style="margin:0;gap:6px">
+          <button class="ia-view-btn active" data-mcunit="day" onclick="mcSwitchUnit('day')">일자별</button>
+          <button class="ia-view-btn" data-mcunit="week" onclick="mcSwitchUnit('week')">주차별</button>
+          <button class="ia-view-btn" data-mcunit="month" onclick="mcSwitchUnit('month')">월별</button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="ia-view-btn" onclick="mcGenerate(true)">🔄 재분석</button>
+      </div>
+
+      <div id="mcWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:14px;font-size:13px"></div>
+
+      <div class="kpi-grid" style="margin-top:18px">
+        <div class="kpi-card"><div class="kl">부재 인입 콜 수</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">부재 인입 고객 수</div><div class="kv" id="mcKpiCust">-</div><div class="ks" id="mcKpiCustSub"></div></div>
+        <div class="kpi-card" style="border-left-color:#64748b"><div class="kl">전체 미수신률</div><div class="kv" id="mcKpiRateAll">-</div><div class="ks" id="mcKpiRateAllSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">유효 미수신률 ★</div><div class="kv" id="mcKpiRateValid">-</div><div class="ks" id="mcKpiRateValidSub"></div></div>
+      </div>
+
+      <div class="ia-section" style="margin-bottom:18px">
+        <h3>부재 인입 추이 <span class="table-sub" id="mcTrendUnitLabel"></span></h3>
+        <div class="ia-chart-wrap"><canvas id="mcTrendChart"></canvas></div>
+      </div>
+
+      <div class="ia-section" style="margin-bottom:18px;overflow-x:auto">
+        <h3>법인별 비교</h3>
+        <table class="ia-table" id="mcCorpTable" style="min-width:760px"></table>
+      </div>
+
+      <div class="ia-section" style="overflow-x:auto">
+        <h3>상세 부재 인입 리스트 <span class="table-sub" id="mcDetailCount"></span></h3>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <input type="text" id="mcDetailSearch" placeholder="발신자번호 / 대표번호 검색" oninput="mcRenderDetail()" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px;width:240px">
+          <div style="flex:1"></div>
+          <button class="ia-view-btn" onclick="mcExportCsv()">📥 CSV 내보내기</button>
+        </div>
+        <div class="ia-table-wrap"><table class="ia-table" id="mcDetailTable" style="min-width:1100px"></table></div>
+        <div id="mcDetailPager" style="display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-missed-call -->
+
 <!-- ═══ Page: 차등성과 ═══ -->
 <div class="page active" id="page-grade-dash">
 
@@ -1403,7 +1585,7 @@ tr.row-h td{background:var(--gh-light)}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup','missed-call']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -1970,7 +2152,10 @@ function switchPage(pageId){
   if(hrDp) hrDp.style.display = pageId==='daily-perf' ? 'flex' : 'none';
   const hrGd=document.getElementById('headerRight-grade-dash');
   if(hrGd) hrGd.style.display = pageId==='grade-dash' ? 'flex' : 'none';
+  const hrMc=document.getElementById('headerRight-missed-call');
+  if(hrMc) hrMc.style.display = pageId==='missed-call' ? 'flex' : 'none';
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
+  if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
 }
 
 // ═══════════════════════════════════════════
@@ -7340,6 +7525,598 @@ async function gdDownloadAprilInitExcel(){
     console.error('차등성과 IDB 초기화 오류:',err);
   }
 })();
+</script>
+
+<!-- ═══════════ 부재인입 대시보드 ═══════════ -->
+<script>
+// ── IndexedDB ──
+const MC_DB_NAME='missedCallDashboard', MC_DB_VER=1;
+let mcIdb=null, mcFiles=[], mcLoaded=false, mcJudged=null, mcMeta=null, mcChart=null;
+let mcCorpFilter='all', mcUnit='day', mcDetailPage=1;
+const MC_TYPES=[
+  {key:'incall',corp:'',id:'incall'},
+  {key:'callback',corp:'',id:'callback'},
+  {key:'customerdb',corp:'위버스마인드',id:'db-weavers'},
+  {key:'customerdb',corp:'더블유케어',id:'db-wcare'},
+  {key:'contract',corp:'위버스마인드',id:'cont-weavers'},
+  {key:'contract',corp:'더블유케어',id:'cont-wcare'},
+  {key:'mapping',corp:'',id:'mapping'},
+];
+
+function mcOpenIDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(MC_DB_NAME,MC_DB_VER);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains('files')) db.createObjectStore('files',{keyPath:'id',autoIncrement:true});
+    };
+    req.onsuccess=()=>{mcIdb=req.result;res();};
+    req.onerror=()=>rej(req.error);
+  });
+}
+function mcIdbAdd(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>res(r.result);tx.onerror=()=>rej(tx.error);});}
+function mcIdbGetAll(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function mcIdbDel(id){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)await mcIdbDel(r.id);}
+
+// ── 정규화 / 날짜 헬퍼 ──
+function mcNormPhone(p){if(p==null)return '';return String(p).replace(/[^0-9]/g,'').replace(/^0+/,'');}
+function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
+function mcCorpFromText(s){const t=String(s||'').trim();if(t.includes('위버')||t.includes('뇌새김'))return '위버스마인드';if(t.includes('케어')||/^w/i.test(t))return '더블유케어';return null;}
+function mcDatePart(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date){if(isNaN(v))return null;return new Date(v.getFullYear(),v.getMonth(),v.getDate());}
+  if(typeof v==='number'){const ms=Math.round((v-25569)*86400000);const d=new Date(ms);return isNaN(d)?null:new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
+  const s=String(v).trim();const m=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  const d=new Date(s);return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function mcTimeMs(v){
+  if(v==null||v==='')return 0;
+  if(typeof v==='number'){let f=v;if(f>=1)f=f-Math.floor(f);return Math.round(f*86400000);}
+  if(v instanceof Date){if(isNaN(v))return 0;return ((v.getHours()*60+v.getMinutes())*60+v.getSeconds())*1000+v.getMilliseconds();}
+  const s=String(v).trim();const m=s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(m)return ((+m[1]*60+ +m[2])*60+(m[3]?+m[3]:0))*1000;return 0;
+}
+function mcFullTs(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date){if(isNaN(v))return null;const t=v.getTime();return t<Date.UTC(2005,0,1)?null:t;}
+  if(typeof v==='number'){if(v<1000)return null;const ms=Math.round((v-25569)*86400000);return ms<Date.UTC(2005,0,1)?null:ms;}
+  const s=String(v).trim();
+  const m=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0,m[6]?+m[6]:0).getTime();
+  const d=new Date(s);const t=d.getTime();return isNaN(t)||t<Date.UTC(2005,0,1)?null:t;
+}
+function mcDur(v){
+  if(v==null||v==='')return 0;
+  if(typeof v==='number')return v<1?Math.round(v*86400):v;
+  if(v instanceof Date)return Math.round(mcTimeMs(v)/1000);
+  const s=String(v).trim();
+  if(s.includes(':'))return Math.round(mcTimeMs(s)/1000);
+  const n=parseFloat(s.replace(/[^0-9.]/g,''));return isNaN(n)?0:n;
+}
+function mcFmtDate(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
+function mcFmtDateTime(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
+function mcWeekKey(ts){const d=new Date(ts);const day=(d.getDay()+6)%7;const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-day);return mon.getTime();}
+function mcWeekLabel(monTs){const d=new Date(monTs);const e=new Date(monTs+6*86400000);const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())}~${p(e.getMonth()+1)}/${p(e.getDate())}`;}
+function mcMonthKey(ts){const d=new Date(ts);return d.getFullYear()*12+d.getMonth();}
+function mcMonthLabel(mk){const y=Math.floor(mk/12),m=mk%12;return `${y}-${String(m+1).padStart(2,'0')}`;}
+
+// ── 모달 / 업로드 ──
+function mcOpenModal(v){
+  mcBindUploadBoxes();
+  document.getElementById('mcModalUpload').classList.toggle('hidden',v!=='upload');
+  document.getElementById('mcModalManage').classList.toggle('hidden',v!=='manage');
+  document.getElementById('mcModalOverlay').classList.add('open');
+  if(v==='upload') mcUpdateUploadStatus();
+  if(v==='manage') mcRenderFileHistory();
+}
+function mcCloseModal(){document.getElementById('mcModalOverlay').classList.remove('open');}
+
+function mcFilesByType(type,corp){return mcFiles.filter(f=>f.type===type&&(corp==null||f.corp===corp));}
+function mcHasType(type,corp){return mcFilesByType(type,corp).length>0;}
+
+function mcUpdateStatusDots(){
+  for(const t of MC_TYPES){
+    const dot=document.getElementById('mc-dot-'+t.id);
+    if(dot) dot.classList.toggle('ok',mcHasType(t.key,t.corp||null));
+  }
+}
+function mcUpdateUploadStatus(){
+  for(const t of MC_TYPES){
+    const box=document.getElementById('box-mc-'+t.id);
+    const fn=document.getElementById('fname-mc-'+t.id);
+    if(!box) continue;
+    const list=mcFilesByType(t.key,t.corp||null);
+    if(list.length){
+      box.classList.add('loaded');
+      const latest=list.slice().sort((a,b)=>b.uploadTime-a.uploadTime)[0];
+      const totalRows=list.reduce((s,f)=>s+(f.rows?f.rows.length:0),0);
+      fn.textContent=t.key==='mapping'?`${latest.fileName} (${totalRows}건)`:`${latest.fileName} 외 ${list.length}개 (행 ${totalRows.toLocaleString()})`;
+    }else{box.classList.remove('loaded');fn.textContent='';}
+  }
+}
+function mcRenderFileHistory(){
+  let html='';
+  const groups=[
+    {key:'incall',corp:null,label:'IN call 데이터',icon:'📞',cls:'db'},
+    {key:'callback',corp:null,label:'콜백 데이터',icon:'📋',cls:'cont'},
+    {key:'customerdb',corp:'위버스마인드',label:'DB — 위버스마인드',icon:'🗂️',cls:'gc'},
+    {key:'customerdb',corp:'더블유케어',label:'DB — 더블유케어',icon:'🗂️',cls:'gc'},
+    {key:'contract',corp:'위버스마인드',label:'계약 — 위버스마인드',icon:'📝',cls:'attend'},
+    {key:'contract',corp:'더블유케어',label:'계약 — 더블유케어',icon:'📝',cls:'attend'},
+    {key:'mapping',corp:null,label:'대표번호 매핑',icon:'🔁',cls:'db'},
+  ];
+  for(const g of groups){
+    const list=mcFilesByType(g.key,g.corp).slice().sort((a,b)=>b.uploadTime-a.uploadTime);
+    html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${g.cls}">${g.icon} ${g.label}</span> ${list.length}개 (행 ${list.reduce((s,f)=>s+(f.rows?f.rows.length:0),0).toLocaleString()})</div>`;
+    if(!list.length) html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';
+    else list.forEach((f,i)=>{
+      html+=`<div class="fh-item${i===0?' active':''}"><span class="fh-name">${f.fileName} <span style="color:#94a3b8">(${(f.rows?f.rows.length:0).toLocaleString()}행)</span></span>${i===0?'<span class="fh-active-badge">최신</span>':''}<span class="fh-date">${typeof fmtDateTime==='function'?fmtDateTime(new Date(f.uploadTime)):mcFmtDateTime(f.uploadTime)}</span><button class="btn-del" onclick="mcDeleteFile(${f.id})" title="삭제">&times;</button></div>`;
+    });
+    html+='</div>';
+  }
+  document.getElementById('mcFileHistory').innerHTML=html;
+}
+async function mcDeleteFile(id){
+  if(!confirm('이 파일을 삭제하시겠습니까?'))return;
+  await mcIdbDel(id);
+  mcFiles=mcFiles.filter(f=>f.id!==id);
+  mcJudged=null;
+  mcUpdateStatusDots();mcUpdateUploadStatus();mcRenderFileHistory();
+}
+async function mcResetAll(){
+  if(!confirm('부재인입 탭의 모든 업로드 데이터를 삭제합니다. 계속할까요?'))return;
+  await mcIdbClear();
+  mcFiles=[];mcJudged=null;
+  mcUpdateStatusDots();mcUpdateUploadStatus();mcRenderFileHistory();
+  document.getElementById('mcDashboard').classList.add('hidden');
+  document.getElementById('mcEmpty').classList.remove('hidden');
+  mcCloseModal();
+}
+
+function mcBindUploadBoxes(){
+  document.querySelectorAll('#mcModalUpload input[type=file]').forEach(input=>{
+    if(input.dataset.bound)return;input.dataset.bound='1';
+    const type=input.dataset.mctype, corp=input.dataset.mccorp||'';
+    const id=MC_TYPES.find(t=>t.key===type&&(t.corp||'')===corp).id;
+    const box=document.getElementById('box-mc-'+id);
+    const prog=document.getElementById('prog-mc-'+id);
+    const handle=async file=>{
+      if(!file)return;
+      prog.classList.remove('hidden','done');prog.classList.add('loading');
+      document.getElementById('fname-mc-'+id).textContent=file.name;
+      try{
+        const fileHash=`${file.name}|${file.size}`;
+        if(type!=='mapping' && mcFiles.some(f=>f.type===type&&f.corp===corp&&f.fileHash===fileHash)){
+          prog.classList.remove('loading');alert('이미 업로드된 파일입니다. (동일 이름·크기)');return;
+        }
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        let parsed;
+        if(type==='incall') parsed=mcParseIncall(wb);
+        else if(type==='callback') parsed=mcParseCallback(wb);
+        else if(type==='customerdb'||type==='contract') parsed=mcParseCustomerLike(wb,type,corp);
+        else if(type==='mapping') parsed=mcParseMapping(wb);
+        if(type==='mapping'){
+          // 매핑은 최신 1건만 — 기존 삭제
+          for(const f of mcFilesByType('mapping',null)){await mcIdbDel(f.id);}
+          mcFiles=mcFiles.filter(f=>f.type!=='mapping');
+        }
+        const rec={type,corp,fileName:file.name,fileHash,uploadTime:Date.now(),rows:parsed.rows,warn:parsed.warn||''};
+        const newId=await mcIdbAdd(rec);rec.id=newId;mcFiles.push(rec);
+        mcJudged=null;
+        prog.classList.remove('loading');prog.classList.add('done');box.classList.add('loaded');
+        mcUpdateStatusDots();mcUpdateUploadStatus();
+        if(parsed.warn) alert(parsed.warn);
+      }catch(err){prog.classList.remove('loading');alert('파일 처리 오류: '+err.message);console.error(err);}
+    };
+    input.addEventListener('change',e=>{const f=e.target.files[0];handle(f);input.value='';});
+    box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('dragover');});
+    box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
+    box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length)handle(e.dataTransfer.files[0]);});
+  });
+}
+
+// ── 파서 ──
+function mcParseIncall(wb){
+  const rows=[];let badCorp=0;
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];if(!ws)continue;
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    if(!aoa.length)continue;
+    // 헤더행 탐색: '대표번호' 또는 '발신자' 포함 행
+    let hdrIdx=-1;
+    for(let i=0;i<Math.min(6,aoa.length);i++){
+      const r=(aoa[i]||[]).map(c=>String(c==null?'':c));
+      if(r.some(c=>c.includes('대표번호'))||r.some(c=>c.includes('발신자'))){hdrIdx=i;break;}
+    }
+    let col={date:4,start:5,end:6,dur:7,grp:8,rep:9,caller:10,status:11};
+    if(hdrIdx>=0){
+      const hdr=(aoa[hdrIdx]||[]).map(c=>String(c==null?'':c).trim());
+      const find=(...keys)=>{for(const k of keys){const idx=hdr.findIndex(h=>h.includes(k));if(idx>=0)return idx;}return -1;};
+      const c2={
+        date:find('일자'),start:find('통화시작','시작'),end:find('통화종료','종료'),dur:find('통화시간'),
+        grp:find('그룹'),rep:find('대표번호'),caller:find('발신자'),status:find('상태')
+      };
+      // 발견 안된 항목은 기본값 유지
+      for(const k in c2){if(c2[k]>=0)col[k]=c2[k];}
+    }
+    const startRow=hdrIdx>=0?hdrIdx+1:3;
+    for(let i=startRow;i<aoa.length;i++){
+      const r=aoa[i];if(!r)continue;
+      const rep=mcNormPhone(r[col.rep]), caller=mcNormPhone(r[col.caller]);
+      if(!rep&&!caller)continue;
+      const corp=mcCorpFromGroup(r[col.grp]);if(!corp){badCorp++;continue;}
+      const dp=mcDatePart(r[col.date]);
+      const startTs=dp?dp.getTime()+mcTimeMs(r[col.start]):mcFullTs(r[col.start]);
+      if(startTs==null)continue;
+      const dur=mcDur(r[col.dur]);
+      const status=String(r[col.status]==null?'':r[col.status]).trim();
+      const valid=status.includes('연결')&&dur>=90;
+      rows.push({corp,caller,rep,startTs,dur,status,valid});
+    }
+  }
+  return {rows,warn:badCorp?`IN call: 법인 미분류(뇌새김/케어 키워드 없음) ${badCorp.toLocaleString()}행 제외됨.`:''};
+}
+function mcParseCallback(wb){
+  const rows=[];let noDate=0,total=0;
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];if(!ws)continue;
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    for(let i=0;i<aoa.length;i++){
+      const r=aoa[i];if(!r)continue;
+      const rep=mcNormPhone(r[0]), caller=mcNormPhone(r[1]);
+      if(!rep||!caller)continue; // 헤더/빈 행 스킵
+      if(!/^\d+$/.test(String(r[0]).replace(/\D/g,'')))continue;
+      total++;
+      const callTs=mcFullTs(r[4]);
+      if(callTs==null){noDate++;continue;}
+      rows.push({rep,caller,callTs,dup:r[2]||1});
+    }
+  }
+  let warn='';
+  if(total===0) warn='콜백 데이터: 유효한 행을 찾지 못했습니다. 컬럼 구조(A 대표번호, B 발신자, E call시간)를 확인하세요.';
+  else if(noDate>total*0.3) warn=`콜백 데이터: call시간(E열)에서 날짜를 읽지 못한 행 ${noDate.toLocaleString()}/${total.toLocaleString()}건이 제외됐습니다. call시간이 'yyyy-mm-dd hh:mm:ss' 형식인지 확인하세요.`;
+  return {rows,warn};
+}
+function mcParseCustomerLike(wb,type,corp){
+  const rows=[];let total=0,valid=0;
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];if(!ws)continue;
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    for(let i=1;i<aoa.length;i++){ // 1행 헤더 가정 → 2행부터
+      const r=aoa[i];if(!r)continue;
+      const m=mcNormPhone(r[12]),n=mcNormPhone(r[13]),o=mcNormPhone(r[14]);
+      const custKey=String(r[6]==null?'':r[6])||String(r[5]==null?'':r[5]);
+      if(!m&&!n&&!o)continue;
+      total++;
+      const orderTs=mcFullTs(r[23]);
+      const distributeTs=mcFullTs(r[8])||(mcDatePart(r[8])?mcDatePart(r[8]).getTime():null);
+      if(type==='contract'){
+        if(orderTs==null)continue; // 유효 계약: X열 값 있는 행만
+        valid++;
+        rows.push({corp,m,n,o,custKey,orderTs});
+      }else{
+        rows.push({corp,m,n,o,custKey,distributeTs});
+      }
+    }
+  }
+  let warn='';
+  if(type==='contract'&&total>0&&valid===0) warn=`계약(${corp}): X열(오더일)이 채워진 행이 없습니다. 오더일 컬럼(X열) 위치를 확인하세요.`;
+  return {rows,warn};
+}
+function mcParseMapping(wb){
+  const rows=[];let bad=0;
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];if(!ws)continue;
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    for(const r of aoa){
+      if(!r)continue;
+      const ph=mcNormPhone(r[0]);if(!ph)continue;
+      const cp=mcCorpFromText(r[1]);
+      if(!cp){bad++;continue;}
+      rows.push([ph,cp]);
+    }
+  }
+  return {rows,warn:rows.length===0?'매핑 테이블: 유효한 행을 찾지 못했습니다. (A: 대표번호, B: 법인)':(bad?`매핑 테이블: 법인을 인식하지 못한 ${bad}행 무시됨.`:'')};
+}
+
+// ── 분석 ──
+function mcReady(){return mcFilesByType('callback',null).length>0 && mcFilesByType('mapping',null).length>0;}
+
+function mcBuildJudged(){
+  // 매핑
+  const mapping=new Map();
+  for(const f of mcFilesByType('mapping',null)) for(const [ph,cp] of (f.rows||[])) mapping.set(ph,cp);
+  // 계약 / DB lookup (법인|전화 → 레코드[])
+  const contractMap=new Map(), dbSet=new Map();
+  const dedupAdd=(map,corp,phone,rec)=>{if(!phone)return;const k=corp+'|'+phone;if(!map.has(k))map.set(k,[]);map.get(k).push(rec);};
+  for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])){dedupAdd(contractMap,c.corp,c.m,c);dedupAdd(contractMap,c.corp,c.n,c);dedupAdd(contractMap,c.corp,c.o,c);}
+  for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])){
+    for(const [colName,ph] of [['M',d.m],['N',d.n],['O',d.o]]){if(!ph)continue;const k=d.corp+'|'+ph;if(!dbSet.has(k))dbSet.set(k,colName);}
+  }
+  // IN call lookup (발신자|대표 → 레코드[]) + dedup
+  const incallMap=new Map();const incSeen=new Set();
+  for(const f of mcFilesByType('incall',null)) for(const ic of (f.rows||[])){
+    const uk=ic.caller+'_'+ic.rep+'_'+ic.startTs+'_'+ic.dur;if(incSeen.has(uk))continue;incSeen.add(uk);
+    const k=ic.caller+'|'+ic.rep;if(!incallMap.has(k))incallMap.set(k,[]);incallMap.get(k).push(ic);
+  }
+  // 콜백 dedup + judge
+  const cbSeen=new Set();const out=[];let unmapped=0;
+  for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
+    const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
+    const corp=mapping.get(cb.rep);
+    if(!corp){unmapped++;continue;}
+    // Step3: 계약
+    const cConts=contractMap.get(corp+'|'+cb.caller)||[];
+    let contractState,matchedCol='-';
+    if(cConts.length){
+      const c0=cConts[0];matchedCol=c0.m===cb.caller?'M':c0.n===cb.caller?'N':c0.o===cb.caller?'O':'-';
+      const hasBefore=cConts.some(c=>c.orderTs!=null&&c.orderTs<=cb.callTs);
+      if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol});continue;}
+      contractState='콜백 이후 계약';
+    }else{
+      // Step4: DB
+      const dbCol=dbSet.get(corp+'|'+cb.caller);
+      if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-'});continue;}
+      contractState='계약 없음';matchedCol=dbCol;
+    }
+    const dbCol2=dbSet.get(corp+'|'+cb.caller);
+    const dbState=dbCol2?'DB 보유':(contractState==='계약 없음'?'DB 보유':'DB 없음');
+    // Step5: IN call ±2분
+    const ics=(incallMap.get(cb.caller+'|'+cb.rep)||[]).filter(r=>Math.abs(r.startTs-cb.callTs)<=120000);
+    let isMissed,reason;
+    if(ics.length===0){isMissed=true;reason='IN call 매칭 없음';}
+    else if(ics.some(r=>r.valid)){isMissed=false;reason='유효통화 연결';}
+    else{isMissed=true;reason='유효통화 아님';}
+    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol});
+  }
+  return {records:out,unmapped,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
+}
+
+function mcGenerate(force){
+  if(!mcReady()){
+    mcUpdateEmptyHint();
+    document.getElementById('mcDashboard').classList.add('hidden');
+    document.getElementById('mcEmpty').classList.remove('hidden');
+    if(force)alert('분석에는 최소 "콜백 데이터"와 "대표번호 매핑"이 필요합니다.');
+    return;
+  }
+  document.getElementById('mcEmpty').classList.add('hidden');
+  document.getElementById('mcDashboard').classList.remove('hidden');
+  // 무거울 수 있으므로 한 프레임 양보
+  const run=()=>{
+    try{
+      const r=mcBuildJudged();
+      mcJudged=r.records;mcMeta={unmapped:r.unmapped,counts:r.counts};
+      mcInitDateRange();
+      mcRender();
+    }catch(e){alert('분석 오류: '+e.message);console.error(e);}
+  };
+  if(force||!mcJudged){setTimeout(run,30);}else{mcRender();}
+}
+
+function mcInitDateRange(){
+  const si=document.getElementById('mcDateStart'), ei=document.getElementById('mcDateEnd');
+  if(!mcJudged||!mcJudged.length)return;
+  let mn=Infinity,mx=-Infinity;
+  for(const r of mcJudged){if(r.callTs<mn)mn=r.callTs;if(r.callTs>mx)mx=r.callTs;}
+  if(!isFinite(mn))return;
+  const toStr=ts=>{const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;};
+  si.min=toStr(mn);si.max=toStr(mx);ei.min=toStr(mn);ei.max=toStr(mx);
+  // 기본: 최근 30일 (데이터 범위 내)
+  if(!si.value||!ei.value){
+    const end=mx;const start=Math.max(mn,end-29*86400000);
+    si.value=toStr(start);ei.value=toStr(end);
+  }
+}
+function mcRangeMs(){
+  const si=document.getElementById('mcDateStart').value, ei=document.getElementById('mcDateEnd').value;
+  let start=si?new Date(si+'T00:00:00').getTime():-Infinity;
+  let end=ei?new Date(ei+'T00:00:00').getTime()+86400000:Infinity;
+  return [start,end];
+}
+function mcQuickRange(kind){
+  if(!mcJudged)return;
+  let mn=Infinity,mx=-Infinity;for(const r of mcJudged){if(r.callTs<mn)mn=r.callTs;if(r.callTs>mx)mx=r.callTs;}
+  const toStr=ts=>{const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;};
+  const dayOf=ts=>{const d=new Date(ts);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();};
+  const today=dayOf(mx);let s,e;
+  if(kind==='today'){s=today;e=today;}
+  else if(kind==='yesterday'){s=today-86400000;e=today-86400000;}
+  else if(kind==='7d'){s=today-6*86400000;e=today;}
+  else if(kind==='30d'){s=today-29*86400000;e=today;}
+  else if(kind==='thisMonth'){const d=new Date(mx);s=new Date(d.getFullYear(),d.getMonth(),1).getTime();e=today;}
+  else if(kind==='lastMonth'){const d=new Date(mx);s=new Date(d.getFullYear(),d.getMonth()-1,1).getTime();e=new Date(d.getFullYear(),d.getMonth(),0).getTime();}
+  else{s=mn;e=mx;}
+  s=Math.max(s,dayOf(mn));
+  document.getElementById('mcDateStart').value=toStr(s);
+  document.getElementById('mcDateEnd').value=toStr(e);
+  document.querySelectorAll('[onclick^="mcQuickRange"]').forEach(b=>b.classList.remove('active'));
+  const btn=Array.from(document.querySelectorAll('[onclick^="mcQuickRange"]')).find(b=>b.getAttribute('onclick').includes(`'${kind}'`));
+  if(btn)btn.classList.add('active');
+  mcRender();
+}
+function mcSwitchCorp(c){mcCorpFilter=c;document.querySelectorAll('[data-mccorpf]').forEach(b=>b.classList.toggle('active',b.dataset.mccorpf===c));mcDetailPage=1;mcRender();}
+function mcSwitchUnit(u){mcUnit=u;document.querySelectorAll('[data-mcunit]').forEach(b=>b.classList.toggle('active',b.dataset.mcunit===u));mcRender();}
+
+function mcStats(records){
+  const denomAll=records.length;
+  const denomValid=records.filter(r=>r.validDenom).length;
+  const missed=records.filter(r=>r.isMissed);
+  const custAll=new Set(records.map(r=>r.caller)).size;
+  const custMissed=new Set(missed.map(r=>r.caller)).size;
+  return {denomAll,denomValid,missedCalls:missed.length,missedCust:custMissed,custAll,
+    rateAll:denomAll?missed.length/denomAll*100:0, rateValid:denomValid?missed.length/denomValid*100:0};
+}
+
+function mcRender(){
+  if(!mcJudged)return;
+  const [start,end]=mcRangeMs();
+  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end); // 매핑된 콜백 전체(법인 필터 무관)
+  const scope=dateScope.filter(r=>mcCorpFilter==='all'||r.corp===mcCorpFilter);
+  // 전기 비교
+  const span=isFinite(start)&&isFinite(end)?(end-start):0;
+  let prevScope=[];
+  if(span>0){const ps=start-span,pe=start;prevScope=mcJudged.filter(r=>r.callTs>=ps&&r.callTs<pe&&(mcCorpFilter==='all'||r.corp===mcCorpFilter));}
+  const st=mcStats(scope), pst=mcStats(prevScope);
+  // KPI
+  const setKpi=(idV,idS,val,sub)=>{document.getElementById(idV).textContent=val;document.getElementById(idS).textContent=sub;};
+  const delta=(cur,prev,unit)=>{if(!prevScope.length)return '';const d=cur-prev;const s=d>0?'▲':d<0?'▼':'–';const col=d>0?'#e71d36':d<0?'#2ec4b6':'#6c757d';return ` <span style="color:${col}">${s}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
+  document.getElementById('mcKpiCalls').textContent=st.missedCalls.toLocaleString()+'건';
+  document.getElementById('mcKpiCallsSub').innerHTML=`전체 모수 ${st.denomAll.toLocaleString()}콜${delta(st.missedCalls,pst.missedCalls)}`;
+  document.getElementById('mcKpiCust').textContent=st.missedCust.toLocaleString()+'명';
+  document.getElementById('mcKpiCustSub').innerHTML=`전체 인입 고객 ${st.custAll.toLocaleString()}명${delta(st.missedCust,pst.missedCust)}`;
+  document.getElementById('mcKpiRateAll').textContent=st.rateAll.toFixed(1)+'%';
+  document.getElementById('mcKpiRateAllSub').innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}${delta(st.rateAll,pst.rateAll,'pp')}`;
+  document.getElementById('mcKpiRateValid').textContent=st.rateValid.toFixed(1)+'%';
+  document.getElementById('mcKpiRateValidSub').innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}콜 기준${delta(st.rateValid,pst.rateValid,'pp')}`;
+  // 경고바
+  const warns=[];
+  if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
+  if(!mcFilesByType('incall',null).length) warns.push('IN call 데이터 미업로드 — 모든 콜백이 "매칭 없음 → 부재"로 집계됩니다');
+  if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 유효 미수신률이 계산되지 않습니다');
+  for(const f of mcFiles){if(f.warn)warns.push(f.warn);}
+  const wb=document.getElementById('mcWarnBar');
+  if(warns.length){wb.classList.remove('hidden');wb.innerHTML='⚠️ '+warns.map(w=>`<div>${w}</div>`).join('');}else wb.classList.add('hidden');
+  // 추이 차트
+  mcRenderTrend(scope,dateScope);
+  // 법인별 비교 (날짜 범위 내, 법인 필터 무관)
+  mcRenderCorpTable(dateScope);
+  // 상세 리스트
+  mcRenderDetail();
+}
+
+function mcBucketKey(ts){return mcUnit==='day'?mcDatePart(ts).getTime():mcUnit==='week'?mcWeekKey(ts):mcMonthKey(ts);}
+function mcBucketLabel(k){return mcUnit==='day'?mcFmtDate(k):mcUnit==='week'?mcWeekLabel(k):mcMonthLabel(k);}
+
+function mcRenderTrend(scope,dateScope){
+  document.getElementById('mcTrendUnitLabel').textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=유효 미수신률)`;
+  const byCorp=mcCorpFilter==='all';
+  const buckets=new Map();
+  const src=byCorp?dateScope:scope;
+  for(const r of src){
+    const k=mcBucketKey(r.callTs);
+    if(!buckets.has(k))buckets.set(k,{weavers:{m:0,v:0},wcare:{m:0,v:0},all:{m:0,v:0}});
+    const b=buckets.get(k);
+    const slot=r.corp==='위버스마인드'?b.weavers:b.wcare;
+    if(r.isMissed){slot.m++;b.all.m++;}
+    if(r.validDenom){slot.v++;b.all.v++;}
+  }
+  const keys=Array.from(buckets.keys()).sort((a,b)=>a-b);
+  const labels=keys.map(mcBucketLabel);
+  const ds=[];
+  if(byCorp){
+    ds.push({type:'bar',label:'위버스마인드 부재콜',data:keys.map(k=>buckets.get(k).weavers.m),backgroundColor:'#4361EE',stack:'m',yAxisID:'y'});
+    ds.push({type:'bar',label:'더블유케어 부재콜',data:keys.map(k=>buckets.get(k).wcare.m),backgroundColor:'#F0920E',stack:'m',yAxisID:'y'});
+  }else{
+    ds.push({type:'bar',label:(mcCorpFilter)+' 부재콜',data:keys.map(k=>buckets.get(k).all.m),backgroundColor:mcCorpFilter==='위버스마인드'?'#4361EE':'#F0920E',yAxisID:'y'});
+  }
+  ds.push({type:'line',label:'유효 미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.all.v?+(b.all.m/b.all.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false});
+  if(mcChart)mcChart.destroy();
+  const ctx=document.getElementById('mcTrendChart');
+  mcChart=new Chart(ctx,{data:{labels,datasets:ds},options:{
+    responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{
+      x:{stacked:byCorp},
+      y:{stacked:byCorp,beginAtZero:true,position:'left',title:{display:true,text:'부재 콜 수'}},
+      y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'미수신률 %'},ticks:{callback:v=>v+'%'}}
+    },
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${c.parsed.y.toLocaleString()}건`}}}
+  }});
+}
+
+function mcRenderCorpTable(dateScope){
+  const corps=['위버스마인드','더블유케어'];
+  let rowsHtml='';
+  const tot={denomAll:0,denomValid:0,missedCalls:0,missedCust:new Set()};
+  for(const c of corps){
+    const recs=dateScope.filter(r=>r.corp===c);
+    const s=mcStats(recs);
+    tot.denomAll+=s.denomAll;tot.denomValid+=s.denomValid;tot.missedCalls+=s.missedCalls;
+    recs.filter(r=>r.isMissed).forEach(r=>tot.missedCust.add(r.caller));
+    rowsHtml+=`<tr><td style="font-weight:700">${c}</td><td>${s.missedCalls.toLocaleString()}</td><td>${s.missedCust.toLocaleString()}</td><td>${s.denomAll.toLocaleString()}</td><td>${s.denomValid.toLocaleString()}</td><td>${s.rateAll.toFixed(1)}%</td><td style="font-weight:700;color:#e71d36">${s.rateValid.toFixed(1)}%</td></tr>`;
+  }
+  const rAll=tot.denomAll?tot.missedCalls/tot.denomAll*100:0, rVal=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
+  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700"><td>합계</td><td>${tot.missedCalls.toLocaleString()}</td><td>${tot.missedCust.size.toLocaleString()}</td><td>${tot.denomAll.toLocaleString()}</td><td>${tot.denomValid.toLocaleString()}</td><td>${rAll.toFixed(1)}%</td><td style="color:#e71d36">${rVal.toFixed(1)}%</td></tr>`;
+  document.getElementById('mcCorpTable').innerHTML=`<thead><tr><th>법인</th><th>부재 콜</th><th>부재 고객</th><th>전체 모수 콜</th><th>유효 모수 콜</th><th>전체 미수신률</th><th>유효 미수신률</th></tr></thead><tbody>${rowsHtml}</tbody>`;
+}
+
+function mcCurrentDetailRows(){
+  if(!mcJudged)return [];
+  const [start,end]=mcRangeMs();
+  let recs=mcJudged.filter(r=>r.isMissed&&r.callTs>=start&&r.callTs<end&&(mcCorpFilter==='all'||r.corp===mcCorpFilter));
+  const q=(document.getElementById('mcDetailSearch').value||'').replace(/[^0-9]/g,'');
+  if(q)recs=recs.filter(r=>r.caller.includes(q)||r.rep.includes(q));
+  recs.sort((a,b)=>b.callTs-a.callTs);
+  return recs;
+}
+function mcRenderDetail(){
+  const recs=mcCurrentDetailRows();
+  document.getElementById('mcDetailCount').textContent=`(${recs.length.toLocaleString()}건)`;
+  const per=50, pages=Math.max(1,Math.ceil(recs.length/per));
+  if(mcDetailPage>pages)mcDetailPage=pages;
+  const slice=recs.slice((mcDetailPage-1)*per,mcDetailPage*per);
+  let body='';
+  for(const r of slice){
+    body+=`<tr><td>${mcFmtDateTime(r.callTs)}</td><td>${r.caller}</td><td>${r.rep}</td><td>${r.corp}</td><td>${r.inCount||'<span style="color:#e71d36">매칭 없음</span>'}</td><td>${(r.inStatuses&&r.inStatuses.length)?r.inStatuses.join(', '):'-'}</td><td>${(r.inDur&&r.inDur.length)?r.inDur.join(', '):'-'}</td><td>${r.contractState}</td><td>${r.dbState}</td><td>${r.matchedCol||'-'}</td><td>${r.reason}</td></tr>`;
+  }
+  if(!slice.length)body='<tr><td colspan="11" style="padding:24px;color:#94a3b8">부재 인입 건이 없습니다.</td></tr>';
+  document.getElementById('mcDetailTable').innerHTML=`<thead><tr><th>콜백 시간</th><th>발신자번호</th><th>대표번호</th><th>법인</th><th>IN call 매칭 수</th><th>매칭 IN call 상태</th><th>매칭 통화시간(초)</th><th>계약 상태</th><th>DB 상태</th><th>매칭 컬럼</th><th>판정 사유</th></tr></thead><tbody>${body}</tbody>`;
+  // pager
+  let pg='';
+  if(pages>1){
+    const mk=(p,t,dis)=>`<button class="ia-view-btn${p===mcDetailPage?' active':''}" ${dis?'disabled':''} onclick="mcGotoPage(${p})">${t}</button>`;
+    pg+=mk(Math.max(1,mcDetailPage-1),'‹',mcDetailPage===1);
+    const win=2;let from=Math.max(1,mcDetailPage-win),to=Math.min(pages,mcDetailPage+win);
+    if(from>1){pg+=mk(1,'1');if(from>2)pg+='<span style="padding:0 4px">…</span>';}
+    for(let p=from;p<=to;p++)pg+=mk(p,String(p));
+    if(to<pages){if(to<pages-1)pg+='<span style="padding:0 4px">…</span>';pg+=mk(pages,String(pages));}
+    pg+=mk(Math.min(pages,mcDetailPage+1),'›',mcDetailPage===pages);
+  }
+  document.getElementById('mcDetailPager').innerHTML=pg;
+}
+function mcGotoPage(p){mcDetailPage=p;mcRenderDetail();}
+
+function mcExportCsv(){
+  const recs=mcCurrentDetailRows();
+  if(!recs.length){alert('내보낼 데이터가 없습니다.');return;}
+  const hdr=['콜백시간','발신자번호','대표번호','법인','IN call 매칭수','매칭 IN call 상태','매칭 통화시간(초)','계약 상태','DB 상태','매칭 컬럼','판정 사유'];
+  const esc=v=>{const s=String(v==null?'':v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const lines=[hdr.join(',')];
+  for(const r of recs)lines.push([mcFmtDateTime(r.callTs),r.caller,r.rep,r.corp,r.inCount,(r.inStatuses||[]).join(' / '),(r.inDur||[]).join(' / '),r.contractState,r.dbState,r.matchedCol||'-',r.reason].map(esc).join(','));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  const si=document.getElementById('mcDateStart').value,ei=document.getElementById('mcDateEnd').value;
+  a.download=`부재인입_상세_${si||''}_${ei||''}.csv`;a.click();URL.revokeObjectURL(a.href);
+}
+
+function mcUpdateEmptyHint(){
+  const need=[];
+  if(!mcFilesByType('callback',null).length)need.push('콜백 데이터');
+  if(!mcFilesByType('mapping',null).length)need.push('대표번호 매핑');
+  const opt=[];
+  if(!mcFilesByType('incall',null).length)opt.push('IN call');
+  if(!mcFilesByType('contract',null).length)opt.push('계약 데이터');
+  if(!mcFilesByType('customerdb',null).length)opt.push('DB 데이터');
+  const el=document.getElementById('mcEmptyHint');
+  if(el)el.textContent=need.length?`필수 미업로드: ${need.join(', ')}`:(opt.length?`선택 미업로드(권장): ${opt.join(', ')} — 분석은 가능하나 정확도가 떨어집니다`:'');
+}
+
+async function mcOnShow(){
+  if(!mcLoaded){
+    try{
+      await mcOpenIDB();
+      mcFiles=await mcIdbGetAll();
+      mcLoaded=true;
+      mcUpdateStatusDots();mcUpdateUploadStatus();
+    }catch(e){console.error('부재인입 IDB:',e);}
+  }
+  mcUpdateEmptyHint();
+  if(mcReady()){ if(!mcJudged) mcGenerate(false); else { document.getElementById('mcEmpty').classList.add('hidden'); document.getElementById('mcDashboard').classList.remove('hidden'); } }
+  else { document.getElementById('mcDashboard').classList.add('hidden'); document.getElementById('mcEmpty').classList.remove('hidden'); }
+}
 </script>
 </body>
 </html>
