@@ -7723,8 +7723,10 @@ function mcBindUploadBoxes(){
 
 // ── 파서 ──
 function mcParseIncall(wb){
-  const rows=[];let badCorp=0;
+  const rows=[];let badCorp=0,nullStart=0,skipNoPhone=0,dropEarly=0;const dbg={sheets:[]};
+  let si=0;
   for(const sn of wb.SheetNames){
+    si++;
     const ws=wb.Sheets[sn];if(!ws)continue;
     const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
     if(!aoa.length)continue;
@@ -7737,30 +7739,37 @@ function mcParseIncall(wb){
     let col={date:4,start:5,end:6,dur:7,grp:8,rep:9,caller:10,status:11};
     if(hdrIdx>=0){
       const hdr=(aoa[hdrIdx]||[]).map(c=>String(c==null?'':c).trim());
-      const find=(...keys)=>{for(const k of keys){const idx=hdr.findIndex(h=>h.includes(k));if(idx>=0)return idx;}return -1;};
+      const find=(...keys)=>{for(const k of keys){const idx=hdr.findIndex(h=>h.replace(/\s/g,'').includes(k));if(idx>=0)return idx;}return -1;};
       const c2={
-        date:find('일자'),start:find('통화시작','시작'),end:find('통화종료','종료'),dur:find('통화시간'),
-        grp:find('그룹'),rep:find('대표번호'),caller:find('발신자'),status:find('상태')
+        date:find('일자','수신일','통화일'),start:find('통화시작','시작','수신시'),end:find('통화종료','종료'),dur:find('통화시간','통화초'),
+        grp:find('그룹'),rep:find('대표번호','수신번호','대표'),caller:find('발신자','발신번호','발신'),status:find('상태','결과')
       };
-      // 발견 안된 항목은 기본값 유지
       for(const k in c2){if(c2[k]>=0)col[k]=c2[k];}
     }
     const startRow=hdrIdx>=0?hdrIdx+1:3;
+    if(si<=1){
+      dbg.hdrIdx=hdrIdx; dbg.col=Object.assign({},col);
+      dbg.headerRow=hdrIdx>=0?(aoa[hdrIdx]||[]).map(c=>String(c==null?'':c)):null;
+      dbg.rawRows=aoa.slice(0,Math.min(6,aoa.length)).map(r=>(r||[]).map(c=>c instanceof Date?c.toISOString():c));
+    }
     for(let i=startRow;i<aoa.length;i++){
       const r=aoa[i];if(!r)continue;
       const rep=mcNormPhone(r[col.rep]), caller=mcNormPhone(r[col.caller]);
-      if(!rep&&!caller)continue;
+      if(!rep&&!caller){skipNoPhone++;continue;}
       const corp=mcCorpFromGroup(r[col.grp]);if(!corp){badCorp++;continue;}
       const dp=mcDatePart(r[col.date]);
       const startTs=dp?dp.getTime()+mcTimeMs(r[col.start]):mcFullTs(r[col.start]);
-      if(startTs==null)continue;
+      if(startTs==null){nullStart++;continue;}
       const dur=mcDur(r[col.dur]);
       const status=String(r[col.status]==null?'':r[col.status]).trim();
       const valid=status.includes('연결')&&dur>=90;
       rows.push({corp,caller,rep,startTs,dur,status,valid});
     }
   }
-  return {rows,warn:badCorp?`IN call: 법인 미분류(뇌새김/케어 키워드 없음) ${badCorp.toLocaleString()}행 제외됨.`:''};
+  dbg.parsed=rows.length; dbg.badCorp=badCorp; dbg.nullStart=nullStart; dbg.skipNoPhone=skipNoPhone;
+  dbg.sample=rows.slice(0,3);
+  window.mcIncallDebug=dbg; console.log('[부재인입 IN call 파싱 진단]',dbg);
+  return {rows,warn:badCorp?`IN call: 법인 미분류(I열 그룹에 뇌새김/케어 키워드 없음) ${badCorp.toLocaleString()}행 제외됨. (콘솔의 'IN call 파싱 진단' 확인)`:''};
 }
 function mcParseCallback(wb){
   const rows=[];let noDate=0,total=0;
