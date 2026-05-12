@@ -7784,7 +7784,7 @@ function mcParseCallback(wb){
       total++;
       const callTs=mcFullTs(r[4]);
       if(callTs==null){noDate++;continue;}
-      rows.push({rep,caller,callTs,dup:r[2]||1});
+      rows.push({rep,caller,callTs,dup:r[2]||1,repRaw:String(r[0]).trim()});
     }
   }
   let warn='';
@@ -7860,7 +7860,7 @@ function mcBuildJudged(){
     sampleIncall:Array.from(incSeen).slice(0,3), sampleIncallKeys:Array.from(incallMap.keys()).slice(0,3),
     cbWithCallerRepKey:0, cbWithCallerOnly:0, cbWithinTime:0, sampleCbKeys:[]};
   // 콜백 dedup + judge
-  const cbSeen=new Set();const out=[];let unmapped=0;
+  const cbSeen=new Set();const out=[];let unmapped=0;const unmappedRepMap=new Map();
   for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
     const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
     if(dbg.sampleCbKeys.length<3)dbg.sampleCbKeys.push(cb.caller+'|'+cb.rep+' @'+new Date(cb.callTs).toISOString());
@@ -7868,7 +7868,7 @@ function mcBuildJudged(){
     if(incCallerSet.has(cb.caller))dbg.cbWithCallerOnly++;
     if((incallMap.get(cb.caller+'|'+cb.rep)||[]).some(r=>Math.abs(r.startTs-cb.callTs)<=120000))dbg.cbWithinTime++;
     const corp=mapping.get(cb.rep);
-    if(!corp){unmapped++;continue;}
+    if(!corp){unmapped++;const k=cb.rep||'(빈값)';const e=unmappedRepMap.get(k)||{대표번호_정규화:k,원본:cb.repRaw||'',건수:0};e.건수++;unmappedRepMap.set(k,e);continue;}
     // Step3: 계약
     const cConts=contractMap.get(corp+'|'+cb.caller)||[];
     let contractState,matchedCol='-';
@@ -7894,7 +7894,10 @@ function mcBuildJudged(){
   }
   dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
   dbg.missed=out.filter(r=>r.isMissed).length; dbg.validDenom=out.filter(r=>r.validDenom).length;
+  dbg.unmappedReps=Array.from(unmappedRepMap.values()).sort((a,b)=>b.건수-a.건수);
+  dbg.mappingSampleKeys=Array.from(mapping.keys()).slice(0,5);
   window.mcDebug=dbg; console.log('[부재인입 진단]',dbg);
+  if(dbg.unmappedReps.length){console.log('[부재인입] 매핑 테이블에 없는 대표번호 '+dbg.unmappedReps.length+'종:');console.table(dbg.unmappedReps);}
   return {records:out,unmapped,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
 }
 
