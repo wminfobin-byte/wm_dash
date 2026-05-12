@@ -1400,8 +1400,8 @@ tr.row-h td{background:var(--gh-light)}
       <div id="mcWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:14px;font-size:13px"></div>
 
       <div class="kpi-grid" style="margin-top:18px">
-        <div class="kpi-card"><div class="kl">전체 모수 (콜 수)</div><div class="kv" id="mcKpiDenom">-</div><div class="ks" id="mcKpiDenomSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 콜 수</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
+        <div class="kpi-card"><div class="kl">부재 인입 모수 (콜 수)</div><div class="kv" id="mcKpiDenom">-</div><div class="ks" id="mcKpiDenomSub"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 콜 수 (미수신)</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv">-</div><div class="ks" id="mcKpiRecvSub"></div></div>
         <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss">-</div><div class="ks" id="mcKpiMissSub"></div></div>
       </div>
@@ -7990,21 +7990,22 @@ function mcRender(){
   // KPI
   const setKpi=(idV,idS,val,sub)=>{document.getElementById(idV).textContent=val;document.getElementById(idS).textContent=sub;};
   const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
-  const recvCalls=st.denomAll-st.missedCalls, recvRate=st.denomAll?recvCalls/st.denomAll*100:0;
-  const pRecvRate=pst.denomAll?(pst.denomAll-pst.missedCalls)/pst.denomAll*100:0;
-  document.getElementById('mcKpiDenom').textContent=st.denomAll.toLocaleString()+'건';
-  document.getElementById('mcKpiDenomSub').innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}건${delta(st.denomAll,pst.denomAll,'',true)}`;
+  // 분모 = 유효 모수 (받았어야 할 콜백 콜). 수신 = 유효통화 연결, 미수신(부재) = 매칭없음·유효통화아님. 수신률+미수신률=100%
+  const recvCalls=st.denomValid-st.missedCalls, recvRate=st.denomValid?recvCalls/st.denomValid*100:0;
+  const pRecvRate=pst.denomValid?(pst.denomValid-pst.missedCalls)/pst.denomValid*100:0;
+  document.getElementById('mcKpiDenom').textContent=st.denomValid.toLocaleString()+'건';
+  document.getElementById('mcKpiDenomSub').innerHTML=`전체 콜백 ${st.denomAll.toLocaleString()}콜 중${delta(st.denomValid,pst.denomValid,'',true)}`;
   document.getElementById('mcKpiCalls').textContent=st.missedCalls.toLocaleString()+'건';
-  document.getElementById('mcKpiCallsSub').innerHTML=`전체 모수 ${st.denomAll.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+  document.getElementById('mcKpiCallsSub').innerHTML=`모수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
   document.getElementById('mcKpiRecv').textContent=recvRate.toFixed(1)+'%';
-  document.getElementById('mcKpiRecvSub').innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
-  document.getElementById('mcKpiMiss').textContent=st.rateAll.toFixed(1)+'%';
-  document.getElementById('mcKpiMissSub').innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomAll.toLocaleString()}콜 · 유효기준 ${st.rateValid.toFixed(1)}%${delta(st.rateAll,pst.rateAll,'pp',false)}`;
+  document.getElementById('mcKpiRecvSub').innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+  document.getElementById('mcKpiMiss').textContent=st.rateValid.toFixed(1)+'%';
+  document.getElementById('mcKpiMissSub').innerHTML=`= 부재 ${st.missedCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
   // 경고바
   const warns=[];
   if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
   if(!mcFilesByType('incall',null).length) warns.push('IN call 데이터 미업로드 — 모든 콜백이 "매칭 없음 → 부재"로 집계됩니다');
-  if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 유효 미수신률이 계산되지 않습니다');
+  if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 수신률·미수신률이 계산되지 않습니다');
   for(const f of mcFiles){if(f.warn)warns.push(f.warn);}
   const wb=document.getElementById('mcWarnBar');
   if(warns.length){wb.classList.remove('hidden');wb.innerHTML='⚠️ '+warns.map(w=>`<div>${w}</div>`).join('');}else wb.classList.add('hidden');
@@ -8021,7 +8022,7 @@ function mcBucketKey(ts){return mcUnit==='day'?mcDayMs(ts):mcUnit==='week'?mcWee
 function mcBucketLabel(k){return mcUnit==='day'?mcFmtDate(k):mcUnit==='week'?mcWeekLabel(k):mcMonthLabel(k);}
 
 function mcRenderTrend(scope,dateScope){
-  document.getElementById('mcTrendUnitLabel').textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=유효 미수신률)`;
+  document.getElementById('mcTrendUnitLabel').textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=미수신률)`;
   const byCorp=mcCorpFilter==='all';
   const buckets=new Map();
   const src=byCorp?dateScope:scope;
@@ -8042,7 +8043,7 @@ function mcRenderTrend(scope,dateScope){
   }else{
     ds.push({type:'bar',label:(mcCorpFilter)+' 부재콜',data:keys.map(k=>buckets.get(k).all.m),backgroundColor:mcCorpFilter==='위버스마인드'?'#4361EE':'#F0920E',yAxisID:'y'});
   }
-  ds.push({type:'line',label:'유효 미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.all.v?+(b.all.m/b.all.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false});
+  ds.push({type:'line',label:'미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.all.v?+(b.all.m/b.all.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false});
   if(mcChart)mcChart.destroy();
   const ctx=document.getElementById('mcTrendChart');
   mcChart=new Chart(ctx,{data:{labels,datasets:ds},options:{
