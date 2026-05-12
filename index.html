@@ -7840,15 +7840,24 @@ function mcBuildJudged(){
   for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])) for(const p of (c.phones||[])) dedupAdd(contractMap,c.corp,p.v,c);
   for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])) for(const p of (d.phones||[])){const k=d.corp+'|'+p.v;if(!dbSet.has(k))dbSet.set(k,p.col);}
   // IN call lookup (발신자|대표 → 레코드[]) + dedup
-  const incallMap=new Map();const incSeen=new Set();
+  const incallMap=new Map();const incSeen=new Set();const incCallerSet=new Set();
   for(const f of mcFilesByType('incall',null)) for(const ic of (f.rows||[])){
     const uk=ic.caller+'_'+ic.rep+'_'+ic.startTs+'_'+ic.dur;if(incSeen.has(uk))continue;incSeen.add(uk);
     const k=ic.caller+'|'+ic.rep;if(!incallMap.has(k))incallMap.set(k,[]);incallMap.get(k).push(ic);
+    incCallerSet.add(ic.caller);
   }
+  // 진단용 카운터
+  const dbg={incallRows:incSeen.size, incallFiles:mcFilesByType('incall',null).length,
+    sampleIncall:Array.from(incSeen).slice(0,3), sampleIncallKeys:Array.from(incallMap.keys()).slice(0,3),
+    cbWithCallerRepKey:0, cbWithCallerOnly:0, cbWithinTime:0, sampleCbKeys:[]};
   // 콜백 dedup + judge
   const cbSeen=new Set();const out=[];let unmapped=0;
   for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
     const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
+    if(dbg.sampleCbKeys.length<3)dbg.sampleCbKeys.push(cb.caller+'|'+cb.rep+' @'+new Date(cb.callTs).toISOString());
+    if(incallMap.has(cb.caller+'|'+cb.rep))dbg.cbWithCallerRepKey++;
+    if(incCallerSet.has(cb.caller))dbg.cbWithCallerOnly++;
+    if((incallMap.get(cb.caller+'|'+cb.rep)||[]).some(r=>Math.abs(r.startTs-cb.callTs)<=120000))dbg.cbWithinTime++;
     const corp=mapping.get(cb.rep);
     if(!corp){unmapped++;continue;}
     // Step3: 계약
@@ -7874,6 +7883,9 @@ function mcBuildJudged(){
     else{isMissed=true;reason='유효통화 아님';}
     out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol});
   }
+  dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
+  dbg.missed=out.filter(r=>r.isMissed).length; dbg.validDenom=out.filter(r=>r.validDenom).length;
+  window.mcDebug=dbg; console.log('[부재인입 진단]',dbg);
   return {records:out,unmapped,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
 }
 
