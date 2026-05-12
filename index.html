@@ -7564,7 +7564,7 @@ async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)awa
 
 // ── 정규화 / 날짜 헬퍼 ──
 function mcNormPhone(p){if(p==null)return '';return String(p).replace(/[^0-9]/g,'').replace(/^0+/,'');}
-function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
+function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김')||s.includes('톡이즈'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
 function mcCorpFromText(s){const t=String(s||'').trim();if(t.includes('위버')||t.includes('뇌새김'))return '위버스마인드';if(t.includes('케어')||/^w/i.test(t))return '더블유케어';return null;}
 function mcDatePart(v){
   if(v==null||v==='')return null;
