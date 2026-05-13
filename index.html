@@ -7366,8 +7366,8 @@ async function gdDownloadExcel(){
   }
 
   const allResults=await gdGetAllResults();
-  // 시트는 오래된 것 → 최신 순으로 배치
-  allResults.sort((a,b)=>a.sheetName.localeCompare(b.sheetName));
+  // 시트는 최신 → 오래된 순으로 배치 (가장 최근 기간이 맨 앞)
+  allResults.sort((a,b)=>b.sheetName.localeCompare(a.sheetName));
   const wb=XLSX.utils.book_new();
   for(const period of allResults){
     const ws=buildSheet(period);
