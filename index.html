@@ -6538,6 +6538,80 @@ window.gdDebugCancels=function(keys){
   return out;
 };
 
+// 디버그: 코디명 배열을 넘기면 계약(cont) 파일에서 해당 OB담당자의 행을 전부 펼쳐 실계약수 판정 추적
+// 사용: gdDebugContractsByMember(['(R_대전)신미경', ...])
+window.gdDebugContractsByMember=function(names){
+  if(!Array.isArray(names)||names.length===0){console.warn('이름 배열 필요');return;}
+  const attendFile=gdGetLatest('attend');
+  const dbFile=gdGetLatest('db');
+  const contFiles=gdGetFilesByType('cont');
+  let contFile=null,bd=Infinity;
+  for(const c of contFiles){const d=Math.abs(c.uploadTime-(dbFile?.uploadTime||0));if(d<bd){bd=d;contFile=c;}}
+  if(!attendFile||!contFile||!dbFile){console.warn('파일 부족 (db/cont/attend)');return;}
+  const {members}=gdGetMembers(attendFile.data);
+  const memberSet=new Set(members);
+  const fmt=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+  const norm=n=>(n||'').replace(/\(R_[^)]+\)/,'').trim();
+
+  // 회차(분배일 min~max) 구해서 참고용으로 표시
+  let minDD=null,maxDD=null;
+  for(let i=1;i<dbFile.data.length;i++){
+    const d=parseDate(dbFile.data[i][COL.distributeDate]);
+    if(d){if(!maxDD||d>maxDD)maxDD=d;if(!minDD||d<minDD)minDD=d;}
+  }
+  console.log(`회차(분배일): ${fmt(minDD)} ~ ${fmt(maxDD)} / 멤버 ${members.length}명 / cont 행 ${contFile.data.length-1}`);
+
+  const wantedNorms=new Set(names.map(norm));
+  const grouped={}; names.forEach(n=>grouped[n]=[]);
+
+  for(let i=1;i<contFile.data.length;i++){
+    const row=contFile.data[i]; if(!row) continue;
+    const obRaw=str(row[COL.obName]);
+    if(!obRaw) continue;
+    const obNorm=norm(obRaw);
+    // 어떤 요청 이름과 매칭되는지
+    const matched=names.find(n=>n===obRaw||norm(n)===obNorm);
+    if(!matched) continue;
+
+    const ck=str(row[COL.customerKey]);
+    const custStatus=str(row[COL.customerStatus]);
+    const lastCall=str(row[COL.lastCallTime]);
+    const orderDt=str(row[COL.orderDate]);
+    const orderDate=parseDate(orderDt);
+    const distDate=parseDate(row[COL.distributeDate]);
+    const dbInfo=str(row[COL.dbInfo]);
+    const mediaCode=str(row[COL.mediaCode]);
+
+    // 실제 gdCountContracts 필터를 그대로 재현
+    const reasons=[];
+    if(!orderDate) reasons.push('오더일 공란(계약 아님)');
+    if(distDate && isHoliday(distDate)) reasons.push(`분배일 휴일(${fmt(distDate)})`);
+    if(obRaw.includes('군자')||obRaw.includes('관리자')||obRaw.includes('삭제요청')) reasons.push('OB 군자/관리자/삭제요청');
+    if(mediaCode.toLowerCase().includes('talkis')) reasons.push('매체 talkis');
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) reasons.push(`dbInfo 'in'+무매체("${dbInfo}")`);
+    const cls=classifyStatus(custStatus,lastCall,orderDt);
+    if(!(cls==='계약'||cls==='취소')) reasons.push(`상태 ${cls}("${custStatus}")`);
+    const memberOK=memberSet.has(obRaw);
+    if(!memberOK && reasons.length===0) reasons.push(`명단 미일치("${obRaw}")`);
+
+    grouped[matched].push({
+      row:i+1, key:ck, ob:obRaw,
+      distDate:fmt(distDate), orderDate:fmt(orderDate),
+      custStatus, dbInfo, mediaCode, cls,
+      status: reasons.length===0?'✅ 실계약카운트':`❌ ${reasons.join(' / ')}`
+    });
+  }
+
+  for(const name of names){
+    const rows=grouped[name];
+    const ok=rows.filter(r=>r.status==='✅ 실계약카운트').length;
+    console.log(`\n=== ${name} → ${ok}/${rows.length}행 카운트 ===`);
+    if(rows.length>0) console.table(rows);
+    else console.log('(cont 파일에 해당 OB담당자 행 없음)');
+  }
+  return grouped;
+};
+
 // 디버그: 코디명 배열을 넘기면 cancel 파일에서 해당 매니저의 회차내 행을 전부 펼쳐서 보여줌
 // 사용: gdDebugByMember(['(R_대전)신미경','(R_대전)박연정', ...])
 window.gdDebugByMember=function(names){
