@@ -8677,7 +8677,12 @@ async function mcDownloadExcel(){
       const recvRate=b.denom?recv/b.denom:0;
       const missRate=b.denom?b.missed/b.denom:0;
       tD+=b.denom;tM+=b.missed;
-      const dateCell=unit==='day'?new Date(k):mcBucketLabel(k);
+      // day: ms → 엑셀 serial(1900 epoch, 로컬 타임존 보정). 그 외: bucket 라벨 문자열
+      let dateCell;
+      if(unit==='day'){
+        const tzOff=new Date(k).getTimezoneOffset()*60000;
+        dateCell=(k-tzOff)/86400000+25569;
+      }else dateCell=mcBucketLabel(k);
       dataRows.push([dateCell,b.denom,recv,recvRate,b.missed,missRate]);
     }
     const tR=tD-tM, tRR=tD?tR/tD:0, tMR=tD?tM/tD:0;
@@ -8719,9 +8724,9 @@ async function mcDownloadExcel(){
       const r=6+i;
       const altBg=i%2===1; // 짝수 행만 옅은 배경
       if(unit==='day'){
+        // aoa_to_sheet가 serial(number)을 t='n'으로 자동 설정 → numFmt만 부여
         const a=XLSX.utils.encode_cell({r,c:1});
         if(ws[a]){
-          ws[a].t='d';
           ws[a].s=altBg?{font:{name:FONT,sz:11},fill:{patternType:'solid',fgColor:{rgb:C.rowAlt}},alignment:{horizontal:'center',vertical:'center'},border:BD,numFmt:'yyyy-mm-dd"("aaa")"'}:STY_DATE;
         }
       }else setS(ws,r,1,altBg?STY_LABEL_ALT:{font:{name:FONT,sz:11},alignment:{horizontal:'center',vertical:'center'},border:BD});
