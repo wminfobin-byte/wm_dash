@@ -1400,17 +1400,7 @@ tr.row-h td{background:var(--gh-light)}
 
       <div id="mcWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:14px;font-size:13px"></div>
 
-      <div class="kpi-grid" style="margin-top:18px">
-        <div class="kpi-card"><div class="kl">부재 인입 모수 (콜 수)</div><div class="kv" id="mcKpiDenom">-</div><div class="ks" id="mcKpiDenomSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 콜 수 (미수신)</div><div class="kv" id="mcKpiCalls">-</div><div class="ks" id="mcKpiCallsSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv">-</div><div class="ks" id="mcKpiRecvSub"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss">-</div><div class="ks" id="mcKpiMissSub"></div></div>
-      </div>
-
-      <div class="ia-section" style="margin-bottom:18px">
-        <h3>부재 인입 추이 <span class="table-sub" id="mcTrendUnitLabel"></span></h3>
-        <div class="ia-chart-wrap"><canvas id="mcTrendChart"></canvas></div>
-      </div>
+      <div id="mcKpiSections" style="margin-top:18px"></div>
 
       <div class="ia-section" style="margin-bottom:18px;overflow-x:auto">
         <h3>법인별 비교</h3>
@@ -7734,7 +7724,7 @@ async function gdDownloadAprilInitExcel(){
 <script>
 // ── IndexedDB ──
 const MC_DB_NAME='missedCallDashboard', MC_DB_VER=1;
-let mcIdb=null, mcFiles=[], mcLoaded=false, mcJudged=null, mcMeta=null, mcChart=null;
+let mcIdb=null, mcFiles=[], mcLoaded=false, mcJudged=null, mcMeta=null, mcCharts={};
 let mcCorpFilter='all', mcUnit='day', mcDetailPage=1;
 const MC_TYPES=[
   {key:'incall',corp:'',id:'incall'},
@@ -8185,26 +8175,8 @@ function mcRender(){
   if(!mcJudged)return;
   const [start,end]=mcRangeMs();
   const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end); // 매핑된 콜백 전체(법인 필터 무관)
-  const scope=dateScope.filter(r=>mcCorpFilter==='all'||r.corp===mcCorpFilter);
-  // 전기 비교
   const span=isFinite(start)&&isFinite(end)?(end-start):0;
-  let prevScope=[];
-  if(span>0){const ps=start-span,pe=start;prevScope=mcJudged.filter(r=>r.callTs>=ps&&r.callTs<pe&&(mcCorpFilter==='all'||r.corp===mcCorpFilter));}
-  const st=mcStats(scope), pst=mcStats(prevScope);
-  // KPI
-  const setKpi=(idV,idS,val,sub)=>{document.getElementById(idV).textContent=val;document.getElementById(idS).textContent=sub;};
-  const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
-  // 분모 = 유효 모수 (받았어야 할 콜백 콜). 수신 = 유효통화 연결, 미수신(부재) = 매칭없음·유효통화아님. 수신률+미수신률=100%
-  const recvCalls=st.denomValid-st.missedCalls, recvRate=st.denomValid?recvCalls/st.denomValid*100:0;
-  const pRecvRate=pst.denomValid?(pst.denomValid-pst.missedCalls)/pst.denomValid*100:0;
-  document.getElementById('mcKpiDenom').textContent=st.denomValid.toLocaleString()+'건';
-  document.getElementById('mcKpiDenomSub').innerHTML=`전체 콜백 ${st.denomAll.toLocaleString()}콜 중${delta(st.denomValid,pst.denomValid,'',true)}`;
-  document.getElementById('mcKpiCalls').textContent=st.missedCalls.toLocaleString()+'건';
-  document.getElementById('mcKpiCallsSub').innerHTML=`모수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
-  document.getElementById('mcKpiRecv').textContent=recvRate.toFixed(1)+'%';
-  document.getElementById('mcKpiRecvSub').innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
-  document.getElementById('mcKpiMiss').textContent=st.rateValid.toFixed(1)+'%';
-  document.getElementById('mcKpiMissSub').innerHTML=`= 부재 ${st.missedCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+  const prevDateScope=span>0?mcJudged.filter(r=>r.callTs>=(start-span)&&r.callTs<start):[];
   // 경고바
   const warns=[];
   if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
@@ -8213,8 +8185,49 @@ function mcRender(){
   for(const f of mcFiles){if(f.warn)warns.push(f.warn);}
   const wb=document.getElementById('mcWarnBar');
   if(warns.length){wb.classList.remove('hidden');wb.innerHTML='⚠️ '+warns.map(w=>`<div>${w}</div>`).join('');}else wb.classList.add('hidden');
-  // 추이 차트
-  mcRenderTrend(scope,dateScope);
+  // 법인 섹션 빌드
+  for(const k in mcCharts){if(mcCharts[k])mcCharts[k].destroy();}
+  mcCharts={};
+  const corpList=mcCorpFilter==='all'?['위버스마인드','더블유케어']:[mcCorpFilter];
+  const container=document.getElementById('mcKpiSections');
+  let html='';
+  for(const c of corpList){
+    const cid=c==='위버스마인드'?'weavers':'wcare';
+    const color=c==='위버스마인드'?'#4361EE':'#F0920E';
+    const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'24px':'0'} 0 12px"><div style="width:6px;height:22px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:17px">${c}</h3></div>`:'';
+    html+=`<div class="mc-corp-block">${heading}
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kl">부재 인입 수</div><div class="kv" id="mcKpiDenom_${cid}">-</div><div class="ks" id="mcKpiDenomSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 미수신</div><div class="kv" id="mcKpiCalls_${cid}">-</div><div class="ks" id="mcKpiCallsSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv_${cid}">-</div><div class="ks" id="mcKpiRecvSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss_${cid}">-</div><div class="ks" id="mcKpiMissSub_${cid}"></div></div>
+      </div>
+      <div class="ia-section" style="margin-top:14px;margin-bottom:0">
+        <h3>부재 인입 추이 <span class="table-sub" id="mcTrendUnitLabel_${cid}"></span></h3>
+        <div class="ia-chart-wrap"><canvas id="mcTrendChart_${cid}"></canvas></div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML=html;
+  // 법인별 KPI/차트 채우기
+  for(const c of corpList){
+    const cid=c==='위버스마인드'?'weavers':'wcare';
+    const scope=dateScope.filter(r=>r.corp===c);
+    const prevScope=prevDateScope.filter(r=>r.corp===c);
+    const st=mcStats(scope), pst=mcStats(prevScope);
+    const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
+    const recvCalls=st.denomValid-st.missedCalls, recvRate=st.denomValid?recvCalls/st.denomValid*100:0;
+    const pRecvRate=pst.denomValid?(pst.denomValid-pst.missedCalls)/pst.denomValid*100:0;
+    document.getElementById(`mcKpiDenom_${cid}`).textContent=st.denomValid.toLocaleString()+'건';
+    document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`전체 콜백 ${st.denomAll.toLocaleString()}콜 중${delta(st.denomValid,pst.denomValid,'',true)}`;
+    document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
+    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`모수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+    document.getElementById(`mcKpiRecv_${cid}`).textContent=recvRate.toFixed(1)+'%';
+    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+    document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
+    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 ${st.missedCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+    mcRenderTrend(scope,cid,c);
+  }
   // 법인별 비교 (날짜 범위 내, 법인 필터 무관)
   mcRenderCorpTable(dateScope);
   // 상세 리스트
@@ -8225,36 +8238,29 @@ function mcDayMs(ts){const d=new Date(ts);return new Date(d.getFullYear(),d.getM
 function mcBucketKey(ts){return mcUnit==='day'?mcDayMs(ts):mcUnit==='week'?mcWeekKey(ts):mcMonthKey(ts);}
 function mcBucketLabel(k){return mcUnit==='day'?mcFmtDate(k):mcUnit==='week'?mcWeekLabel(k):mcMonthLabel(k);}
 
-function mcRenderTrend(scope,dateScope){
-  document.getElementById('mcTrendUnitLabel').textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=미수신률)`;
-  const byCorp=mcCorpFilter==='all';
+function mcRenderTrend(scope,cid,corpName){
+  document.getElementById(`mcTrendUnitLabel_${cid}`).textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=미수신률)`;
   const buckets=new Map();
-  const src=byCorp?dateScope:scope;
-  for(const r of src){
+  for(const r of scope){
     const k=mcBucketKey(r.callTs);
-    if(!buckets.has(k))buckets.set(k,{weavers:{m:0,v:0},wcare:{m:0,v:0},all:{m:0,v:0}});
+    if(!buckets.has(k))buckets.set(k,{m:0,v:0});
     const b=buckets.get(k);
-    const slot=r.corp==='위버스마인드'?b.weavers:b.wcare;
-    if(r.isMissed){slot.m++;b.all.m++;}
-    if(r.validDenom){slot.v++;b.all.v++;}
+    if(r.isMissed)b.m++;
+    if(r.validDenom)b.v++;
   }
   const keys=Array.from(buckets.keys()).sort((a,b)=>a-b);
   const labels=keys.map(mcBucketLabel);
-  const ds=[];
-  if(byCorp){
-    ds.push({type:'bar',label:'위버스마인드 부재콜',data:keys.map(k=>buckets.get(k).weavers.m),backgroundColor:'#4361EE',stack:'m',yAxisID:'y'});
-    ds.push({type:'bar',label:'더블유케어 부재콜',data:keys.map(k=>buckets.get(k).wcare.m),backgroundColor:'#F0920E',stack:'m',yAxisID:'y'});
-  }else{
-    ds.push({type:'bar',label:(mcCorpFilter)+' 부재콜',data:keys.map(k=>buckets.get(k).all.m),backgroundColor:mcCorpFilter==='위버스마인드'?'#4361EE':'#F0920E',yAxisID:'y'});
-  }
-  ds.push({type:'line',label:'미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.all.v?+(b.all.m/b.all.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false});
-  if(mcChart)mcChart.destroy();
-  const ctx=document.getElementById('mcTrendChart');
-  mcChart=new Chart(ctx,{data:{labels,datasets:ds},options:{
+  const color=corpName==='위버스마인드'?'#4361EE':'#F0920E';
+  const ds=[
+    {type:'bar',label:`${corpName} 부재콜`,data:keys.map(k=>buckets.get(k).m),backgroundColor:color,yAxisID:'y'},
+    {type:'line',label:'미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.v?+(b.m/b.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false}
+  ];
+  const ctx=document.getElementById(`mcTrendChart_${cid}`);
+  mcCharts[cid]=new Chart(ctx,{data:{labels,datasets:ds},options:{
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{
-      x:{stacked:byCorp},
-      y:{stacked:byCorp,beginAtZero:true,position:'left',title:{display:true,text:'부재 콜 수'}},
+      x:{},
+      y:{beginAtZero:true,position:'left',title:{display:true,text:'부재 콜 수'}},
       y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'미수신률 %'},ticks:{callback:v=>v+'%'}}
     },
     plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${c.parsed.y.toLocaleString()}건`}}}
