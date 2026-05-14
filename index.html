@@ -8255,6 +8255,7 @@ function mcRender(){
       ${subHead('④ 추이','일자·주차·월 단위')}
       <div class="ia-chart-wrap" style="margin-top:0"><canvas id="mcTrendChart_${cid}"></canvas></div>
       <div id="mcTrendUnitLabel_${cid}" style="font-size:11px;color:#94a3b8;margin-top:4px;text-align:center"></div>
+      <div style="margin-top:14px;overflow-x:auto"><table class="ia-table" id="mcTrendTable_${cid}" style="min-width:680px;font-size:12.5px"></table></div>
     </div>`;
   }
   container.innerHTML=html;
@@ -8304,6 +8305,7 @@ function mcRender(){
       document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= 전환 ${convCust.toLocaleString()} / 부재 인입 ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
     }
     mcRenderTrend(scope,cid,c);
+    mcRenderTrendTable(scope,cid,c);
   }
   // 법인별 비교 (날짜 범위 내, 법인 필터 무관)
   mcRenderCorpTable(dateScope,hasStatusMetaByCorp);
@@ -8342,6 +8344,59 @@ function mcRenderTrend(scope,cid,corpName){
     },
     plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${c.parsed.y.toLocaleString()}건`}}}
   }});
+}
+
+function mcRenderTrendTable(scope,cid,corpName){
+  // validDenom 행만 집계 (KPI/차트와 동일 모집단)
+  const buckets=new Map();
+  for(const r of scope){
+    if(!r.validDenom)continue;
+    const k=mcBucketKey(r.callTs);
+    if(!buckets.has(k))buckets.set(k,{denom:0,missed:0});
+    const b=buckets.get(k);
+    b.denom++; if(r.isMissed)b.missed++;
+  }
+  const keys=Array.from(buckets.keys()).sort((a,b)=>b-a); // 최신이 위로
+  let tDenom=0,tMissed=0,rowsHtml='';
+  for(const k of keys){
+    const b=buckets.get(k);
+    const recv=b.denom-b.missed;
+    const recvRate=b.denom?recv/b.denom*100:0;
+    const missRate=b.denom?b.missed/b.denom*100:0;
+    tDenom+=b.denom; tMissed+=b.missed;
+    rowsHtml+=`<tr>
+      <td style="white-space:nowrap">${mcBucketLabel(k)}</td>
+      <td>${b.denom.toLocaleString()}</td>
+      <td>${recv.toLocaleString()}</td>
+      <td style="color:#2ec4b6">${recvRate.toFixed(1)}%</td>
+      <td>${b.missed.toLocaleString()}</td>
+      <td style="color:#e71d36">${missRate.toFixed(1)}%</td>
+    </tr>`;
+  }
+  const tRecv=tDenom-tMissed;
+  const tRecvRate=tDenom?tRecv/tDenom*100:0;
+  const tMissRate=tDenom?tMissed/tDenom*100:0;
+  const unitLabel=mcUnit==='day'?'일자':mcUnit==='week'?'주차':'월';
+  document.getElementById(`mcTrendTable_${cid}`).innerHTML=`
+    <thead><tr>
+      <th style="text-align:left">${unitLabel}</th>
+      <th>부재 인입 수</th>
+      <th>부재 인입 수신</th>
+      <th>수신률</th>
+      <th>부재 인입 미수신</th>
+      <th>미수신률</th>
+    </tr></thead>
+    <tbody>
+      <tr style="background:#2d3748;color:#fff;font-weight:700">
+        <td>합계</td>
+        <td>${tDenom.toLocaleString()}</td>
+        <td>${tRecv.toLocaleString()}</td>
+        <td>${tRecvRate.toFixed(1)}%</td>
+        <td>${tMissed.toLocaleString()}</td>
+        <td>${tMissRate.toFixed(1)}%</td>
+      </tr>
+      ${rowsHtml||'<tr><td colspan="6" style="padding:14px;color:#94a3b8">기간 내 데이터 없음</td></tr>'}
+    </tbody>`;
 }
 
 function mcRenderCorpTable(dateScope,hasStatusMetaByCorp){
