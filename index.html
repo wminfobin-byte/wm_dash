@@ -8203,7 +8203,7 @@ function mcRender(){
     warns.push(w);
   }
   if(!mcFilesByType('incall',null).length) warns.push('IN call 데이터 미업로드 — 모든 콜백이 "매칭 없음 → 부재"로 집계됩니다');
-  if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 수신률·미수신률이 계산되지 않습니다');
+  if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 부재 인입 수가 0이라 수신률·미수신률이 계산되지 않습니다');
   // 계약 파일에 상태값 메타가 없으면(구버전 업로드) 재업로드 안내 (법인별)
   const hasStatusMetaByCorp={};
   for(const c of ['위버스마인드','더블유케어']){
@@ -8259,11 +8259,11 @@ function mcRender(){
     document.getElementById(`mcKpiDenom_${cid}`).textContent=st.denomValid.toLocaleString()+'건';
     document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`전체 콜백 ${st.denomAll.toLocaleString()}콜 중${delta(st.denomValid,pst.denomValid,'',true)}`;
     document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`모수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`부재 인입 수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
     document.getElementById(`mcKpiRecv_${cid}`).textContent=recvRate.toFixed(1)+'%';
-    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
-    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 ${st.missedCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 인입 미수신 ${st.missedCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
     // 콜백→실계약 전환 KPI (상태값 메타 있는 법인만)
     if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
       const uniqPhones=new Set(scope.map(r=>r.caller));
@@ -8273,7 +8273,7 @@ function mcRender(){
       const cRate=uniqPhones.size?convPhones.size/uniqPhones.size*100:0;
       const pCRate=pUniqPhones.size?pConvPhones.size/pUniqPhones.size*100:0;
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}콜 기준${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
+      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 수 ${st.denomValid.toLocaleString()}콜 기준${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
       document.getElementById(`mcKpiConv_${cid}`).textContent=convPhones.size.toLocaleString()+'명';
       document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`콜백 이후 실계약 발생${delta(convPhones.size,pConvPhones.size,'',true)}`;
       document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
