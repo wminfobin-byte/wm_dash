@@ -8266,10 +8266,12 @@ function mcRender(){
     document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 인입 미수신 ${st.missedCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
     // 콜백→실계약 전환 KPI (상태값 메타 있는 법인만)
     if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
-      const uniqPhones=new Set(scope.map(r=>r.caller));
-      const convPhones=new Set(scope.filter(r=>r.contractValid).map(r=>r.caller));
-      const pUniqPhones=new Set(prevScope.map(r=>r.caller));
-      const pConvPhones=new Set(prevScope.filter(r=>r.contractValid).map(r=>r.caller));
+      const validRecs=scope.filter(r=>r.validDenom);
+      const pValidRecs=prevScope.filter(r=>r.validDenom);
+      const uniqPhones=new Set(validRecs.map(r=>r.caller));
+      const convPhones=new Set(validRecs.filter(r=>r.contractValid).map(r=>r.caller));
+      const pUniqPhones=new Set(pValidRecs.map(r=>r.caller));
+      const pConvPhones=new Set(pValidRecs.filter(r=>r.contractValid).map(r=>r.caller));
       const cRate=uniqPhones.size?convPhones.size/uniqPhones.size*100:0;
       const pCRate=pUniqPhones.size?pConvPhones.size/pUniqPhones.size*100:0;
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
