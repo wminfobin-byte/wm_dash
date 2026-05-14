@@ -7737,6 +7737,8 @@ const MC_TYPES=[
 ];
 // 법인별 고객 전화번호 컬럼 (0-indexed). 위버스마인드=M열만(차등성과/표준 WM_고객관리 구조), 더블유케어=M·N·O열
 const MC_PHONE_COLS={'위버스마인드':[12],'더블유케어':[12,13,14]};
+// 계약 파일 컬럼 (V열=최종통화, X열=오더일은 양쪽 공통. 고객상태는 위버스 AD(29) / 더블유 AC(28))
+const MC_CONTRACT_COLS={'위버스마인드':{status:29,lastCall:21,orderDt:23},'더블유케어':{status:28,lastCall:21,orderDt:23}};
 const MC_COL_LABEL={12:'M',13:'N',14:'O'};
 
 function mcOpenIDB(){
@@ -7999,11 +8001,15 @@ function mcParseCustomerLike(wb,type,corp){
       if(!phones.length)continue;
       const custKey=String(r[6]==null?'':r[6])||String(r[5]==null?'':r[5]);
       total++;
-      const orderTs=mcFullTs(r[23]);
+      const cc=MC_CONTRACT_COLS[corp]||MC_CONTRACT_COLS['위버스마인드'];
+      const orderTs=mcFullTs(r[cc.orderDt]);
       if(type==='contract'){
         if(orderTs==null)continue; // 유효 계약: X열(오더일) 값 있는 행만
         valid++;
-        rows.push({corp,phones,custKey,orderTs});
+        const status=r[cc.status]==null?'':String(r[cc.status]);
+        const lastCallStr=r[cc.lastCall]==null?'':String(r[cc.lastCall]);
+        const orderDtStr=r[cc.orderDt]==null?'':String(r[cc.orderDt]);
+        rows.push({corp,phones,custKey,orderTs,status,lastCallStr,orderDtStr});
       }else{
         rows.push({corp,phones,custKey});
       }
@@ -8065,16 +8071,22 @@ function mcBuildJudged(){
     if(!corp){unmapped++;const k=cb.rep||'(빈값)';const e=unmappedRepMap.get(k)||{대표번호_정규화:k,원본:cb.repRaw||'',건수:0};e.건수++;unmappedRepMap.set(k,e);continue;}
     // Step3: 계약
     const cConts=contractMap.get(corp+'|'+cb.caller)||[];
-    let contractState,matchedCol='-';
+    let contractState,matchedCol='-',contractValid=false;
     if(cConts.length){
       const pm=(cConts[0].phones||[]).find(p=>p.v===cb.caller);matchedCol=pm?pm.col:'-';
       const hasBefore=cConts.some(c=>c.orderTs!=null&&c.orderTs<=cb.callTs);
-      if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol});continue;}
+      if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol,contractValid:false});continue;}
       contractState='콜백 이후 계약';
+      // 차등성과 실계약수 룰(상태값 + 오더일==최종통화일 제외) 적용 — 양쪽 법인 공통
+      contractValid=cConts.some(c=>{
+        if(c.status==null)return false;
+        const cls=classifyStatus(c.status||'',c.lastCallStr||'',c.orderDtStr||'');
+        return cls==='계약'||cls==='취소';
+      });
     }else{
       // Step4: DB
       const dbCol=dbSet.get(corp+'|'+cb.caller);
-      if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-'});continue;}
+      if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-',contractValid:false});continue;}
       contractState='계약 없음';matchedCol=dbCol;
     }
     const dbState=(contractState==='계약 없음')?'DB 보유':(dbSet.has(corp+'|'+cb.caller)?'DB 보유':'DB 없음');
@@ -8084,7 +8096,7 @@ function mcBuildJudged(){
     if(ics.length===0){isMissed=true;reason='IN call 매칭 없음';}
     else if(ics.some(r=>r.valid)){isMissed=false;reason='유효통화 연결';}
     else{isMissed=true;reason='유효통화 아님';}
-    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol});
+    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol,contractValid});
   }
   dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
   dbg.missed=out.filter(r=>r.isMissed).length; dbg.validDenom=out.filter(r=>r.validDenom).length;
@@ -8182,6 +8194,13 @@ function mcRender(){
   if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
   if(!mcFilesByType('incall',null).length) warns.push('IN call 데이터 미업로드 — 모든 콜백이 "매칭 없음 → 부재"로 집계됩니다');
   if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 수신률·미수신률이 계산되지 않습니다');
+  // 계약 파일에 상태값 메타가 없으면(구버전 업로드) 재업로드 안내 (법인별)
+  const hasStatusMetaByCorp={};
+  for(const c of ['위버스마인드','더블유케어']){
+    const fs=mcFilesByType('contract',c);
+    hasStatusMetaByCorp[c]=fs.some(f=>(f.rows||[]).some(r=>r.status!==undefined));
+    if(fs.length&&!hasStatusMetaByCorp[c]) warns.push(`${c} 계약 파일에 상태값 메타가 없어 계약 전환 분석이 비활성됩니다 — 계약 파일을 재업로드하세요.`);
+  }
   for(const f of mcFiles){if(f.warn)warns.push(f.warn);}
   const wb=document.getElementById('mcWarnBar');
   if(warns.length){wb.classList.remove('hidden');wb.innerHTML='⚠️ '+warns.map(w=>`<div>${w}</div>`).join('');}else wb.classList.add('hidden');
@@ -8195,13 +8214,22 @@ function mcRender(){
     const cid=c==='위버스마인드'?'weavers':'wcare';
     const color=c==='위버스마인드'?'#4361EE':'#F0920E';
     const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'24px':'0'} 0 12px"><div style="width:6px;height:22px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:17px">${c}</h3></div>`:'';
+    const convBlock=(hasStatusMetaByCorp[c])?`
+      <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+        <h4 style="margin:0;font-size:14px;color:#475569">콜백 → 실계약 전환 <span style="font-weight:400;color:#94a3b8">(전화번호 중복 제거 · 차등성과 실계약 룰 적용)</span></h4>
+      </div>
+      <div class="kpi-grid" style="margin-top:8px">
+        <div class="kpi-card"><div class="kl">콜백 고객 수</div><div class="kv" id="mcKpiUniq_${cid}">-</div><div class="ks" id="mcKpiUniqSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:#6d28d9"><div class="kl">실계약 전환</div><div class="kv" id="mcKpiConv_${cid}">-</div><div class="ks" id="mcKpiConvSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약률</div><div class="kv" id="mcKpiCRate_${cid}">-</div><div class="ks" id="mcKpiCRateSub_${cid}"></div></div>
+      </div>`:'';
     html+=`<div class="mc-corp-block">${heading}
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kl">부재 인입 수</div><div class="kv" id="mcKpiDenom_${cid}">-</div><div class="ks" id="mcKpiDenomSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 미수신</div><div class="kv" id="mcKpiCalls_${cid}">-</div><div class="ks" id="mcKpiCallsSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv_${cid}">-</div><div class="ks" id="mcKpiRecvSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss_${cid}">-</div><div class="ks" id="mcKpiMissSub_${cid}"></div></div>
-      </div>
+      </div>${convBlock}
       <div class="ia-section" style="margin-top:14px;margin-bottom:0">
         <h3>부재 인입 추이 <span class="table-sub" id="mcTrendUnitLabel_${cid}"></span></h3>
         <div class="ia-chart-wrap"><canvas id="mcTrendChart_${cid}"></canvas></div>
@@ -8226,6 +8254,21 @@ function mcRender(){
     document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
     document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 ${st.missedCalls.toLocaleString()} / 모수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+    // 콜백→실계약 전환 KPI (상태값 메타 있는 법인만)
+    if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
+      const uniqPhones=new Set(scope.map(r=>r.caller));
+      const convPhones=new Set(scope.filter(r=>r.contractValid).map(r=>r.caller));
+      const pUniqPhones=new Set(prevScope.map(r=>r.caller));
+      const pConvPhones=new Set(prevScope.filter(r=>r.contractValid).map(r=>r.caller));
+      const cRate=uniqPhones.size?convPhones.size/uniqPhones.size*100:0;
+      const pCRate=pUniqPhones.size?pConvPhones.size/pUniqPhones.size*100:0;
+      document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
+      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`유효 모수 ${st.denomValid.toLocaleString()}콜 기준${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
+      document.getElementById(`mcKpiConv_${cid}`).textContent=convPhones.size.toLocaleString()+'명';
+      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`콜백 이후 실계약 발생${delta(convPhones.size,pConvPhones.size,'',true)}`;
+      document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
+      document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= ${convPhones.size.toLocaleString()} / ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
+    }
     mcRenderTrend(scope,cid,c);
   }
   // 법인별 비교 (날짜 범위 내, 법인 필터 무관)
