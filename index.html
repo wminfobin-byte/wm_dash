@@ -8542,21 +8542,40 @@ async function mcDownloadExcel(){
   if(typeof XLSX==='undefined'||!XLSX.utils){alert('xlsx 라이브러리 미로드');return;}
   const [start,end]=mcRangeMs();
   const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end);
-  const corps=['위버스마인드','더블유케어'];
-  // 스타일
-  const BORDER={top:{style:'thin',color:{rgb:'CBD5E1'}},bottom:{style:'thin',color:{rgb:'CBD5E1'}},left:{style:'thin',color:{rgb:'CBD5E1'}},right:{style:'thin',color:{rgb:'CBD5E1'}}};
-  const AC={horizontal:'center',vertical:'center'},AR={horizontal:'right',vertical:'center'},AL={horizontal:'left',vertical:'center'};
-  const sty=(p)=>Object.assign({border:BORDER,alignment:AC},p);
-  const STY_TITLE=sty({font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'2D3748'}}});
-  const STY_SUB=sty({font:{italic:true,color:{rgb:'64748B'}}});
-  const STY_HDR=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'2D3748'}}});
-  const STY_LABEL=sty({font:{bold:true},fill:{patternType:'solid',fgColor:{rgb:'F1F5F9'}},alignment:AL});
-  const STY_NUM=sty({alignment:AR,numFmt:'_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-'});
-  const STY_PCT=sty({alignment:AR,numFmt:'0.0%'});
-  const STY_DATE=sty({numFmt:'yyyy-mm-dd"("aaa")"'});
-  const STY_T_L=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AL});
-  const STY_T_N=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AR,numFmt:'_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-'});
-  const STY_T_P=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AR,numFmt:'0.0%'});
+
+  // ── 색상 팔레트 ──
+  const C={
+    titleNavy:'1E293B', titleBlue:'4361EE', titleGreen:'10B981',
+    hdrBg:'334155', hdrFg:'FFFFFF',
+    labelBg:'F8FAFC', subFg:'64748B',
+    totalBg:'1E293B',
+    cellBorder:'E2E8F0', hdrBorder:'1E293B',
+    recv:'10B981', miss:'DC2626', contract:'7C3AED',
+    rowAlt:'F8FAFC'
+  };
+  const BD={top:{style:'thin',color:{rgb:C.cellBorder}},bottom:{style:'thin',color:{rgb:C.cellBorder}},left:{style:'thin',color:{rgb:C.cellBorder}},right:{style:'thin',color:{rgb:C.cellBorder}}};
+  const BDH={top:{style:'medium',color:{rgb:C.hdrBorder}},bottom:{style:'medium',color:{rgb:C.hdrBorder}},left:{style:'thin',color:{rgb:C.cellBorder}},right:{style:'thin',color:{rgb:C.cellBorder}}};
+  const FONT='맑은 고딕';
+  const AC={horizontal:'center',vertical:'center',wrapText:true},AR={horizontal:'right',vertical:'center'},AL={horizontal:'left',vertical:'center',indent:1};
+  const NUM_ACCT='_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-';
+
+  // 스타일 빌더
+  const styTitle=(bg)=>({font:{name:FONT,bold:true,sz:18,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:bg}},alignment:AC});
+  const STY_SUB={font:{name:FONT,italic:true,sz:11,color:{rgb:C.subFg}},alignment:{horizontal:'center',vertical:'center'}};
+  const STY_HDR={font:{name:FONT,bold:true,sz:12,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:C.hdrBg}},alignment:AC,border:BDH};
+  const STY_LABEL={font:{name:FONT,bold:true,sz:11,color:{rgb:'334155'}},fill:{patternType:'solid',fgColor:{rgb:C.labelBg}},alignment:AL,border:BD};
+  const STY_NUM={font:{name:FONT,sz:11},alignment:AR,border:BD,numFmt:NUM_ACCT};
+  const STY_NUM_ALT={font:{name:FONT,sz:11},fill:{patternType:'solid',fgColor:{rgb:C.rowAlt}},alignment:AR,border:BD,numFmt:NUM_ACCT};
+  const STY_PCT_RECV={font:{name:FONT,sz:11,bold:true,color:{rgb:C.recv}},alignment:AR,border:BD,numFmt:'0.0%'};
+  const STY_PCT_MISS={font:{name:FONT,sz:11,bold:true,color:{rgb:C.miss}},alignment:AR,border:BD,numFmt:'0.0%'};
+  const STY_PCT_CONT={font:{name:FONT,sz:11,bold:true,color:{rgb:C.contract}},alignment:AR,border:BD,numFmt:'0.0%'};
+  const STY_DATE={font:{name:FONT,sz:11},alignment:{horizontal:'center',vertical:'center'},border:BD,numFmt:'yyyy-mm-dd"("aaa")"'};
+  const STY_LABEL_ALT={font:{name:FONT,bold:true,sz:11,color:{rgb:'334155'}},fill:{patternType:'solid',fgColor:{rgb:C.rowAlt}},alignment:{horizontal:'center',vertical:'center'},border:BD};
+  const STY_TOT_L={font:{name:FONT,bold:true,sz:12,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:C.totalBg}},alignment:{horizontal:'center',vertical:'center'},border:BD};
+  const STY_TOT_N={font:{name:FONT,bold:true,sz:12,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:C.totalBg}},alignment:AR,border:BD,numFmt:NUM_ACCT};
+  const STY_TOT_PR={font:{name:FONT,bold:true,sz:12,color:{rgb:'A7F3D0'}},fill:{patternType:'solid',fgColor:{rgb:C.totalBg}},alignment:AR,border:BD,numFmt:'0.0%'};
+  const STY_TOT_PM={font:{name:FONT,bold:true,sz:12,color:{rgb:'FCA5A5'}},fill:{patternType:'solid',fgColor:{rgb:C.totalBg}},alignment:AR,border:BD,numFmt:'0.0%'};
+
   // 통계
   function comp(corp){
     const recs=dateScope.filter(r=>r.corp===corp);
@@ -8578,37 +8597,59 @@ async function mcDownloadExcel(){
   const totUniq=new Set(dateScope.filter(r=>r.validDenom).map(r=>r.caller)).size;
   const totConvCount=w.convCount+wc.convCount, totConvCust=w.convCust+wc.convCust;
   const totContractRate=totUniq?totConvCust/totUniq:0;
+
   const wb=XLSX.utils.book_new();
-  // ── 시트 1: 종합 요약 ──
-  const sumAoa=[
-    ['부재인입 분석 종합 요약'],
-    [`기간: ${mcCurrentRangeLabel()}`],
-    [''],
-    ['지표','위버스마인드','케어','합계'],
-    ['부재 인입 수',w.denom,wc.denom,totDenom],
-    ['부재 인입 수신',w.recvCalls,wc.recvCalls,totRecv],
-    ['수신률',w.recvRate,wc.recvRate,totRecvRate],
-    ['부재 인입 미수신',w.missed,wc.missed,totMiss],
-    ['미수신률',w.missRate,wc.missRate,totMissRate],
-    ['부재 인입 고객 수',w.uniq,wc.uniq,totUniq],
-    ['실계약수',w.convCount,wc.convCount,totConvCount],
-    ['실계약률',w.contractRate,wc.contractRate,totContractRate],
+  const setS=(ws,r,c,s)=>{const a=XLSX.utils.encode_cell({r,c});if(!ws[a])ws[a]={t:'s',v:''};ws[a].s=s;};
+
+  // ─────── 시트 1: 종합 요약 ───────
+  // 레이아웃: A 패딩, B 지표, C 위버스, D 케어, E 합계, F 패딩
+  // 행: 0 패딩 / 1 타이틀 / 2 부제 / 3 패딩 / 4 헤더 / 5~12 데이터 / 13 패딩
+  const aoa1=[
+    ['','','','','',''],
+    ['','부재인입 분석 종합 요약','','','',''],
+    ['',`기간: ${mcCurrentRangeLabel()}`,'','','',''],
+    ['','','','','',''],
+    ['','지표','위버스마인드','케어','합계',''],
+    ['','부재 인입 수',w.denom,wc.denom,totDenom,''],
+    ['','부재 인입 수신',w.recvCalls,wc.recvCalls,totRecv,''],
+    ['','수신률',w.recvRate,wc.recvRate,totRecvRate,''],
+    ['','부재 인입 미수신',w.missed,wc.missed,totMiss,''],
+    ['','미수신률',w.missRate,wc.missRate,totMissRate,''],
+    ['','부재 인입 고객 수',w.uniq,wc.uniq,totUniq,''],
+    ['','실계약수',w.convCount,wc.convCount,totConvCount,''],
+    ['','실계약률',w.contractRate,wc.contractRate,totContractRate,''],
+    ['','','','','','']
   ];
-  const ws1=XLSX.utils.aoa_to_sheet(sumAoa);
-  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
-  ws1['!cols']=[{wch:26},{wch:18},{wch:18},{wch:18}];
-  ws1['!rows']=[{hpx:30},{hpx:20},{hpx:8},{hpx:24}];
-  const setS=(ws,r,c,s)=>{const a=XLSX.utils.encode_cell({r,c});if(ws[a])ws[a].s=s;};
-  setS(ws1,0,0,STY_TITLE); setS(ws1,1,0,STY_SUB);
-  for(let c=0;c<4;c++)setS(ws1,3,c,STY_HDR);
-  const pctRows=new Set([6,8,11]);
-  for(let r=4;r<=11;r++){
-    setS(ws1,r,0,STY_LABEL);
-    for(let c=1;c<=3;c++)setS(ws1,r,c,pctRows.has(r)?STY_PCT:STY_NUM);
+  const ws1=XLSX.utils.aoa_to_sheet(aoa1);
+  ws1['!merges']=[
+    {s:{r:1,c:1},e:{r:1,c:4}},
+    {s:{r:2,c:1},e:{r:2,c:4}},
+  ];
+  ws1['!cols']=[{wch:3},{wch:28},{wch:20},{wch:20},{wch:20},{wch:3}];
+  ws1['!rows']=[
+    {hpx:12},{hpx:40},{hpx:24},{hpx:12},{hpx:34},
+    {hpx:28},{hpx:28},{hpx:28},{hpx:28},{hpx:28},{hpx:28},{hpx:28},{hpx:28},
+    {hpx:12}
+  ];
+  // 타이틀
+  for(let c=1;c<=4;c++)setS(ws1,1,c,styTitle(C.titleNavy));
+  // 부제
+  for(let c=1;c<=4;c++)setS(ws1,2,c,STY_SUB);
+  // 헤더
+  for(let c=1;c<=4;c++)setS(ws1,4,c,STY_HDR);
+  // 데이터 — 비율 행은 색상별 강조
+  const rateStyle1={7:STY_PCT_RECV,9:STY_PCT_MISS,12:STY_PCT_CONT};
+  for(let r=5;r<=12;r++){
+    setS(ws1,r,1,STY_LABEL);
+    const ps=rateStyle1[r];
+    for(let c=2;c<=4;c++){
+      setS(ws1,r,c,ps?ps:STY_NUM);
+    }
   }
   XLSX.utils.book_append_sheet(wb,ws1,'종합 요약');
-  // ── 시트 2/3: 일자별 추이 ──
-  function buildTrend(corp,sheetName){
+
+  // ─────── 시트 2/3: 일자별 추이 ───────
+  function buildTrend(corp, sheetName, titleBg){
     const recs=dateScope.filter(r=>r.corp===corp&&r.validDenom);
     const unit=mcUnit;
     const buckets=new Map();
@@ -8631,37 +8672,59 @@ async function mcDownloadExcel(){
     }
     const tR=tD-tM, tRR=tD?tR/tD:0, tMR=tD?tM/tD:0;
     const unitLabel=unit==='day'?'일자':unit==='week'?'주차':'월';
+    // 레이아웃: A패딩 / B일자 / C부재인입수 / D수신 / E수신률 / F미수신 / G미수신률 / H패딩
     const aoa=[
-      [`${mcCorpDisp(corp)} — ${unitLabel}별 추이`],
-      [`기간: ${mcCurrentRangeLabel()}`],
-      [''],
-      [unitLabel,'부재 인입 수','부재 인입 수신','수신률','부재 인입 미수신','미수신률'],
-      ['합계',tD,tR,tRR,tM,tMR],
-      ...dataRows
+      ['','','','','','','',''],
+      ['',`${mcCorpDisp(corp)} — ${unitLabel}별 추이`,'','','','','',''],
+      ['',`기간: ${mcCurrentRangeLabel()}`,'','','','','',''],
+      ['','','','','','','',''],
+      ['',unitLabel,'부재 인입 수','부재 인입 수신','수신률','부재 인입 미수신','미수신률',''],
+      ['','합계',tD,tR,tRR,tM,tMR,''],
+      ...dataRows.map(d=>['',...d,'']),
+      ['','','','','','','','']
     ];
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
-    ws['!cols']=[{wch:18},{wch:14},{wch:14},{wch:10},{wch:14},{wch:10}];
-    ws['!rows']=[{hpx:30},{hpx:20},{hpx:8},{hpx:24}];
-    setS(ws,0,0,STY_TITLE); setS(ws,1,0,STY_SUB);
-    for(let c=0;c<6;c++)setS(ws,3,c,STY_HDR);
-    setS(ws,4,0,STY_T_L);
-    [1,2,4].forEach(c=>setS(ws,4,c,STY_T_N));
-    [3,5].forEach(c=>setS(ws,4,c,STY_T_P));
+    ws['!merges']=[
+      {s:{r:1,c:1},e:{r:1,c:6}},
+      {s:{r:2,c:1},e:{r:2,c:6}},
+    ];
+    ws['!cols']=[{wch:3},{wch:20},{wch:16},{wch:16},{wch:12},{wch:16},{wch:12},{wch:3}];
+    ws['!rows']=[
+      {hpx:12},{hpx:40},{hpx:24},{hpx:12},{hpx:34},{hpx:32},
+      ...dataRows.map(()=>({hpx:26})),
+      {hpx:12}
+    ];
+    // 타이틀
+    for(let c=1;c<=6;c++)setS(ws,1,c,styTitle(titleBg));
+    for(let c=1;c<=6;c++)setS(ws,2,c,STY_SUB);
+    // 헤더
+    for(let c=1;c<=6;c++)setS(ws,4,c,STY_HDR);
+    // 합계 행 (row=5)
+    setS(ws,5,1,STY_TOT_L);
+    [2,3,5].forEach(c=>setS(ws,5,c,STY_TOT_N));
+    setS(ws,5,4,STY_TOT_PR);
+    setS(ws,5,6,STY_TOT_PM);
+    // 데이터 행
     for(let i=0;i<dataRows.length;i++){
-      const r=5+i;
+      const r=6+i;
+      const altBg=i%2===1; // 짝수 행만 옅은 배경
       if(unit==='day'){
-        const a=XLSX.utils.encode_cell({r,c:0});
-        if(ws[a]){ws[a].t='d';ws[a].s=STY_DATE;}
-      }else setS(ws,r,0,sty({alignment:AC}));
-      [1,2,4].forEach(c=>setS(ws,r,c,STY_NUM));
-      [3,5].forEach(c=>setS(ws,r,c,STY_PCT));
+        const a=XLSX.utils.encode_cell({r,c:1});
+        if(ws[a]){
+          ws[a].t='d';
+          ws[a].s=altBg?{font:{name:FONT,sz:11},fill:{patternType:'solid',fgColor:{rgb:C.rowAlt}},alignment:{horizontal:'center',vertical:'center'},border:BD,numFmt:'yyyy-mm-dd"("aaa")"'}:STY_DATE;
+        }
+      }else setS(ws,r,1,altBg?STY_LABEL_ALT:{font:{name:FONT,sz:11},alignment:{horizontal:'center',vertical:'center'},border:BD});
+      [2,3,5].forEach(c=>setS(ws,r,c,altBg?STY_NUM_ALT:STY_NUM));
+      setS(ws,r,4,STY_PCT_RECV);
+      setS(ws,r,6,STY_PCT_MISS);
     }
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
   }
-  buildTrend('위버스마인드','위버스마인드 추이');
-  buildTrend('더블유케어','케어 추이');
-  // 눈금선 제거
+  buildTrend('위버스마인드','위버스마인드 추이',C.titleBlue);
+  buildTrend('더블유케어','케어 추이',C.titleGreen);
+
+  // ── 마무리: 눈금선 제거 + 다운로드 ──
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
   const zip=await JSZip.loadAsync(wbBuf);
   for(const path of Object.keys(zip.files)){
