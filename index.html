@@ -8525,13 +8525,22 @@ async function mcDownloadPng(which){
   const labelMap={weavers:'위버스마인드',wcare:'케어',compare:'법인별비교'};
   const el=document.getElementById(idMap[which]);
   if(!el){alert('대상 영역을 찾지 못했습니다.');return;}
-  // PNG 캡처 시 .no-capture 클래스는 임시 숨김
   const hidden=Array.from(el.querySelectorAll('.no-capture'));
   hidden.forEach(n=>n.style.visibility='hidden');
   try{
-    const canvas=await html2canvas(el,{backgroundColor:'#ffffff',scale:2,useCORS:true});
+    const scale=2;
+    const captured=await html2canvas(el,{backgroundColor:'#ffffff',scale,useCORS:true});
+    // 좌·우·상·하 흰 여백 추가 (실제 픽셀 기준 40px, scale 적용)
+    const padX=40*scale, padY=24*scale;
+    const out=document.createElement('canvas');
+    out.width=captured.width+padX*2;
+    out.height=captured.height+padY*2;
+    const ctx=out.getContext('2d');
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,out.width,out.height);
+    ctx.drawImage(captured,padX,padY);
     const a=document.createElement('a');
-    a.href=canvas.toDataURL('image/png');
+    a.href=out.toDataURL('image/png');
     a.download=`부재인입_${labelMap[which]}_${mcCurrentRangeLabel()||mcFmtDateWd(Date.now())}.png`;
     a.click();
   }catch(e){alert('PNG 저장 실패: '+e.message);}
