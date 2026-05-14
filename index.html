@@ -1385,7 +1385,7 @@ tr.row-h td{background:var(--gh-light)}
         <div class="ia-view-tabs" style="margin:0;gap:6px">
           <button class="ia-view-btn active" data-mccorpf="all" onclick="mcSwitchCorp('all')">전체</button>
           <button class="ia-view-btn" data-mccorpf="위버스마인드" onclick="mcSwitchCorp('위버스마인드')">위버스마인드</button>
-          <button class="ia-view-btn" data-mccorpf="더블유케어" onclick="mcSwitchCorp('더블유케어')">케어</button>
+          <button class="ia-view-btn" data-mccorpf="더블유케어" onclick="mcSwitchCorp('더블유케어')">더블유케어</button>
         </div>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <label>집계:</label>
@@ -7776,8 +7776,8 @@ const MC_VALID_CALL_DUR=60;
 function mcIsValidCall(r){return !!(r&&r.status&&r.status.includes('연결')&&(r.dur||0)>=MC_VALID_CALL_DUR);}
 function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김')||s.includes('톡이즈'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
 function mcCorpFromText(s){const t=String(s||'').trim();if(t.includes('위버')||t.includes('뇌새김'))return '위버스마인드';if(t.includes('케어')||/^w/i.test(t))return '더블유케어';return null;}
-// 표시명 — 내부 corp 키는 '더블유케어' 유지하고 UI에서만 '케어'로 짧게
-function mcCorpDisp(c){return c==='더블유케어'?'케어':c;}
+// 표시명 — 내부 corp 키와 동일 (필요 시 별칭 매핑 위치)
+function mcCorpDisp(c){return c;}
 function mcDatePart(v){
   if(v==null||v==='')return null;
   if(v instanceof Date){if(isNaN(v))return null;return new Date(v.getFullYear(),v.getMonth(),v.getDate());}
@@ -8523,7 +8523,7 @@ function mcCurrentRangeLabel(){
 }
 async function mcDownloadPng(which){
   const idMap={weavers:'mcCorpBlock_weavers',wcare:'mcCorpBlock_wcare',compare:'mcCorpCompareSection'};
-  const labelMap={weavers:'위버스마인드',wcare:'케어',compare:'법인별비교'};
+  const labelMap={weavers:'위버스마인드',wcare:'더블유케어',compare:'법인별비교'};
   const el=document.getElementById(idMap[which]);
   if(!el){alert('대상 영역을 찾지 못했습니다.');return;}
   const hidden=Array.from(el.querySelectorAll('.no-capture'));
@@ -8619,7 +8619,7 @@ async function mcDownloadExcel(){
     ['','부재인입 분석 종합 요약','','','',''],
     ['',`기간: ${mcCurrentRangeLabel()}`,'','','',''],
     ['','','','','',''],
-    ['','지표','위버스마인드','케어','합계',''],
+    ['','지표','위버스마인드','더블유케어','합계',''],
     ['','부재 인입 수',w.denom,wc.denom,totDenom,''],
     ['','부재 인입 수신',w.recvCalls,wc.recvCalls,totRecv,''],
     ['','수신률',w.recvRate,wc.recvRate,totRecvRate,''],
@@ -8737,7 +8737,7 @@ async function mcDownloadExcel(){
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
   }
   buildTrend('위버스마인드','위버스마인드 추이',C.titleBlue);
-  buildTrend('더블유케어','케어 추이',C.titleGreen);
+  buildTrend('더블유케어','더블유케어 추이',C.titleGreen);
 
   // ── 마무리: 눈금선 제거 + 다운로드 ──
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
