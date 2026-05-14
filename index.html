@@ -8104,7 +8104,7 @@ function mcBuildJudged(){
   dbg.mappingSampleKeys=Array.from(mapping.keys()).slice(0,5);
   window.mcDebug=dbg; console.log('[부재인입 진단]',dbg);
   if(dbg.unmappedReps.length){console.log('[부재인입] 매핑 테이블에 없는 대표번호 '+dbg.unmappedReps.length+'종:');console.table(dbg.unmappedReps);}
-  return {records:out,unmapped,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
+  return {records:out,unmapped,unmappedReps:dbg.unmappedReps,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
 }
 
 function mcGenerate(force){
@@ -8121,7 +8121,7 @@ function mcGenerate(force){
   const run=()=>{
     try{
       const r=mcBuildJudged();
-      mcJudged=r.records;mcMeta={unmapped:r.unmapped,counts:r.counts};
+      mcJudged=r.records;mcMeta={unmapped:r.unmapped,unmappedReps:r.unmappedReps,counts:r.counts};
       mcInitDateRange();
       mcRender();
     }catch(e){alert('분석 오류: '+e.message);console.error(e);}
@@ -8191,7 +8191,17 @@ function mcRender(){
   const prevDateScope=span>0?mcJudged.filter(r=>r.callTs>=(start-span)&&r.callTs<start):[];
   // 경고바
   const warns=[];
-  if(mcMeta&&mcMeta.unmapped) warns.push(`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`);
+  if(mcMeta&&mcMeta.unmapped){
+    let w=`매핑 테이블에 없는 대표번호 콜백 ${mcMeta.unmapped.toLocaleString()}건은 집계에서 제외됨`;
+    const reps=(mcMeta.unmappedReps||[]);
+    if(reps.length){
+      w+=` <a href="#" onclick="event.preventDefault();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'(상세 보기)':'(접기)';" style="color:#9a3412;text-decoration:underline">(상세 보기)</a>`;
+      w+=`<div style="display:none;margin-top:6px;padding:8px 10px;background:#fef3c7;border-radius:6px;max-height:240px;overflow-y:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="text-align:left;color:#78350f"><th style="padding:4px 8px">대표번호(정규화)</th><th style="padding:4px 8px">원본</th><th style="padding:4px 8px;text-align:right">건수</th></tr></thead><tbody>`;
+      for(const r of reps) w+=`<tr><td style="padding:3px 8px;font-family:monospace">${r.대표번호_정규화||'(빈값)'}</td><td style="padding:3px 8px;color:#92400e">${r.원본||'-'}</td><td style="padding:3px 8px;text-align:right">${r.건수.toLocaleString()}</td></tr>`;
+      w+=`</tbody></table></div>`;
+    }
+    warns.push(w);
+  }
   if(!mcFilesByType('incall',null).length) warns.push('IN call 데이터 미업로드 — 모든 콜백이 "매칭 없음 → 부재"로 집계됩니다');
   if(!mcFilesByType('contract',null).length&&!mcFilesByType('customerdb',null).length) warns.push('DB/계약 데이터 미업로드 — 유효 모수가 0이라 수신률·미수신률이 계산되지 않습니다');
   // 계약 파일에 상태값 메타가 없으면(구버전 업로드) 재업로드 안내 (법인별)
