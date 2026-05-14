@@ -1395,6 +1395,7 @@ tr.row-h td{background:var(--gh-light)}
           <button class="ia-view-btn" data-mcunit="month" onclick="mcSwitchUnit('month')">월별</button>
         </div>
         <div style="flex:1"></div>
+        <button class="ia-view-btn" onclick="mcDownloadExcel()" style="background:#16a34a;color:#fff;border-color:#16a34a">📥 엑셀 다운로드</button>
         <button class="ia-view-btn" onclick="mcGenerate(true)">🔄 재분석</button>
       </div>
 
@@ -1402,20 +1403,30 @@ tr.row-h td{background:var(--gh-light)}
 
       <div id="mcKpiSections" style="margin-top:18px"></div>
 
-      <div class="ia-section" style="margin-bottom:18px;overflow-x:auto">
-        <h3>법인별 비교</h3>
-        <table class="ia-table" id="mcCorpTable" style="min-width:760px"></table>
+      <div class="ia-section" id="mcCorpCompareSection" style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <h3 style="margin:0">법인별 비교</h3>
+          <div style="flex:1"></div>
+          <button class="ia-view-btn no-capture" onclick="mcDownloadPng('compare')">📷 PNG 저장</button>
+        </div>
+        <div id="mcCorpTable"></div>
       </div>
 
       <div class="ia-section" style="overflow-x:auto">
-        <h3>상세 부재 인입 리스트 <span class="table-sub" id="mcDetailCount"></span></h3>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-          <input type="text" id="mcDetailSearch" placeholder="발신자번호 / 대표번호 검색" oninput="mcRenderDetail()" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px;width:240px">
-          <div style="flex:1"></div>
-          <button class="ia-view-btn" onclick="mcExportCsv()">📥 CSV 내보내기</button>
+        <h3 style="cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none" onclick="mcToggleDetail()">
+          <span id="mcDetailArrow" style="display:inline-block;transition:transform .2s">▶</span>
+          상세 부재 인입 리스트 <span class="table-sub" id="mcDetailCount"></span>
+          <span style="margin-left:auto;font-size:12px;color:#94a3b8;font-weight:400">클릭해서 펼치기</span>
+        </h3>
+        <div id="mcDetailBody" style="display:none">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;margin-top:12px">
+            <input type="text" id="mcDetailSearch" placeholder="발신자번호 / 대표번호 검색" oninput="mcRenderDetail()" style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:13px;width:240px">
+            <div style="flex:1"></div>
+            <button class="ia-view-btn" onclick="mcExportCsv()">📥 CSV 내보내기</button>
+          </div>
+          <div class="ia-table-wrap"><table class="ia-table" id="mcDetailTable" style="min-width:1100px"></table></div>
+          <div id="mcDetailPager" style="display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap"></div>
         </div>
-        <div class="ia-table-wrap"><table class="ia-table" id="mcDetailTable" style="min-width:1100px"></table></div>
-        <div id="mcDetailPager" style="display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap"></div>
       </div>
     </div>
   </div>
@@ -8230,8 +8241,8 @@ function mcRender(){
   let html='';
   for(const c of corpList){
     const cid=c==='위버스마인드'?'weavers':'wcare';
-    const color=c==='위버스마인드'?'#4361EE':'#F0920E';
-    const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'32px':'0'} 0 16px"><div style="width:6px;height:24px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:19px;font-weight:700">${mcCorpDisp(c)}</h3></div>`:'';
+    const color=c==='위버스마인드'?'#4361EE':'#10b981';
+    const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'32px':'0'} 0 16px"><div style="width:6px;height:24px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:19px;font-weight:700">${mcCorpDisp(c)}</h3><div style="flex:1"></div><button class="ia-view-btn no-capture" onclick="mcDownloadPng('${cid}')">📷 PNG 저장</button></div>`:`<div style="display:flex;align-items:center;gap:10px;margin:0 0 12px"><div style="flex:1"></div><button class="ia-view-btn no-capture" onclick="mcDownloadPng('${cid}')">📷 PNG 저장</button></div>`;
     const subHead=(t,hint)=>`<div style="display:flex;align-items:baseline;gap:8px;margin:18px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:6px"><h4 style="margin:0;font-size:13px;font-weight:700;color:#1e293b;letter-spacing:.3px">${t}</h4><span style="font-size:11px;color:#94a3b8">${hint||''}</span></div>`;
     const convBlock=(hasStatusMetaByCorp[c])?`
       ${subHead('③ 콜백 → 실계약 전환','부재 인입 고객 기준 · 차등성과 실계약 룰 적용')}
@@ -8240,7 +8251,7 @@ function mcRender(){
         <div class="kpi-card" style="border-left-color:#6d28d9"><div class="kl">실계약 전환</div><div class="kv" id="mcKpiConv_${cid}">-</div><div class="ks" id="mcKpiConvSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">실계약률</div><div class="kv" id="mcKpiCRate_${cid}">-</div><div class="ks" id="mcKpiCRateSub_${cid}"></div></div>
       </div>`:'';
-    html+=`<div class="mc-corp-block">${heading}
+    html+=`<div class="mc-corp-block" id="mcCorpBlock_${cid}">${heading}
       ${subHead('① 고객 인입','고객이 회사로 다시 걸어준 콜')}
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kl">부재 인입 수</div><div class="kv" id="mcKpiDenom_${cid}">-</div><div class="ks" id="mcKpiDenomSub_${cid}"></div></div>
@@ -8329,7 +8340,7 @@ function mcRenderTrend(scope,cid,corpName){
   }
   const keys=Array.from(buckets.keys()).sort((a,b)=>a-b);
   const labels=keys.map(mcBucketLabel);
-  const color=corpName==='위버스마인드'?'#4361EE':'#F0920E';
+  const color=corpName==='위버스마인드'?'#4361EE':'#10b981';
   const ds=[
     {type:'bar',label:`${mcCorpDisp(corpName)} 부재 인입 미수신`,data:keys.map(k=>buckets.get(k).m),backgroundColor:color,yAxisID:'y'},
     {type:'line',label:'미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.v?+(b.m/b.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false}
@@ -8378,13 +8389,13 @@ function mcRenderTrendTable(scope,cid,corpName){
   const tMissRate=tDenom?tMissed/tDenom*100:0;
   const unitLabel=mcUnit==='day'?'일자':mcUnit==='week'?'주차':'월';
   document.getElementById(`mcTrendTable_${cid}`).innerHTML=`
-    <thead><tr>
-      <th style="text-align:left">${unitLabel}</th>
-      <th>부재 인입 수</th>
-      <th>부재 인입 수신</th>
-      <th>수신률</th>
-      <th>부재 인입 미수신</th>
-      <th>미수신률</th>
+    <thead><tr style="text-align:center">
+      <th style="text-align:center">${unitLabel}</th>
+      <th style="text-align:center">부재 인입 수</th>
+      <th style="text-align:center">부재 인입 수신</th>
+      <th style="text-align:center">수신률</th>
+      <th style="text-align:center">부재 인입 미수신</th>
+      <th style="text-align:center">미수신률</th>
     </tr></thead>
     <tbody>
       <tr style="background:#2d3748;color:#fff;font-weight:700">
@@ -8402,63 +8413,63 @@ function mcRenderTrendTable(scope,cid,corpName){
 function mcRenderCorpTable(dateScope,hasStatusMetaByCorp){
   const corps=['위버스마인드','더블유케어'];
   hasStatusMetaByCorp=hasStatusMetaByCorp||{'위버스마인드':false,'더블유케어':false};
-  let rowsHtml='';
-  const tot={denomValid:0,recvCalls:0,missedCalls:0,uniqPhones:new Set(),convCount:0,convCust:0};
+  // 법인별 통계 미리 계산
+  const stat={};
+  const totals={denomValid:0,recvCalls:0,missedCalls:0,uniqPhones:new Set(),convCount:0,convCust:0};
   for(const c of corps){
     const recs=dateScope.filter(r=>r.corp===c);
     const s=mcStats(recs);
     const valid=recs.filter(r=>r.validDenom);
     const recvCalls=s.denomValid-s.missedCalls;
     const recvRate=s.denomValid?recvCalls/s.denomValid*100:0;
-    // 전환: phone-deduped contractCount 합산 + 전환 고객수
     const phoneCount=new Map();
     for(const r of valid){if(!phoneCount.has(r.caller))phoneCount.set(r.caller,r.contractCount||0);}
     const uniqPhonesC=new Set(valid.map(r=>r.caller));
     const convCountC=Array.from(phoneCount.values()).reduce((a,b)=>a+b,0);
     const convCustC=Array.from(phoneCount.values()).filter(v=>v>0).length;
     const contractRate=uniqPhonesC.size?convCustC/uniqPhonesC.size*100:0;
-    tot.denomValid+=s.denomValid;tot.recvCalls+=recvCalls;tot.missedCalls+=s.missedCalls;
-    valid.forEach(r=>tot.uniqPhones.add(r.caller));
-    tot.convCount+=convCountC;tot.convCust+=convCustC;
-    const showConv=hasStatusMetaByCorp[c];
-    rowsHtml+=`<tr>
-      <td style="font-weight:700">${mcCorpDisp(c)}</td>
-      <td>${s.denomValid.toLocaleString()}</td>
-      <td>${recvCalls.toLocaleString()}</td>
-      <td style="color:#2ec4b6">${recvRate.toFixed(1)}%</td>
-      <td>${s.missedCalls.toLocaleString()}</td>
-      <td style="color:#e71d36">${s.rateValid.toFixed(1)}%</td>
-      <td>${uniqPhonesC.size.toLocaleString()}</td>
-      <td>${showConv?convCountC.toLocaleString():'<span style="color:#cbd5e1">-</span>'}</td>
-      <td style="color:#6d28d9">${showConv?contractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>'}</td>
-    </tr>`;
+    stat[c]={denomValid:s.denomValid,recvCalls,recvRate,missedCalls:s.missedCalls,rateValid:s.rateValid,uniq:uniqPhonesC.size,convCount:convCountC,convCust:convCustC,contractRate,showConv:hasStatusMetaByCorp[c]};
+    totals.denomValid+=s.denomValid;totals.recvCalls+=recvCalls;totals.missedCalls+=s.missedCalls;
+    valid.forEach(r=>totals.uniqPhones.add(r.caller));
+    totals.convCount+=convCountC;totals.convCust+=convCustC;
   }
-  const tRecvRate=tot.denomValid?tot.recvCalls/tot.denomValid*100:0;
-  const tMissRate=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
-  const tContractRate=tot.uniqPhones.size?tot.convCust/tot.uniqPhones.size*100:0;
+  const tRecvRate=totals.denomValid?totals.recvCalls/totals.denomValid*100:0;
+  const tMissRate=totals.denomValid?totals.missedCalls/totals.denomValid*100:0;
+  const tContractRate=totals.uniqPhones.size?totals.convCust/totals.uniqPhones.size*100:0;
   const anyConv=hasStatusMetaByCorp['위버스마인드']||hasStatusMetaByCorp['더블유케어'];
-  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700">
-    <td>합계</td>
-    <td>${tot.denomValid.toLocaleString()}</td>
-    <td>${tot.recvCalls.toLocaleString()}</td>
-    <td style="color:#2ec4b6">${tRecvRate.toFixed(1)}%</td>
-    <td>${tot.missedCalls.toLocaleString()}</td>
-    <td style="color:#e71d36">${tMissRate.toFixed(1)}%</td>
-    <td>${tot.uniqPhones.size.toLocaleString()}</td>
-    <td>${anyConv?tot.convCount.toLocaleString():'<span style="color:#cbd5e1">-</span>'}</td>
-    <td style="color:#6d28d9">${anyConv?tContractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>'}</td>
-  </tr>`;
-  document.getElementById('mcCorpTable').innerHTML=`<thead><tr>
-    <th>법인</th>
-    <th>부재 인입 수</th>
-    <th>부재 인입 수신</th>
-    <th>수신률</th>
-    <th>부재 인입 미수신</th>
-    <th>미수신률</th>
-    <th>부재 인입 고객 수</th>
-    <th>실계약수</th>
-    <th>실계약률</th>
-  </tr></thead><tbody>${rowsHtml}</tbody>`;
+  // 한 법인의 지표·값 표 빌드
+  const buildOne=(c,s,accent)=>{
+    const r=(label,val,color)=>`<tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">${label}</td><td style="padding:9px 14px;text-align:right;font-weight:700;color:${color||'#1e293b'}">${val}</td></tr>`;
+    return `<table class="ia-table" style="width:100%;font-size:13px">
+      <thead><tr><th colspan="2" style="background:${accent};color:#fff;padding:10px 14px;text-align:center;font-size:14px">${mcCorpDisp(c)}</th></tr></thead>
+      <tbody>
+        ${r('부재 인입 수',s.denomValid.toLocaleString()+' 콜')}
+        ${r('부재 인입 수신',s.recvCalls.toLocaleString()+' 콜')}
+        ${r('수신률',s.recvRate.toFixed(1)+'%','#2ec4b6')}
+        ${r('부재 인입 미수신',s.missedCalls.toLocaleString()+' 콜')}
+        ${r('미수신률',s.rateValid.toFixed(1)+'%','#e71d36')}
+        ${r('부재 인입 고객 수',s.uniq.toLocaleString()+' 명')}
+        ${r('실계약수',s.showConv?s.convCount.toLocaleString()+' 건':'<span style="color:#cbd5e1">-</span>')}
+        ${r('실계약률',s.showConv?s.contractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>','#6d28d9')}
+      </tbody></table>`;
+  };
+  const blockWeavers=`<div id="mcCorpBlock_weavers" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">${buildOne('위버스마인드',stat['위버스마인드'],'#4361EE')}</div>`;
+  const blockWcare=`<div id="mcCorpBlock_wcare" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">${buildOne('더블유케어',stat['더블유케어'],'#10b981')}</div>`;
+  const tot=`<div style="margin-top:16px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+    <table class="ia-table" style="width:100%;font-size:13px">
+      <thead><tr><th colspan="2" style="background:#2d3748;color:#fff;padding:10px 14px;text-align:center;font-size:14px">합계</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">부재 인입 수</td><td style="padding:9px 14px;text-align:right;font-weight:700">${totals.denomValid.toLocaleString()} 콜</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">부재 인입 수신</td><td style="padding:9px 14px;text-align:right;font-weight:700">${totals.recvCalls.toLocaleString()} 콜</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">수신률</td><td style="padding:9px 14px;text-align:right;font-weight:700;color:#2ec4b6">${tRecvRate.toFixed(1)}%</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">부재 인입 미수신</td><td style="padding:9px 14px;text-align:right;font-weight:700">${totals.missedCalls.toLocaleString()} 콜</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">미수신률</td><td style="padding:9px 14px;text-align:right;font-weight:700;color:#e71d36">${tMissRate.toFixed(1)}%</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">부재 인입 고객 수 (양 법인 dedup)</td><td style="padding:9px 14px;text-align:right;font-weight:700">${totals.uniqPhones.size.toLocaleString()} 명</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">실계약수</td><td style="padding:9px 14px;text-align:right;font-weight:700">${anyConv?totals.convCount.toLocaleString()+' 건':'<span style="color:#cbd5e1">-</span>'}</td></tr>
+        <tr><td style="padding:9px 14px;text-align:left;font-weight:500;color:#475569">실계약률</td><td style="padding:9px 14px;text-align:right;font-weight:700;color:#6d28d9">${anyConv?tContractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>'}</td></tr>
+      </tbody>
+    </table></div>`;
+  document.getElementById('mcCorpTable').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${blockWeavers}${blockWcare}</div>${tot}`;
 }
 
 function mcCurrentDetailRows(){
@@ -8496,6 +8507,185 @@ function mcRenderDetail(){
   document.getElementById('mcDetailPager').innerHTML=pg;
 }
 function mcGotoPage(p){mcDetailPage=p;mcRenderDetail();}
+// 일자 포맷 yyyy-mm-dd(aaa) — aaa는 한국어 요일 약자
+function mcFmtDateWd(ts){
+  const d=new Date(ts);
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  const wd=['일','월','화','수','목','금','토'][d.getDay()];
+  return `${y}-${m}-${dd}(${wd})`;
+}
+function mcCurrentRangeLabel(){
+  const si=document.getElementById('mcDateStart').value, ei=document.getElementById('mcDateEnd').value;
+  const s=si?mcFmtDateWd(new Date(si).getTime()):'';
+  const e=ei?mcFmtDateWd(new Date(ei).getTime()):'';
+  return s&&e?`${s}_${e}`:(s||e||'');
+}
+async function mcDownloadPng(which){
+  const idMap={weavers:'mcCorpBlock_weavers',wcare:'mcCorpBlock_wcare',compare:'mcCorpCompareSection'};
+  const labelMap={weavers:'위버스마인드',wcare:'케어',compare:'법인별비교'};
+  const el=document.getElementById(idMap[which]);
+  if(!el){alert('대상 영역을 찾지 못했습니다.');return;}
+  // PNG 캡처 시 .no-capture 클래스는 임시 숨김
+  const hidden=Array.from(el.querySelectorAll('.no-capture'));
+  hidden.forEach(n=>n.style.visibility='hidden');
+  try{
+    const canvas=await html2canvas(el,{backgroundColor:'#ffffff',scale:2,useCORS:true});
+    const a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download=`부재인입_${labelMap[which]}_${mcCurrentRangeLabel()||mcFmtDateWd(Date.now())}.png`;
+    a.click();
+  }catch(e){alert('PNG 저장 실패: '+e.message);}
+  hidden.forEach(n=>n.style.visibility='');
+}
+async function mcDownloadExcel(){
+  if(!mcJudged){alert('먼저 분석 실행이 필요합니다.');return;}
+  if(typeof XLSX==='undefined'||!XLSX.utils){alert('xlsx 라이브러리 미로드');return;}
+  const [start,end]=mcRangeMs();
+  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end);
+  const corps=['위버스마인드','더블유케어'];
+  // 스타일
+  const BORDER={top:{style:'thin',color:{rgb:'CBD5E1'}},bottom:{style:'thin',color:{rgb:'CBD5E1'}},left:{style:'thin',color:{rgb:'CBD5E1'}},right:{style:'thin',color:{rgb:'CBD5E1'}}};
+  const AC={horizontal:'center',vertical:'center'},AR={horizontal:'right',vertical:'center'},AL={horizontal:'left',vertical:'center'};
+  const sty=(p)=>Object.assign({border:BORDER,alignment:AC},p);
+  const STY_TITLE=sty({font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'2D3748'}}});
+  const STY_SUB=sty({font:{italic:true,color:{rgb:'64748B'}}});
+  const STY_HDR=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'2D3748'}}});
+  const STY_LABEL=sty({font:{bold:true},fill:{patternType:'solid',fgColor:{rgb:'F1F5F9'}},alignment:AL});
+  const STY_NUM=sty({alignment:AR,numFmt:'_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-'});
+  const STY_PCT=sty({alignment:AR,numFmt:'0.0%'});
+  const STY_DATE=sty({numFmt:'yyyy-mm-dd"("aaa")"'});
+  const STY_T_L=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AL});
+  const STY_T_N=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AR,numFmt:'_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-'});
+  const STY_T_P=sty({font:{bold:true,color:{rgb:'FFFFFF'}},fill:{patternType:'solid',fgColor:{rgb:'1E293B'}},alignment:AR,numFmt:'0.0%'});
+  // 통계
+  function comp(corp){
+    const recs=dateScope.filter(r=>r.corp===corp);
+    const s=mcStats(recs);
+    const valid=recs.filter(r=>r.validDenom);
+    const recvCalls=s.denomValid-s.missedCalls;
+    const recvRate=s.denomValid?recvCalls/s.denomValid:0;
+    const phoneCount=new Map();
+    for(const r of valid){if(!phoneCount.has(r.caller))phoneCount.set(r.caller,r.contractCount||0);}
+    const uniq=new Set(valid.map(r=>r.caller)).size;
+    const convCount=Array.from(phoneCount.values()).reduce((a,b)=>a+b,0);
+    const convCust=Array.from(phoneCount.values()).filter(v=>v>0).length;
+    const contractRate=uniq?convCust/uniq:0;
+    return {denom:s.denomValid,recvCalls,recvRate,missed:s.missedCalls,missRate:s.rateValid/100,uniq,convCount,convCust,contractRate};
+  }
+  const w=comp('위버스마인드'),wc=comp('더블유케어');
+  const totDenom=w.denom+wc.denom, totRecv=w.recvCalls+wc.recvCalls, totMiss=w.missed+wc.missed;
+  const totRecvRate=totDenom?totRecv/totDenom:0, totMissRate=totDenom?totMiss/totDenom:0;
+  const totUniq=new Set(dateScope.filter(r=>r.validDenom).map(r=>r.caller)).size;
+  const totConvCount=w.convCount+wc.convCount, totConvCust=w.convCust+wc.convCust;
+  const totContractRate=totUniq?totConvCust/totUniq:0;
+  const wb=XLSX.utils.book_new();
+  // ── 시트 1: 종합 요약 ──
+  const sumAoa=[
+    ['부재인입 분석 종합 요약'],
+    [`기간: ${mcCurrentRangeLabel()}`],
+    [''],
+    ['지표','위버스마인드','케어','합계'],
+    ['부재 인입 수',w.denom,wc.denom,totDenom],
+    ['부재 인입 수신',w.recvCalls,wc.recvCalls,totRecv],
+    ['수신률',w.recvRate,wc.recvRate,totRecvRate],
+    ['부재 인입 미수신',w.missed,wc.missed,totMiss],
+    ['미수신률',w.missRate,wc.missRate,totMissRate],
+    ['부재 인입 고객 수',w.uniq,wc.uniq,totUniq],
+    ['실계약수',w.convCount,wc.convCount,totConvCount],
+    ['실계약률',w.contractRate,wc.contractRate,totContractRate],
+  ];
+  const ws1=XLSX.utils.aoa_to_sheet(sumAoa);
+  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
+  ws1['!cols']=[{wch:26},{wch:18},{wch:18},{wch:18}];
+  ws1['!rows']=[{hpx:30},{hpx:20},{hpx:8},{hpx:24}];
+  const setS=(ws,r,c,s)=>{const a=XLSX.utils.encode_cell({r,c});if(ws[a])ws[a].s=s;};
+  setS(ws1,0,0,STY_TITLE); setS(ws1,1,0,STY_SUB);
+  for(let c=0;c<4;c++)setS(ws1,3,c,STY_HDR);
+  const pctRows=new Set([6,8,11]);
+  for(let r=4;r<=11;r++){
+    setS(ws1,r,0,STY_LABEL);
+    for(let c=1;c<=3;c++)setS(ws1,r,c,pctRows.has(r)?STY_PCT:STY_NUM);
+  }
+  XLSX.utils.book_append_sheet(wb,ws1,'종합 요약');
+  // ── 시트 2/3: 일자별 추이 ──
+  function buildTrend(corp,sheetName){
+    const recs=dateScope.filter(r=>r.corp===corp&&r.validDenom);
+    const unit=mcUnit;
+    const buckets=new Map();
+    for(const r of recs){
+      const k=mcBucketKey(r.callTs);
+      if(!buckets.has(k))buckets.set(k,{denom:0,missed:0});
+      const b=buckets.get(k);b.denom++;if(r.isMissed)b.missed++;
+    }
+    const keys=Array.from(buckets.keys()).sort((a,b)=>b-a);
+    let tD=0,tM=0;
+    const dataRows=[];
+    for(const k of keys){
+      const b=buckets.get(k);
+      const recv=b.denom-b.missed;
+      const recvRate=b.denom?recv/b.denom:0;
+      const missRate=b.denom?b.missed/b.denom:0;
+      tD+=b.denom;tM+=b.missed;
+      const dateCell=unit==='day'?new Date(k):mcBucketLabel(k);
+      dataRows.push([dateCell,b.denom,recv,recvRate,b.missed,missRate]);
+    }
+    const tR=tD-tM, tRR=tD?tR/tD:0, tMR=tD?tM/tD:0;
+    const unitLabel=unit==='day'?'일자':unit==='week'?'주차':'월';
+    const aoa=[
+      [`${mcCorpDisp(corp)} — ${unitLabel}별 추이`],
+      [`기간: ${mcCurrentRangeLabel()}`],
+      [''],
+      [unitLabel,'부재 인입 수','부재 인입 수신','수신률','부재 인입 미수신','미수신률'],
+      ['합계',tD,tR,tRR,tM,tMR],
+      ...dataRows
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+    ws['!cols']=[{wch:18},{wch:14},{wch:14},{wch:10},{wch:14},{wch:10}];
+    ws['!rows']=[{hpx:30},{hpx:20},{hpx:8},{hpx:24}];
+    setS(ws,0,0,STY_TITLE); setS(ws,1,0,STY_SUB);
+    for(let c=0;c<6;c++)setS(ws,3,c,STY_HDR);
+    setS(ws,4,0,STY_T_L);
+    [1,2,4].forEach(c=>setS(ws,4,c,STY_T_N));
+    [3,5].forEach(c=>setS(ws,4,c,STY_T_P));
+    for(let i=0;i<dataRows.length;i++){
+      const r=5+i;
+      if(unit==='day'){
+        const a=XLSX.utils.encode_cell({r,c:0});
+        if(ws[a]){ws[a].t='d';ws[a].s=STY_DATE;}
+      }else setS(ws,r,0,sty({alignment:AC}));
+      [1,2,4].forEach(c=>setS(ws,r,c,STY_NUM));
+      [3,5].forEach(c=>setS(ws,r,c,STY_PCT));
+    }
+    XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  }
+  buildTrend('위버스마인드','위버스마인드 추이');
+  buildTrend('더블유케어','케어 추이');
+  // 눈금선 제거
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  const zip=await JSZip.loadAsync(wbBuf);
+  for(const path of Object.keys(zip.files)){
+    if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+      const xml=await zip.file(path).async('string');
+      zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));
+    }
+  }
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`부재인입_${mcCurrentRangeLabel()||mcFmtDateWd(Date.now())}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function mcToggleDetail(){
+  const body=document.getElementById('mcDetailBody');
+  const arrow=document.getElementById('mcDetailArrow');
+  const hint=arrow.parentElement.querySelector('span:last-child');
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  arrow.style.transform=open?'rotate(90deg)':'rotate(0deg)';
+  if(hint)hint.textContent=open?'클릭해서 접기':'클릭해서 펼치기';
+}
 
 function mcExportCsv(){
   const recs=mcCurrentDetailRows();
