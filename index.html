@@ -7960,7 +7960,7 @@ function mcParseIncall(wb){
       if(startTs==null){nullStart++;continue;}
       const dur=mcDur(r[col.dur]);
       const status=String(r[col.status]==null?'':r[col.status]).trim();
-      const valid=status.includes('연결')&&dur>=90;
+      const valid=status.includes('연결')&&dur>=60;
       rows.push({corp,caller,rep,startTs,dur,status,valid});
     }
   }
@@ -8243,7 +8243,7 @@ function mcRender(){
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">부재 인입 수신</div><div class="kv" id="mcKpiRecvCalls_${cid}">-</div><div class="ks" id="mcKpiRecvCallsSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv_${cid}">-</div><div class="ks" id="mcKpiRecvSub_${cid}"></div></div>
       </div>
-      ${subHead('② 응대 실패','연결 안 됐거나 90초 미만 종료')}
+      ${subHead('② 응대 실패','연결 안 됐거나 60초 미만 종료')}
       <div class="kpi-grid">
         <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 미수신</div><div class="kv" id="mcKpiCalls_${cid}">-</div><div class="ks" id="mcKpiCallsSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss_${cid}">-</div><div class="ks" id="mcKpiMissSub_${cid}"></div></div>
@@ -8267,12 +8267,12 @@ function mcRender(){
     document.getElementById(`mcKpiDenom_${cid}`).textContent=st.denomValid.toLocaleString()+'건';
     document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`고객이 회사로 회신한 콜${delta(st.denomValid,pst.denomValid,'',true)}`;
     document.getElementById(`mcKpiRecvCalls_${cid}`).textContent=recvCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiRecvCallsSub_${cid}`).innerHTML=`90초+ 연결 통화${delta(recvCalls,pRecvCalls,'',true)}`;
+    document.getElementById(`mcKpiRecvCallsSub_${cid}`).innerHTML=`60초+ 연결 통화${delta(recvCalls,pRecvCalls,'',true)}`;
     document.getElementById(`mcKpiRecv_${cid}`).textContent=recvRate.toFixed(1)+'%';
     document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
     // ② 응대 실패
     document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`연결 실패 or 90초 미만${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`연결 실패 or 60초 미만${delta(st.missedCalls,pst.missedCalls,'',false)}`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
     document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
     // ③ 콜백→실계약 전환 (상태값 메타 있는 법인만)
