@@ -8388,6 +8388,7 @@ function mcRenderTrendTable(scope,cid,corpName){
   const tRecvRate=tDenom?tRecv/tDenom*100:0;
   const tMissRate=tDenom?tMissed/tDenom*100:0;
   const unitLabel=mcUnit==='day'?'일자':mcUnit==='week'?'주차':'월';
+  const totalCell='background:#2d3748;color:#fff;font-weight:700;text-align:center';
   document.getElementById(`mcTrendTable_${cid}`).innerHTML=`
     <thead><tr style="text-align:center">
       <th style="text-align:center">${unitLabel}</th>
@@ -8398,13 +8399,13 @@ function mcRenderTrendTable(scope,cid,corpName){
       <th style="text-align:center">미수신률</th>
     </tr></thead>
     <tbody>
-      <tr style="background:#2d3748;color:#fff;font-weight:700">
-        <td>합계</td>
-        <td>${tDenom.toLocaleString()}</td>
-        <td>${tRecv.toLocaleString()}</td>
-        <td>${tRecvRate.toFixed(1)}%</td>
-        <td>${tMissed.toLocaleString()}</td>
-        <td>${tMissRate.toFixed(1)}%</td>
+      <tr>
+        <td style="${totalCell}">합계</td>
+        <td style="${totalCell}">${tDenom.toLocaleString()}</td>
+        <td style="${totalCell}">${tRecv.toLocaleString()}</td>
+        <td style="${totalCell}">${tRecvRate.toFixed(1)}%</td>
+        <td style="${totalCell}">${tMissed.toLocaleString()}</td>
+        <td style="${totalCell}">${tMissRate.toFixed(1)}%</td>
       </tr>
       ${rowsHtml||'<tr><td colspan="6" style="padding:14px;color:#94a3b8">기간 내 데이터 없음</td></tr>'}
     </tbody>`;
