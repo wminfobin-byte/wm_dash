@@ -8313,17 +8313,17 @@ function mcRenderTrend(scope,cid,corpName){
 function mcRenderCorpTable(dateScope){
   const corps=['위버스마인드','더블유케어'];
   let rowsHtml='';
-  const tot={denomAll:0,denomValid:0,missedCalls:0,missedCust:new Set()};
+  const tot={denomValid:0,missedCalls:0,missedCust:new Set()};
   for(const c of corps){
     const recs=dateScope.filter(r=>r.corp===c);
     const s=mcStats(recs);
-    tot.denomAll+=s.denomAll;tot.denomValid+=s.denomValid;tot.missedCalls+=s.missedCalls;
+    tot.denomValid+=s.denomValid;tot.missedCalls+=s.missedCalls;
     recs.filter(r=>r.isMissed).forEach(r=>tot.missedCust.add(r.caller));
-    rowsHtml+=`<tr><td style="font-weight:700">${c}</td><td>${s.missedCalls.toLocaleString()}</td><td>${s.missedCust.toLocaleString()}</td><td>${s.denomAll.toLocaleString()}</td><td>${s.denomValid.toLocaleString()}</td><td>${s.rateAll.toFixed(1)}%</td><td style="font-weight:700;color:#e71d36">${s.rateValid.toFixed(1)}%</td></tr>`;
+    rowsHtml+=`<tr><td style="font-weight:700">${c}</td><td>${s.denomValid.toLocaleString()}</td><td>${s.missedCalls.toLocaleString()}</td><td>${s.missedCust.toLocaleString()}</td><td style="font-weight:700;color:#e71d36">${s.rateValid.toFixed(1)}%</td></tr>`;
   }
-  const rAll=tot.denomAll?tot.missedCalls/tot.denomAll*100:0, rVal=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
-  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700"><td>합계</td><td>${tot.missedCalls.toLocaleString()}</td><td>${tot.missedCust.size.toLocaleString()}</td><td>${tot.denomAll.toLocaleString()}</td><td>${tot.denomValid.toLocaleString()}</td><td>${rAll.toFixed(1)}%</td><td style="color:#e71d36">${rVal.toFixed(1)}%</td></tr>`;
-  document.getElementById('mcCorpTable').innerHTML=`<thead><tr><th>법인</th><th>부재 콜</th><th>부재 고객</th><th>전체 모수 콜</th><th>유효 모수 콜</th><th>전체 미수신률</th><th>유효 미수신률</th></tr></thead><tbody>${rowsHtml}</tbody>`;
+  const rVal=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
+  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700"><td>합계</td><td>${tot.denomValid.toLocaleString()}</td><td>${tot.missedCalls.toLocaleString()}</td><td>${tot.missedCust.size.toLocaleString()}</td><td style="color:#e71d36">${rVal.toFixed(1)}%</td></tr>`;
+  document.getElementById('mcCorpTable').innerHTML=`<thead><tr><th>법인</th><th>부재 인입 수</th><th>부재 인입 미수신</th><th>부재 고객</th><th>미수신률</th></tr></thead><tbody>${rowsHtml}</tbody>`;
 }
 
 function mcCurrentDetailRows(){
