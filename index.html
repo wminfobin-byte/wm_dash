@@ -7760,6 +7760,9 @@ async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)awa
 
 // ── 정규화 / 날짜 헬퍼 ──
 function mcNormPhone(p){if(p==null)return '';return String(p).replace(/[^0-9]/g,'').replace(/^0+/,'');}
+// 수신(유효통화) 판정: status에 '연결' 포함 AND 통화시간 ≥ MC_VALID_CALL_DUR초
+const MC_VALID_CALL_DUR=60;
+function mcIsValidCall(r){return !!(r&&r.status&&r.status.includes('연결')&&(r.dur||0)>=MC_VALID_CALL_DUR);}
 function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김')||s.includes('톡이즈'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
 function mcCorpFromText(s){const t=String(s||'').trim();if(t.includes('위버')||t.includes('뇌새김'))return '위버스마인드';if(t.includes('케어')||/^w/i.test(t))return '더블유케어';return null;}
 // 표시명 — 내부 corp 키는 '더블유케어' 유지하고 UI에서만 '케어'로 짧게
@@ -7960,8 +7963,9 @@ function mcParseIncall(wb){
       if(startTs==null){nullStart++;continue;}
       const dur=mcDur(r[col.dur]);
       const status=String(r[col.status]==null?'':r[col.status]).trim();
-      const valid=status.includes('연결')&&dur>=60;
-      rows.push({corp,caller,rep,startTs,dur,status,valid});
+      const row={corp,caller,rep,startTs,dur,status};
+      row.valid=mcIsValidCall(row);
+      rows.push(row);
     }
   }
   dbg.parsed=rows.length; dbg.badCorp=badCorp; dbg.nullStart=nullStart; dbg.skipNoPhone=skipNoPhone;
@@ -8094,11 +8098,11 @@ function mcBuildJudged(){
       contractState='계약 없음';matchedCol=dbCol;
     }
     const dbState=(contractState==='계약 없음')?'DB 보유':(dbSet.has(corp+'|'+cb.caller)?'DB 보유':'DB 없음');
-    // Step5: IN call ±2분
+    // Step5: IN call ±2분 — valid는 현재 룰로 동적 재판정(IDB의 r.valid는 파싱 당시 룰)
     const ics=(incallMap.get(cb.caller+'|'+cb.rep)||[]).filter(r=>Math.abs(r.startTs-cb.callTs)<=120000);
     let isMissed,reason;
     if(ics.length===0){isMissed=true;reason='IN call 매칭 없음';}
-    else if(ics.some(r=>r.valid)){isMissed=false;reason='유효통화 연결';}
+    else if(ics.some(mcIsValidCall)){isMissed=false;reason='유효통화 연결';}
     else{isMissed=true;reason='유효통화 아님';}
     out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol,contractValid,contractCount});
   }
