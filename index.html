@@ -1385,7 +1385,7 @@ tr.row-h td{background:var(--gh-light)}
         <div class="ia-view-tabs" style="margin:0;gap:6px">
           <button class="ia-view-btn active" data-mccorpf="all" onclick="mcSwitchCorp('all')">전체</button>
           <button class="ia-view-btn" data-mccorpf="위버스마인드" onclick="mcSwitchCorp('위버스마인드')">위버스마인드</button>
-          <button class="ia-view-btn" data-mccorpf="더블유케어" onclick="mcSwitchCorp('더블유케어')">더블유케어</button>
+          <button class="ia-view-btn" data-mccorpf="더블유케어" onclick="mcSwitchCorp('더블유케어')">케어</button>
         </div>
         <div style="width:1px;height:22px;background:#e2e8f0"></div>
         <label>집계:</label>
@@ -7762,6 +7762,8 @@ async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)awa
 function mcNormPhone(p){if(p==null)return '';return String(p).replace(/[^0-9]/g,'').replace(/^0+/,'');}
 function mcCorpFromGroup(g){const s=String(g||'');if(s.includes('뇌새김')||s.includes('톡이즈'))return '위버스마인드';if(s.includes('케어'))return '더블유케어';return null;}
 function mcCorpFromText(s){const t=String(s||'').trim();if(t.includes('위버')||t.includes('뇌새김'))return '위버스마인드';if(t.includes('케어')||/^w/i.test(t))return '더블유케어';return null;}
+// 표시명 — 내부 corp 키는 '더블유케어' 유지하고 UI에서만 '케어'로 짧게
+function mcCorpDisp(c){return c==='더블유케어'?'케어':c;}
 function mcDatePart(v){
   if(v==null||v==='')return null;
   if(v instanceof Date){if(isNaN(v))return null;return new Date(v.getFullYear(),v.getMonth(),v.getDate());}
@@ -8071,22 +8073,24 @@ function mcBuildJudged(){
     if(!corp){unmapped++;const k=cb.rep||'(빈값)';const e=unmappedRepMap.get(k)||{대표번호_정규화:k,원본:cb.repRaw||'',건수:0};e.건수++;unmappedRepMap.set(k,e);continue;}
     // Step3: 계약
     const cConts=contractMap.get(corp+'|'+cb.caller)||[];
-    let contractState,matchedCol='-',contractValid=false;
+    let contractState,matchedCol='-',contractValid=false,contractCount=0;
     if(cConts.length){
       const pm=(cConts[0].phones||[]).find(p=>p.v===cb.caller);matchedCol=pm?pm.col:'-';
       const hasBefore=cConts.some(c=>c.orderTs!=null&&c.orderTs<=cb.callTs);
-      if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol,contractValid:false});continue;}
+      if(hasBefore){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'콜백 이전 계약 있음(제외)',dbState:'-',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'계약 후 콜백(제외)',allDenom:true,validDenom:false,matchedCol,contractValid:false,contractCount:0});continue;}
       contractState='콜백 이후 계약';
       // 차등성과 실계약수 룰(상태값 + 오더일==최종통화일 제외) 적용 — 양쪽 법인 공통
-      contractValid=cConts.some(c=>{
+      const validConts=cConts.filter(c=>{
         if(c.status==null)return false;
         const cls=classifyStatus(c.status||'',c.lastCallStr||'',c.orderDtStr||'');
         return cls==='계약'||cls==='취소';
       });
+      contractCount=validConts.length;
+      contractValid=contractCount>0;
     }else{
       // Step4: DB
       const dbCol=dbSet.get(corp+'|'+cb.caller);
-      if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-',contractValid:false});continue;}
+      if(!dbCol){out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState:'계약 없음',dbState:'DB 없음',inCount:0,inStatuses:[],inDur:[],isMissed:false,reason:'모수 아님(제외)',allDenom:true,validDenom:false,matchedCol:'-',contractValid:false,contractCount:0});continue;}
       contractState='계약 없음';matchedCol=dbCol;
     }
     const dbState=(contractState==='계약 없음')?'DB 보유':(dbSet.has(corp+'|'+cb.caller)?'DB 보유':'DB 없음');
@@ -8096,7 +8100,7 @@ function mcBuildJudged(){
     if(ics.length===0){isMissed=true;reason='IN call 매칭 없음';}
     else if(ics.some(r=>r.valid)){isMissed=false;reason='유효통화 연결';}
     else{isMissed=true;reason='유효통화 아님';}
-    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol,contractValid});
+    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol,contractValid,contractCount});
   }
   dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
   dbg.missed=out.filter(r=>r.isMissed).length; dbg.validDenom=out.filter(r=>r.validDenom).length;
@@ -8209,7 +8213,7 @@ function mcRender(){
   for(const c of ['위버스마인드','더블유케어']){
     const fs=mcFilesByType('contract',c);
     hasStatusMetaByCorp[c]=fs.some(f=>(f.rows||[]).some(r=>r.status!==undefined));
-    if(fs.length&&!hasStatusMetaByCorp[c]) warns.push(`${c} 계약 파일에 상태값 메타가 없어 계약 전환 분석이 비활성됩니다 — 계약 파일을 재업로드하세요.`);
+    if(fs.length&&!hasStatusMetaByCorp[c]) warns.push(`${mcCorpDisp(c)} 계약 파일에 상태값 메타가 없어 계약 전환 분석이 비활성됩니다 — 계약 파일을 재업로드하세요.`);
   }
   for(const f of mcFiles){if(f.warn)warns.push(f.warn);}
   const wb=document.getElementById('mcWarnBar');
@@ -8223,27 +8227,30 @@ function mcRender(){
   for(const c of corpList){
     const cid=c==='위버스마인드'?'weavers':'wcare';
     const color=c==='위버스마인드'?'#4361EE':'#F0920E';
-    const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'24px':'0'} 0 12px"><div style="width:6px;height:22px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:17px">${c}</h3></div>`:'';
+    const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'32px':'0'} 0 16px"><div style="width:6px;height:24px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:19px;font-weight:700">${mcCorpDisp(c)}</h3></div>`:'';
+    const subHead=(t,hint)=>`<div style="display:flex;align-items:baseline;gap:8px;margin:18px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:6px"><h4 style="margin:0;font-size:13px;font-weight:700;color:#1e293b;letter-spacing:.3px">${t}</h4><span style="font-size:11px;color:#94a3b8">${hint||''}</span></div>`;
     const convBlock=(hasStatusMetaByCorp[c])?`
-      <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
-        <h4 style="margin:0;font-size:14px;color:#475569">콜백 → 실계약 전환 <span style="font-weight:400;color:#94a3b8">(부재 인입 고객 기준 · 차등성과 실계약 룰 적용)</span></h4>
-      </div>
-      <div class="kpi-grid" style="margin-top:8px">
+      ${subHead('③ 콜백 → 실계약 전환','부재 인입 고객 기준 · 차등성과 실계약 룰 적용')}
+      <div class="kpi-grid">
         <div class="kpi-card"><div class="kl">부재 인입 고객 수</div><div class="kv" id="mcKpiUniq_${cid}">-</div><div class="ks" id="mcKpiUniqSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:#6d28d9"><div class="kl">실계약 전환</div><div class="kv" id="mcKpiConv_${cid}">-</div><div class="ks" id="mcKpiConvSub_${cid}"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약률</div><div class="kv" id="mcKpiCRate_${cid}">-</div><div class="ks" id="mcKpiCRateSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">실계약률</div><div class="kv" id="mcKpiCRate_${cid}">-</div><div class="ks" id="mcKpiCRateSub_${cid}"></div></div>
       </div>`:'';
     html+=`<div class="mc-corp-block">${heading}
+      ${subHead('① 고객 인입','고객이 회사로 다시 걸어준 콜')}
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kl">부재 인입 수</div><div class="kv" id="mcKpiDenom_${cid}">-</div><div class="ks" id="mcKpiDenomSub_${cid}"></div></div>
-        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 미수신</div><div class="kv" id="mcKpiCalls_${cid}">-</div><div class="ks" id="mcKpiCallsSub_${cid}"></div></div>
+        <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">부재 인입 수신</div><div class="kv" id="mcKpiRecvCalls_${cid}">-</div><div class="ks" id="mcKpiRecvCallsSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">수신률</div><div class="kv" id="mcKpiRecv_${cid}">-</div><div class="ks" id="mcKpiRecvSub_${cid}"></div></div>
+      </div>
+      ${subHead('② 응대 실패','연결 안 됐거나 90초 미만 종료')}
+      <div class="kpi-grid">
+        <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">부재 인입 미수신</div><div class="kv" id="mcKpiCalls_${cid}">-</div><div class="ks" id="mcKpiCallsSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">미수신률</div><div class="kv" id="mcKpiMiss_${cid}">-</div><div class="ks" id="mcKpiMissSub_${cid}"></div></div>
       </div>${convBlock}
-      <div class="ia-section" style="margin-top:14px;margin-bottom:0">
-        <h3>부재 인입 추이 <span class="table-sub" id="mcTrendUnitLabel_${cid}"></span></h3>
-        <div class="ia-chart-wrap"><canvas id="mcTrendChart_${cid}"></canvas></div>
-      </div>
+      ${subHead('④ 추이','일자·주차·월 단위')}
+      <div class="ia-chart-wrap" style="margin-top:0"><canvas id="mcTrendChart_${cid}"></canvas></div>
+      <div id="mcTrendUnitLabel_${cid}" style="font-size:11px;color:#94a3b8;margin-top:4px;text-align:center"></div>
     </div>`;
   }
   container.innerHTML=html;
@@ -8255,36 +8262,47 @@ function mcRender(){
     const st=mcStats(scope), pst=mcStats(prevScope);
     const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
     const recvCalls=st.denomValid-st.missedCalls, recvRate=st.denomValid?recvCalls/st.denomValid*100:0;
-    const pRecvRate=pst.denomValid?(pst.denomValid-pst.missedCalls)/pst.denomValid*100:0;
+    const pRecvCalls=pst.denomValid-pst.missedCalls, pRecvRate=pst.denomValid?pRecvCalls/pst.denomValid*100:0;
+    // ① 고객 인입
     document.getElementById(`mcKpiDenom_${cid}`).textContent=st.denomValid.toLocaleString()+'건';
-    document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`전체 콜백 ${st.denomAll.toLocaleString()}콜 중${delta(st.denomValid,pst.denomValid,'',true)}`;
-    document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`부재 인입 수 ${st.denomValid.toLocaleString()}콜 중${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+    document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`고객이 회사로 회신한 콜${delta(st.denomValid,pst.denomValid,'',true)}`;
+    document.getElementById(`mcKpiRecvCalls_${cid}`).textContent=recvCalls.toLocaleString()+'건';
+    document.getElementById(`mcKpiRecvCallsSub_${cid}`).innerHTML=`90초+ 연결 통화${delta(recvCalls,pRecvCalls,'',true)}`;
     document.getElementById(`mcKpiRecv_${cid}`).textContent=recvRate.toFixed(1)+'%';
-    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+    // ② 응대 실패
+    document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
+    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`연결 실패 or 90초 미만${delta(st.missedCalls,pst.missedCalls,'',false)}`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
-    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 인입 미수신 ${st.missedCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
-    // 콜백→실계약 전환 KPI — 분모는 부재 인입 수(받은+부재 모두)의 발신자 dedup
+    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+    // ③ 콜백→실계약 전환 (상태값 메타 있는 법인만)
     if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
       const validRecs=scope.filter(r=>r.validDenom);
       const pValidRecs=prevScope.filter(r=>r.validDenom);
       const uniqPhones=new Set(validRecs.map(r=>r.caller));
-      const convPhones=new Set(validRecs.filter(r=>r.contractValid).map(r=>r.caller));
       const pUniqPhones=new Set(pValidRecs.map(r=>r.caller));
-      const pConvPhones=new Set(pValidRecs.filter(r=>r.contractValid).map(r=>r.caller));
-      const cRate=uniqPhones.size?convPhones.size/uniqPhones.size*100:0;
-      const pCRate=pUniqPhones.size?pConvPhones.size/pUniqPhones.size*100:0;
+      // 같은 phone이 여러 콜백 record에 등장해도 contractCount는 phone당 한 번만 합산
+      const phoneCount=new Map();
+      for(const r of validRecs){if(!phoneCount.has(r.caller))phoneCount.set(r.caller,r.contractCount||0);}
+      const pPhoneCount=new Map();
+      for(const r of pValidRecs){if(!pPhoneCount.has(r.caller))pPhoneCount.set(r.caller,r.contractCount||0);}
+      const convCount=Array.from(phoneCount.values()).reduce((a,b)=>a+b,0);
+      const pConvCount=Array.from(pPhoneCount.values()).reduce((a,b)=>a+b,0);
+      const convCust=Array.from(phoneCount.entries()).filter(([_,v])=>v>0).length;
+      const pConvCust=Array.from(pPhoneCount.entries()).filter(([_,v])=>v>0).length;
+      const cRate=uniqPhones.size?convCust/uniqPhones.size*100:0;
+      const pCRate=pUniqPhones.size?pConvCust/pUniqPhones.size*100:0;
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 수 ${st.denomValid.toLocaleString()}콜의 발신자 dedup${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
-      document.getElementById(`mcKpiConv_${cid}`).textContent=convPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`부재 인입 이후 실계약 발생${delta(convPhones.size,pConvPhones.size,'',true)}`;
+      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 ${st.denomValid.toLocaleString()}콜의 고유 고객${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
+      document.getElementById(`mcKpiConv_${cid}`).textContent=convCount.toLocaleString()+'건';
+      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`고객 ${convCust.toLocaleString()}명에서 발생${delta(convCount,pConvCount,'',true)}`;
       document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
-      document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= ${convPhones.size.toLocaleString()} / ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
+      document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= 전환 ${convCust.toLocaleString()} / 부재 인입 ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
     }
     mcRenderTrend(scope,cid,c);
   }
   // 법인별 비교 (날짜 범위 내, 법인 필터 무관)
-  mcRenderCorpTable(dateScope);
+  mcRenderCorpTable(dateScope,hasStatusMetaByCorp);
   // 상세 리스트
   mcRenderDetail();
 }
@@ -8294,7 +8312,7 @@ function mcBucketKey(ts){return mcUnit==='day'?mcDayMs(ts):mcUnit==='week'?mcWee
 function mcBucketLabel(k){return mcUnit==='day'?mcFmtDate(k):mcUnit==='week'?mcWeekLabel(k):mcMonthLabel(k);}
 
 function mcRenderTrend(scope,cid,corpName){
-  document.getElementById(`mcTrendUnitLabel_${cid}`).textContent=`(${mcUnit==='day'?'일자별':mcUnit==='week'?'주차별':'월별'} · 막대=부재 콜수, 선=미수신률)`;
+  document.getElementById(`mcTrendUnitLabel_${cid}`).textContent=`막대 = 부재 인입 미수신 콜수 · 선 = 미수신률`;
   const buckets=new Map();
   for(const r of scope){
     const k=mcBucketKey(r.callTs);
@@ -8307,7 +8325,7 @@ function mcRenderTrend(scope,cid,corpName){
   const labels=keys.map(mcBucketLabel);
   const color=corpName==='위버스마인드'?'#4361EE':'#F0920E';
   const ds=[
-    {type:'bar',label:`${corpName} 부재콜`,data:keys.map(k=>buckets.get(k).m),backgroundColor:color,yAxisID:'y'},
+    {type:'bar',label:`${mcCorpDisp(corpName)} 부재 인입 미수신`,data:keys.map(k=>buckets.get(k).m),backgroundColor:color,yAxisID:'y'},
     {type:'line',label:'미수신률(%)',data:keys.map(k=>{const b=buckets.get(k);return b.v?+(b.m/b.v*100).toFixed(1):0;}),borderColor:'#e71d36',backgroundColor:'#e71d36',yAxisID:'y1',tension:.25,pointRadius:3,fill:false}
   ];
   const ctx=document.getElementById(`mcTrendChart_${cid}`);
@@ -8322,20 +8340,66 @@ function mcRenderTrend(scope,cid,corpName){
   }});
 }
 
-function mcRenderCorpTable(dateScope){
+function mcRenderCorpTable(dateScope,hasStatusMetaByCorp){
   const corps=['위버스마인드','더블유케어'];
+  hasStatusMetaByCorp=hasStatusMetaByCorp||{'위버스마인드':false,'더블유케어':false};
   let rowsHtml='';
-  const tot={denomValid:0,missedCalls:0,missedCust:new Set()};
+  const tot={denomValid:0,recvCalls:0,missedCalls:0,uniqPhones:new Set(),convCount:0,convCust:0};
   for(const c of corps){
     const recs=dateScope.filter(r=>r.corp===c);
     const s=mcStats(recs);
-    tot.denomValid+=s.denomValid;tot.missedCalls+=s.missedCalls;
-    recs.filter(r=>r.isMissed).forEach(r=>tot.missedCust.add(r.caller));
-    rowsHtml+=`<tr><td style="font-weight:700">${c}</td><td>${s.denomValid.toLocaleString()}</td><td>${s.missedCalls.toLocaleString()}</td><td>${s.missedCust.toLocaleString()}</td><td style="font-weight:700;color:#e71d36">${s.rateValid.toFixed(1)}%</td></tr>`;
+    const valid=recs.filter(r=>r.validDenom);
+    const recvCalls=s.denomValid-s.missedCalls;
+    const recvRate=s.denomValid?recvCalls/s.denomValid*100:0;
+    // 전환: phone-deduped contractCount 합산 + 전환 고객수
+    const phoneCount=new Map();
+    for(const r of valid){if(!phoneCount.has(r.caller))phoneCount.set(r.caller,r.contractCount||0);}
+    const uniqPhonesC=new Set(valid.map(r=>r.caller));
+    const convCountC=Array.from(phoneCount.values()).reduce((a,b)=>a+b,0);
+    const convCustC=Array.from(phoneCount.values()).filter(v=>v>0).length;
+    const contractRate=uniqPhonesC.size?convCustC/uniqPhonesC.size*100:0;
+    tot.denomValid+=s.denomValid;tot.recvCalls+=recvCalls;tot.missedCalls+=s.missedCalls;
+    valid.forEach(r=>tot.uniqPhones.add(r.caller));
+    tot.convCount+=convCountC;tot.convCust+=convCustC;
+    const showConv=hasStatusMetaByCorp[c];
+    rowsHtml+=`<tr>
+      <td style="font-weight:700">${mcCorpDisp(c)}</td>
+      <td>${s.denomValid.toLocaleString()}</td>
+      <td>${recvCalls.toLocaleString()}</td>
+      <td style="color:#2ec4b6">${recvRate.toFixed(1)}%</td>
+      <td>${s.missedCalls.toLocaleString()}</td>
+      <td style="color:#e71d36">${s.rateValid.toFixed(1)}%</td>
+      <td>${uniqPhonesC.size.toLocaleString()}</td>
+      <td>${showConv?convCountC.toLocaleString():'<span style="color:#cbd5e1">-</span>'}</td>
+      <td style="color:#6d28d9">${showConv?contractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>'}</td>
+    </tr>`;
   }
-  const rVal=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
-  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700"><td>합계</td><td>${tot.denomValid.toLocaleString()}</td><td>${tot.missedCalls.toLocaleString()}</td><td>${tot.missedCust.size.toLocaleString()}</td><td style="color:#e71d36">${rVal.toFixed(1)}%</td></tr>`;
-  document.getElementById('mcCorpTable').innerHTML=`<thead><tr><th>법인</th><th>부재 인입 수</th><th>부재 인입 미수신</th><th>부재 고객</th><th>미수신률</th></tr></thead><tbody>${rowsHtml}</tbody>`;
+  const tRecvRate=tot.denomValid?tot.recvCalls/tot.denomValid*100:0;
+  const tMissRate=tot.denomValid?tot.missedCalls/tot.denomValid*100:0;
+  const tContractRate=tot.uniqPhones.size?tot.convCust/tot.uniqPhones.size*100:0;
+  const anyConv=hasStatusMetaByCorp['위버스마인드']||hasStatusMetaByCorp['더블유케어'];
+  rowsHtml+=`<tr style="background:#f1f5f9;font-weight:700">
+    <td>합계</td>
+    <td>${tot.denomValid.toLocaleString()}</td>
+    <td>${tot.recvCalls.toLocaleString()}</td>
+    <td style="color:#2ec4b6">${tRecvRate.toFixed(1)}%</td>
+    <td>${tot.missedCalls.toLocaleString()}</td>
+    <td style="color:#e71d36">${tMissRate.toFixed(1)}%</td>
+    <td>${tot.uniqPhones.size.toLocaleString()}</td>
+    <td>${anyConv?tot.convCount.toLocaleString():'<span style="color:#cbd5e1">-</span>'}</td>
+    <td style="color:#6d28d9">${anyConv?tContractRate.toFixed(1)+'%':'<span style="color:#cbd5e1">-</span>'}</td>
+  </tr>`;
+  document.getElementById('mcCorpTable').innerHTML=`<thead><tr>
+    <th>법인</th>
+    <th>부재 인입 수</th>
+    <th>부재 인입 수신</th>
+    <th>수신률</th>
+    <th>부재 인입 미수신</th>
+    <th>미수신률</th>
+    <th>부재 인입 고객 수</th>
+    <th>실계약수</th>
+    <th>실계약률</th>
+  </tr></thead><tbody>${rowsHtml}</tbody>`;
 }
 
 function mcCurrentDetailRows(){
