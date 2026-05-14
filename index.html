@@ -7810,8 +7810,8 @@ function mcDur(v){
   if(s.includes(':'))return Math.round(mcTimeMs(s)/1000);
   const n=parseFloat(s.replace(/[^0-9.]/g,''));return isNaN(n)?0:n;
 }
-function mcFmtDate(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
-function mcFmtDateTime(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
+function mcFmtDate(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');const wd=['일','월','화','수','목','금','토'][d.getDay()];return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}(${wd})`;}
+function mcFmtDateTime(ts){if(ts==null)return '-';const d=new Date(ts);const p=n=>String(n).padStart(2,'0');const wd=['일','월','화','수','목','금','토'][d.getDay()];return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}(${wd}) ${p(d.getHours())}:${p(d.getMinutes())}`;}
 function mcWeekKey(ts){const d=new Date(ts);const day=(d.getDay()+6)%7;const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-day);return mon.getTime();}
 function mcWeekLabel(monTs){const d=new Date(monTs);const e=new Date(monTs+6*86400000);const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())}~${p(e.getMonth()+1)}/${p(e.getDate())}`;}
 function mcMonthKey(ts){const d=new Date(ts);return d.getFullYear()*12+d.getMonth();}
