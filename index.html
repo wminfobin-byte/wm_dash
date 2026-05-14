@@ -8226,10 +8226,10 @@ function mcRender(){
     const heading=mcCorpFilter==='all'?`<div style="display:flex;align-items:center;gap:10px;margin:${html?'24px':'0'} 0 12px"><div style="width:6px;height:22px;background:${color};border-radius:3px"></div><h3 style="margin:0;font-size:17px">${c}</h3></div>`:'';
     const convBlock=(hasStatusMetaByCorp[c])?`
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
-        <h4 style="margin:0;font-size:14px;color:#475569">콜백 → 실계약 전환 <span style="font-weight:400;color:#94a3b8">(부재 고객 기준 · 차등성과 실계약 룰 적용)</span></h4>
+        <h4 style="margin:0;font-size:14px;color:#475569">콜백 → 실계약 전환 <span style="font-weight:400;color:#94a3b8">(부재 인입 고객 기준 · 차등성과 실계약 룰 적용)</span></h4>
       </div>
       <div class="kpi-grid" style="margin-top:8px">
-        <div class="kpi-card"><div class="kl">콜백 대상 고객</div><div class="kv" id="mcKpiUniq_${cid}">-</div><div class="ks" id="mcKpiUniqSub_${cid}"></div></div>
+        <div class="kpi-card"><div class="kl">부재 인입 고객 수</div><div class="kv" id="mcKpiUniq_${cid}">-</div><div class="ks" id="mcKpiUniqSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:#6d28d9"><div class="kl">실계약 전환</div><div class="kv" id="mcKpiConv_${cid}">-</div><div class="ks" id="mcKpiConvSub_${cid}"></div></div>
         <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약률</div><div class="kv" id="mcKpiCRate_${cid}">-</div><div class="ks" id="mcKpiCRateSub_${cid}"></div></div>
       </div>`:'';
@@ -8264,20 +8264,20 @@ function mcRender(){
     document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= 유효통화 ${recvCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
     document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= 부재 인입 미수신 ${st.missedCalls.toLocaleString()} / 부재 인입 수 ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
-    // 콜백→실계약 전환 KPI (상태값 메타 있는 법인만) — 분모는 부재 콜의 발신자 dedup(=부재 고객)
+    // 콜백→실계약 전환 KPI — 분모는 부재 인입 수(받은+부재 모두)의 발신자 dedup
     if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
-      const missedRecs=scope.filter(r=>r.isMissed);
-      const pMissedRecs=prevScope.filter(r=>r.isMissed);
-      const uniqPhones=new Set(missedRecs.map(r=>r.caller));
-      const convPhones=new Set(missedRecs.filter(r=>r.contractValid).map(r=>r.caller));
-      const pUniqPhones=new Set(pMissedRecs.map(r=>r.caller));
-      const pConvPhones=new Set(pMissedRecs.filter(r=>r.contractValid).map(r=>r.caller));
+      const validRecs=scope.filter(r=>r.validDenom);
+      const pValidRecs=prevScope.filter(r=>r.validDenom);
+      const uniqPhones=new Set(validRecs.map(r=>r.caller));
+      const convPhones=new Set(validRecs.filter(r=>r.contractValid).map(r=>r.caller));
+      const pUniqPhones=new Set(pValidRecs.map(r=>r.caller));
+      const pConvPhones=new Set(pValidRecs.filter(r=>r.contractValid).map(r=>r.caller));
       const cRate=uniqPhones.size?convPhones.size/uniqPhones.size*100:0;
       const pCRate=pUniqPhones.size?pConvPhones.size/pUniqPhones.size*100:0;
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`= 부재 고객 (부재 인입 미수신 ${st.missedCalls.toLocaleString()}콜 dedup)${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
+      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 수 ${st.denomValid.toLocaleString()}콜의 발신자 dedup${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
       document.getElementById(`mcKpiConv_${cid}`).textContent=convPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`부재 인입 미수신 이후 실계약 발생${delta(convPhones.size,pConvPhones.size,'',true)}`;
+      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`부재 인입 이후 실계약 발생${delta(convPhones.size,pConvPhones.size,'',true)}`;
       document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
       document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= ${convPhones.size.toLocaleString()} / ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
     }
