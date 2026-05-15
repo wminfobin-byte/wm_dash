@@ -7880,6 +7880,37 @@ async function mcDeleteFile(id){
   mcJudged=null;
   mcUpdateStatusDots();mcUpdateUploadStatus();mcRenderFileHistory();
 }
+
+// ── 진단 헬퍼 (콘솔에서 mcDiag() 호출) ──
+window.mcDiag=function(){
+  if(!window.mcFiles||!mcFiles.length){console.log('mcFiles 비어있음. 부재인입 탭이 초기화됐는지 확인하세요.');return;}
+  const summary=mcFiles.map(f=>({id:f.id,type:f.type,corp:f.corp||'-',파일명:f.fileName,행수:(f.rows||[]).length,업로드:new Date(f.uploadTime).toLocaleString('ko-KR'),경고:f.warn?'⚠️':''}));
+  console.log('%c── 부재인입 업로드 파일 전체 ──','color:#2563eb;font-weight:bold');
+  console.table(summary);
+  // 경고 있는 파일
+  const warned=mcFiles.filter(f=>f.warn);
+  if(warned.length){
+    console.log(`%c── 경고가 있는 파일 ${warned.length}개 ──`,'color:#dc2626;font-weight:bold');
+    warned.forEach(f=>{
+      console.log(`%c[${f.fileName}] type=${f.type} corp=${f.corp||'-'} 행수=${(f.rows||[]).length}`,'color:#dc2626;font-weight:bold');
+      console.log(f.warn);
+      if(f.badCorpSamples&&f.badCorpSamples.length){console.log('  법인 미분류 샘플:');console.table(f.badCorpSamples);}
+    });
+  }
+  // 더블유케어 DB / 계약 0행
+  const emptyDw=mcFiles.filter(f=>(f.type==='customerdb'||f.type==='contract')&&f.corp==='더블유케어'&&(f.rows||[]).length===0);
+  if(emptyDw.length){console.log('%c── 더블유케어 DB·계약 중 0행 파일 ──','color:#dc2626;font-weight:bold');emptyDw.forEach(f=>console.log(`  · [${f.type}] ${f.fileName} (업로드 ${new Date(f.uploadTime).toLocaleString('ko-KR')})`));}
+  // IN call 미분류 누적
+  const badIncall=mcFiles.filter(f=>f.type==='incall'&&f.warn&&f.warn.includes('법인 미분류'));
+  if(badIncall.length){
+    console.log('%c── IN call 법인 미분류가 있는 파일 ──','color:#dc2626;font-weight:bold');
+    badIncall.forEach(f=>{
+      const m=(f.warn||'').match(/([\d,]+)행 제외/);const cnt=m?m[1]:'?';
+      console.log(`  · ${f.fileName} → ${cnt}행 미분류${f.badCorpSamples?`, 샘플 ${f.badCorpSamples.length}건 저장됨`:' (샘플 미저장 — 신규 업로드분만 저장됨)'}`);
+    });
+  }
+  return summary;
+};
 async function mcResetAll(){
   if(!confirm('부재인입 탭의 모든 업로드 데이터를 삭제합니다. 계속할까요?'))return;
   await mcIdbClear();
@@ -7915,6 +7946,9 @@ function mcBindUploadBoxes(){
         mcFiles=mcFiles.filter(f=>f.type!=='mapping');
       }
       const rec={type,corp,fileName:file.name,fileHash,uploadTime:Date.now(),rows:parsed.rows,warn:parsed.warn||''};
+      if(type==='incall'&&window.mcIncallDebug&&window.mcIncallDebug.badCorpSamples&&window.mcIncallDebug.badCorpSamples.length){
+        rec.badCorpSamples=window.mcIncallDebug.badCorpSamples.slice(0,50);
+      }
       const newId=await mcIdbAdd(rec);rec.id=newId;mcFiles.push(rec);
       return {status:'ok',name:file.name,warn:parsed.warn?`[${file.name}]\n${parsed.warn}`:''};
     };
