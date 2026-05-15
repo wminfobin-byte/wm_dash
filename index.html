@@ -8271,8 +8271,6 @@ function mcRender(){
   if(!mcJudged)return;
   const [start,end]=mcRangeMs();
   const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end); // 매핑된 콜백 전체(법인 필터 무관)
-  const span=isFinite(start)&&isFinite(end)?(end-start):0;
-  const prevDateScope=span>0?mcJudged.filter(r=>r.callTs>=(start-span)&&r.callTs<start):[];
   // 경고바
   const warns=[];
   if(mcMeta&&mcMeta.unmapped){
@@ -8339,46 +8337,36 @@ function mcRender(){
   for(const c of corpList){
     const cid=c==='위버스마인드'?'weavers':'wcare';
     const scope=dateScope.filter(r=>r.corp===c);
-    const prevScope=prevDateScope.filter(r=>r.corp===c);
-    const st=mcStats(scope), pst=mcStats(prevScope);
-    const delta=(cur,prev,unit,goodUp)=>{if(!prevScope.length)return '';const d=cur-prev;if(Math.abs(d)<(unit==='pp'?0.05:0.5))return ` <span style="color:#94a3b8">– 전기 ${prev.toFixed(unit==='pp'?1:0)}${unit==='pp'?'%':''}</span>`;const up=d>0;const good=goodUp?up:!up;const col=good?'#2ec4b6':'#e71d36';return ` <span style="color:${col}">${up?'▲':'▼'}${Math.abs(d).toFixed(unit==='pp'?1:0)}${unit==='pp'?'pp':''}</span>`;};
+    const st=mcStats(scope);
     const recvCalls=st.denomValid-st.missedCalls, recvRate=st.denomValid?recvCalls/st.denomValid*100:0;
-    const pRecvCalls=pst.denomValid-pst.missedCalls, pRecvRate=pst.denomValid?pRecvCalls/pst.denomValid*100:0;
     // ① 고객 인입
     document.getElementById(`mcKpiDenom_${cid}`).textContent=st.denomValid.toLocaleString()+'건';
-    document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`고객이 회사로 회신한 콜${delta(st.denomValid,pst.denomValid,'',true)}`;
+    document.getElementById(`mcKpiDenomSub_${cid}`).innerHTML=`고객이 회사로 회신한 콜`;
     document.getElementById(`mcKpiRecvCalls_${cid}`).textContent=recvCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiRecvCallsSub_${cid}`).innerHTML=`60초+ 연결 통화${delta(recvCalls,pRecvCalls,'',true)}`;
+    document.getElementById(`mcKpiRecvCallsSub_${cid}`).innerHTML=`60초+ 연결 통화`;
     document.getElementById(`mcKpiRecv_${cid}`).textContent=recvRate.toFixed(1)+'%';
-    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(recvRate,pRecvRate,'pp',true)}`;
+    document.getElementById(`mcKpiRecvSub_${cid}`).innerHTML=`= ${recvCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜`;
     // ② 응대 실패
     document.getElementById(`mcKpiCalls_${cid}`).textContent=st.missedCalls.toLocaleString()+'건';
-    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`연결 실패 or 60초 미만${delta(st.missedCalls,pst.missedCalls,'',false)}`;
+    document.getElementById(`mcKpiCallsSub_${cid}`).innerHTML=`연결 실패 or 60초 미만`;
     document.getElementById(`mcKpiMiss_${cid}`).textContent=st.rateValid.toFixed(1)+'%';
-    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜${delta(st.rateValid,pst.rateValid,'pp',false)}`;
+    document.getElementById(`mcKpiMissSub_${cid}`).innerHTML=`= ${st.missedCalls.toLocaleString()} / ${st.denomValid.toLocaleString()}콜`;
     // ③ 콜백→실계약 전환 (상태값 메타 있는 법인만)
     if(hasStatusMetaByCorp[c]&&document.getElementById(`mcKpiUniq_${cid}`)){
       const validRecs=scope.filter(r=>r.validDenom);
-      const pValidRecs=prevScope.filter(r=>r.validDenom);
       const uniqPhones=new Set(validRecs.map(r=>r.caller));
-      const pUniqPhones=new Set(pValidRecs.map(r=>r.caller));
       // 같은 phone이 여러 콜백 record에 등장해도 contractCount는 phone당 한 번만 합산
       const phoneCount=new Map();
       for(const r of validRecs){if(!phoneCount.has(r.caller))phoneCount.set(r.caller,r.contractCount||0);}
-      const pPhoneCount=new Map();
-      for(const r of pValidRecs){if(!pPhoneCount.has(r.caller))pPhoneCount.set(r.caller,r.contractCount||0);}
       const convCount=Array.from(phoneCount.values()).reduce((a,b)=>a+b,0);
-      const pConvCount=Array.from(pPhoneCount.values()).reduce((a,b)=>a+b,0);
       const convCust=Array.from(phoneCount.entries()).filter(([_,v])=>v>0).length;
-      const pConvCust=Array.from(pPhoneCount.entries()).filter(([_,v])=>v>0).length;
       const cRate=uniqPhones.size?convCust/uniqPhones.size*100:0;
-      const pCRate=pUniqPhones.size?pConvCust/pUniqPhones.size*100:0;
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
-      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 ${st.denomValid.toLocaleString()}콜의 고유 고객${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
+      document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 ${st.denomValid.toLocaleString()}콜의 고유 고객`;
       document.getElementById(`mcKpiConv_${cid}`).textContent=convCount.toLocaleString()+'건';
       document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`부재 인입 후 발생한 계약 건`;
       document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
-      document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= 전환 ${convCust.toLocaleString()} / 부재 인입 ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
+      document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= 전환 ${convCust.toLocaleString()} / 부재 인입 ${uniqPhones.size.toLocaleString()}명`;
     }
     mcRenderTrend(scope,cid,c);
     mcRenderTrendTable(scope,cid,c);
