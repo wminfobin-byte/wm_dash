@@ -9305,13 +9305,12 @@ function gcRenderPersonTable(dbAgg, contAgg, cxAgg){
   const arr = Array.from(persons.entries()).map(([n,info])=>({rawName:n, ...info}));
   arr.sort((a,b)=>{
     if(a.center!==b.center) return a.center.localeCompare(b.center);
-    if(a.series!==b.series) return a.series.localeCompare(b.series);
     return a.displayName.localeCompare(b.displayName);
   });
   const rows = arr.map(p=>{
     const f = (s,c,n)=>n===p.rawName;
     return {
-      label: `<span style="color:#64748b;font-size:11px">${p.center} · ${p.series}</span><br><b>${p.displayName}</b>`,
+      label: `<span style="color:#64748b;font-size:11px">${p.center}</span> ${p.displayName}`,
       vals: gcCalcRow(
         gcSumBy(dbAgg,4,f), gcSumBy(dbAgg,5,f),
         gcSumBy(contAgg,4,f), gcSumBy(contAgg,5,f),
