@@ -1597,24 +1597,28 @@ tr.row-h td{background:var(--gh-light)}
             <div class="icon">📋</div><div class="label">DB수 (다중)</div>
             <div class="desc">WM_고객관리<br>분배일이 4·5월인 행</div>
             <div class="filename" id="fname-gc-db"></div>
+            <div class="progress-bar hidden" id="prog-gc-db"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-gc-cont">
             <input type="file" accept=".xlsx,.xls" id="file-gc-cont" multiple>
             <div class="icon">📝</div><div class="label">실계약수 (다중)</div>
             <div class="desc">WM_고객관리<br>오더일 + 계약/취소 상태</div>
             <div class="filename" id="fname-gc-cont"></div>
+            <div class="progress-bar hidden" id="prog-gc-cont"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-gc-cancel">
             <input type="file" accept=".xlsx,.xls" id="file-gc-cancel" multiple>
             <div class="icon">↩️</div><div class="label">취소수 (다중)</div>
             <div class="desc">신청자관리<br>환불일(AQ열)이 4·5월</div>
             <div class="filename" id="fname-gc-cancel"></div>
+            <div class="progress-bar hidden" id="prog-gc-cancel"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-gc-attend">
             <input type="file" accept=".xlsx,.xls" id="file-gc-attend">
             <div class="icon">👥</div><div class="label">명단 (선택)</div>
             <div class="desc">근태보고<br>없어도 동작</div>
             <div class="filename" id="fname-gc-attend"></div>
+            <div class="progress-bar hidden" id="prog-gc-attend"><div class="progress-fill"></div></div>
           </div>
         </div>
         <div style="margin-top:18px;text-align:center">
@@ -8976,6 +8980,10 @@ function gcInit(){
     input.addEventListener('change', async (e)=>{
       const files = Array.from(e.target.files||[]);
       if(!files.length) return;
+      const prog = document.getElementById('prog-gc-'+type);
+      prog.classList.remove('hidden','done');
+      prog.classList.add('loading');
+      let anyError = false;
       for(const file of files){
         try{
           // 동일 이름 재업로드 시 스킵 (다중 슬롯에 한해)
@@ -8989,11 +8997,20 @@ function gcInit(){
             gcFiles[type] = {fileName:file.name, data};
           }
         }catch(err){
+          anyError = true;
           alert(`파일 읽기 실패 (${file.name}): `+err.message);
         }
       }
       gcRenderFileNames(type);
       gcCheckReady();
+      prog.classList.remove('loading');
+      if(!anyError){
+        prog.classList.add('done');
+        // 1.5초 후 진행바 숨김 (파일명 목록은 그대로 유지)
+        setTimeout(()=>{ prog.classList.add('hidden'); prog.classList.remove('done'); }, 1500);
+      }else{
+        prog.classList.add('hidden');
+      }
       // 같은 파일 다시 올릴 수 있게 input 초기화
       e.target.value = '';
     });
