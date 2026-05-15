@@ -7882,8 +7882,9 @@ async function mcDeleteFile(id){
 }
 
 // ── 진단 헬퍼 (콘솔에서 mcDiag() 호출) ──
-window.mcDiag=function(){
-  if(!window.mcFiles||!mcFiles.length){console.log('mcFiles 비어있음. 부재인입 탭이 초기화됐는지 확인하세요.');return;}
+window.mcDiag=async function(){
+  if((!window.mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();}
+  if(!window.mcFiles||!mcFiles.length){console.log('mcFiles 비어있음. 부재인입 탭에 업로드된 파일이 없거나, IDB 초기화에 실패했습니다.');return;}
   const summary=mcFiles.map(f=>({id:f.id,type:f.type,corp:f.corp||'-',파일명:f.fileName,행수:(f.rows||[]).length,업로드:new Date(f.uploadTime).toLocaleString('ko-KR'),경고:f.warn?'⚠️':''}));
   console.log('%c── 부재인입 업로드 파일 전체 ──','color:#2563eb;font-weight:bold');
   console.table(summary);
