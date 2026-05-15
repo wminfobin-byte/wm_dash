@@ -1274,10 +1274,10 @@ tr.row-h td{background:var(--gh-light)}
       <button class="modal-close" onclick="mcCloseModal()">&times;</button>
       <div id="mcModalUpload">
         <h2>파일 업로드 — 부재인입</h2>
-        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">IN call · 콜백 · DB · 계약 데이터는 누적 저장됩니다. 동일 파일 재업로드 시 자동으로 건너뜁니다.</p>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">IN call · 콜백 · DB · 계약 데이터는 누적 저장됩니다. 각 박스에 <b>여러 파일을 한 번에 드래그앤드롭</b>할 수 있으며, 동일 파일 재업로드 시 자동으로 건너뜁니다.</p>
         <div class="upload-grid">
           <div class="upload-box" id="box-mc-incall">
-            <input type="file" accept=".xlsx,.xls" data-mctype="incall" data-mccorp="">
+            <input type="file" accept=".xlsx,.xls" data-mctype="incall" data-mccorp="" multiple>
             <div class="icon">📞</div>
             <div class="label">IN call 데이터</div>
             <div class="desc">인입 콜 로그 (시트 다수)<br>3행 헤더 · 4행부터 · I열로 법인 자동분류</div>
@@ -1286,7 +1286,7 @@ tr.row-h td{background:var(--gh-light)}
             <div class="progress-bar hidden" id="prog-mc-incall"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-mc-callback">
-            <input type="file" accept=".xlsx,.xls,.csv" data-mctype="callback" data-mccorp="">
+            <input type="file" accept=".xlsx,.xls,.csv" data-mctype="callback" data-mccorp="" multiple>
             <div class="icon">📋</div>
             <div class="label">콜백 데이터</div>
             <div class="desc">전체 인입 모수<br>A 대표번호 · B 발신자 · E call시간</div>
@@ -1295,7 +1295,7 @@ tr.row-h td{background:var(--gh-light)}
             <div class="progress-bar hidden" id="prog-mc-callback"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-mc-db-weavers">
-            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="위버스마인드">
+            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="위버스마인드" multiple>
             <div class="icon">🗂️</div>
             <div class="label">DB 데이터 — 위버스마인드</div>
             <div class="desc">WM_고객관리 (차등성과 DB수 형식)<br>전화번호 M열 · 고객키 G · 분배일 I</div>
@@ -1304,7 +1304,7 @@ tr.row-h td{background:var(--gh-light)}
             <div class="progress-bar hidden" id="prog-mc-db-weavers"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-mc-db-wcare">
-            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="더블유케어">
+            <input type="file" accept=".xlsx,.xls" data-mctype="customerdb" data-mccorp="더블유케어" multiple>
             <div class="icon">🗂️</div>
             <div class="label">DB 데이터 — 더블유케어</div>
             <div class="desc">WM_고객관리 A~AE 구조<br>전화번호 M·N·O열 · 고객키 G · 분배일 I</div>
@@ -1313,7 +1313,7 @@ tr.row-h td{background:var(--gh-light)}
             <div class="progress-bar hidden" id="prog-mc-db-wcare"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-mc-cont-weavers">
-            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="위버스마인드">
+            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="위버스마인드" multiple>
             <div class="icon">📝</div>
             <div class="label">계약 데이터 — 위버스마인드</div>
             <div class="desc">차등성과 계약수 형식 · 전화번호 M열<br>X열(오더일) 있는 행만 유효 계약</div>
@@ -1322,7 +1322,7 @@ tr.row-h td{background:var(--gh-light)}
             <div class="progress-bar hidden" id="prog-mc-cont-weavers"><div class="progress-fill"></div></div>
           </div>
           <div class="upload-box" id="box-mc-cont-wcare">
-            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="더블유케어">
+            <input type="file" accept=".xlsx,.xls" data-mctype="contract" data-mccorp="더블유케어" multiple>
             <div class="icon">📝</div>
             <div class="label">계약 데이터 — 더블유케어</div>
             <div class="desc">A~AE 구조 · 전화번호 M·N·O열<br>X열(오더일) 있는 행만 유효 계약</div>
@@ -7897,39 +7897,64 @@ function mcBindUploadBoxes(){
     const id=MC_TYPES.find(t=>t.key===type&&(t.corp||'')===corp).id;
     const box=document.getElementById('box-mc-'+id);
     const prog=document.getElementById('prog-mc-'+id);
-    const handle=async file=>{
-      if(!file)return;
-      prog.classList.remove('hidden','done');prog.classList.add('loading');
-      document.getElementById('fname-mc-'+id).textContent=file.name;
-      try{
-        const fileHash=`${file.name}|${file.size}`;
-        if(type!=='mapping' && mcFiles.some(f=>f.type===type&&f.corp===corp&&f.fileHash===fileHash)){
-          prog.classList.remove('loading');alert('이미 업로드된 파일입니다. (동일 이름·크기)');return;
-        }
-        const buf=await file.arrayBuffer();
-        const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-        let parsed;
-        if(type==='incall') parsed=mcParseIncall(wb);
-        else if(type==='callback') parsed=mcParseCallback(wb);
-        else if(type==='customerdb'||type==='contract') parsed=mcParseCustomerLike(wb,type,corp);
-        else if(type==='mapping') parsed=mcParseMapping(wb);
-        if(type==='mapping'){
-          // 매핑은 최신 1건만 — 기존 삭제
-          for(const f of mcFilesByType('mapping',null)){await mcIdbDel(f.id);}
-          mcFiles=mcFiles.filter(f=>f.type!=='mapping');
-        }
-        const rec={type,corp,fileName:file.name,fileHash,uploadTime:Date.now(),rows:parsed.rows,warn:parsed.warn||''};
-        const newId=await mcIdbAdd(rec);rec.id=newId;mcFiles.push(rec);
-        mcJudged=null;
-        prog.classList.remove('loading');prog.classList.add('done');box.classList.add('loaded');
-        mcUpdateStatusDots();mcUpdateUploadStatus();
-        if(parsed.warn) alert(parsed.warn);
-      }catch(err){prog.classList.remove('loading');alert('파일 처리 오류: '+err.message);console.error(err);}
+    const handleOne=async file=>{
+      const fileHash=`${file.name}|${file.size}`;
+      if(type!=='mapping' && mcFiles.some(f=>f.type===type&&f.corp===corp&&f.fileHash===fileHash)){
+        return {status:'dup',name:file.name};
+      }
+      const buf=await file.arrayBuffer();
+      const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+      let parsed;
+      if(type==='incall') parsed=mcParseIncall(wb);
+      else if(type==='callback') parsed=mcParseCallback(wb);
+      else if(type==='customerdb'||type==='contract') parsed=mcParseCustomerLike(wb,type,corp);
+      else if(type==='mapping') parsed=mcParseMapping(wb);
+      if(type==='mapping'){
+        // 매핑은 최신 1건만 — 기존 삭제
+        for(const f of mcFilesByType('mapping',null)){await mcIdbDel(f.id);}
+        mcFiles=mcFiles.filter(f=>f.type!=='mapping');
+      }
+      const rec={type,corp,fileName:file.name,fileHash,uploadTime:Date.now(),rows:parsed.rows,warn:parsed.warn||''};
+      const newId=await mcIdbAdd(rec);rec.id=newId;mcFiles.push(rec);
+      return {status:'ok',name:file.name,warn:parsed.warn||''};
     };
-    input.addEventListener('change',e=>{const f=e.target.files[0];handle(f);input.value='';});
+    const handleMany=async files=>{
+      const arr=Array.from(files||[]).filter(Boolean);
+      if(!arr.length)return;
+      // 매핑은 최신 1건만 사용 — 다중 드롭 시 마지막 파일만 채택
+      const list=(type==='mapping' && arr.length>1)?[arr[arr.length-1]]:arr;
+      prog.classList.remove('hidden','done');prog.classList.add('loading');
+      const fnameEl=document.getElementById('fname-mc-'+id);
+      let okCnt=0, dupCnt=0, errs=[], warns=[];
+      for(let i=0;i<list.length;i++){
+        const f=list[i];
+        fnameEl.textContent=list.length>1?`${f.name} (${i+1}/${list.length})`:f.name;
+        try{
+          const r=await handleOne(f);
+          if(r.status==='ok'){okCnt++;if(r.warn)warns.push(r.warn);}
+          else if(r.status==='dup')dupCnt++;
+        }catch(err){errs.push(`${f.name}: ${err.message}`);console.error(err);}
+      }
+      mcJudged=null;
+      prog.classList.remove('loading');
+      if(okCnt>0){prog.classList.add('done');box.classList.add('loaded');}
+      mcUpdateStatusDots();mcUpdateUploadStatus();
+      // 파일명 표시: 성공이 있으면 마지막 성공 파일명(다중이면 N개 누적), 없으면 비움
+      if(list.length>1){
+        fnameEl.textContent=okCnt>0?`${okCnt}개 업로드 완료${dupCnt?` · ${dupCnt}개 중복 스킵`:''}`:(dupCnt?`${dupCnt}개 중복 스킵`:'');
+      }
+      // 경고/오류는 집계하여 1회만 알림
+      const msgs=[];
+      if(dupCnt&&list.length===1) msgs.push('이미 업로드된 파일입니다. (동일 이름·크기)');
+      else if(dupCnt&&list.length>1) msgs.push(`${dupCnt}개 파일은 이미 업로드되어 건너뛰었습니다. (동일 이름·크기)`);
+      if(errs.length) msgs.push(`파일 처리 오류:\n- ${errs.join('\n- ')}`);
+      if(warns.length) msgs.push(warns.join('\n\n'));
+      if(msgs.length) alert(msgs.join('\n\n'));
+    };
+    input.addEventListener('change',e=>{handleMany(e.target.files);input.value='';});
     box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('dragover');});
     box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
-    box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length)handle(e.dataTransfer.files[0]);});
+    box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length)handleMany(e.dataTransfer.files);});
   });
 }
 
