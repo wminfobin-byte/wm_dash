@@ -8311,7 +8311,7 @@ function mcRender(){
       document.getElementById(`mcKpiUniq_${cid}`).textContent=uniqPhones.size.toLocaleString()+'명';
       document.getElementById(`mcKpiUniqSub_${cid}`).innerHTML=`부재 인입 ${st.denomValid.toLocaleString()}콜의 고유 고객${delta(uniqPhones.size,pUniqPhones.size,'',true)}`;
       document.getElementById(`mcKpiConv_${cid}`).textContent=convCount.toLocaleString()+'건';
-      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`고객 ${convCust.toLocaleString()}명에서 발생${delta(convCount,pConvCount,'',true)}`;
+      document.getElementById(`mcKpiConvSub_${cid}`).innerHTML=`부재 인입 후 발생한 계약 건${delta(convCount,pConvCount,'',true)}`;
       document.getElementById(`mcKpiCRate_${cid}`).textContent=cRate.toFixed(1)+'%';
       document.getElementById(`mcKpiCRateSub_${cid}`).innerHTML=`= 전환 ${convCust.toLocaleString()} / 부재 인입 ${uniqPhones.size.toLocaleString()}명${delta(cRate,pCRate,'pp',true)}`;
     }
