@@ -720,6 +720,7 @@ tr.row-h td{background:var(--gh-light)}
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
+  <div class="tab-item" data-page="group-compare" onclick="switchPage('group-compare')">그룹/차등 비교</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
@@ -1582,12 +1583,79 @@ tr.row-h td{background:var(--gh-light)}
 </div>
 </div><!-- /page-grade-dash -->
 
+<!-- ═══ Page: 그룹/차등 비교 ═══ -->
+<div class="page" id="page-group-compare">
+  <div class="modal-overlay" id="gcModalOverlay" onclick="if(event.target===this)gcCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="gcCloseModal()">&times;</button>
+      <div id="gcModalUpload">
+        <h2>파일 업로드 — 그룹/차등 비교</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB·계약·취소 3종 + 명단(선택)을 한 번에 올리면 분배일 기준으로 4월·5월이 자동 분리됩니다. <b>(R_대전)·(R_유성)</b> 담당자만 집계.</p>
+        <div class="upload-grid">
+          <div class="upload-box" id="box-gc-db">
+            <input type="file" accept=".xlsx,.xls" id="file-gc-db">
+            <div class="icon">📋</div><div class="label">DB수</div>
+            <div class="desc">WM_고객관리<br>분배일이 4·5월인 행</div>
+            <div class="filename" id="fname-gc-db"></div>
+          </div>
+          <div class="upload-box" id="box-gc-cont">
+            <input type="file" accept=".xlsx,.xls" id="file-gc-cont">
+            <div class="icon">📝</div><div class="label">실계약수</div>
+            <div class="desc">WM_고객관리<br>오더일 + 계약/취소 상태</div>
+            <div class="filename" id="fname-gc-cont"></div>
+          </div>
+          <div class="upload-box" id="box-gc-cancel">
+            <input type="file" accept=".xlsx,.xls" id="file-gc-cancel">
+            <div class="icon">↩️</div><div class="label">취소수</div>
+            <div class="desc">신청자관리<br>환불일(AQ열)이 4·5월</div>
+            <div class="filename" id="fname-gc-cancel"></div>
+          </div>
+          <div class="upload-box" id="box-gc-attend">
+            <input type="file" accept=".xlsx,.xls" id="file-gc-attend">
+            <div class="icon">👥</div><div class="label">명단 (선택)</div>
+            <div class="desc">근태보고<br>없어도 동작</div>
+            <div class="filename" id="fname-gc-attend"></div>
+          </div>
+        </div>
+        <div style="margin-top:18px;text-align:center">
+          <button class="btn-primary" id="gcGenerateBtn" onclick="gcGenerate()" disabled style="padding:10px 24px">분석 시작</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="gcEmpty" style="text-align:center;padding:80px 20px;color:#94a3b8">
+      <div style="font-size:48px;margin-bottom:12px">📊</div>
+      <h2 style="color:#475569;margin-bottom:8px">그룹/차등 비교</h2>
+      <p style="margin-bottom:18px;font-size:14px">DB·계약·취소 파일을 업로드하면 (R_대전)·(R_유성) 담당자의 4월 vs 5월 성과를 비교합니다.</p>
+      <button class="btn-primary" onclick="gcOpenModal()" style="padding:10px 24px">파일 업로드</button>
+    </div>
+    <div id="gcDashboard" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <h2 style="margin:0;font-size:20px">대전·유성 차등성과 — 4월 vs 5월</h2>
+        <button class="btn-secondary" onclick="gcOpenModal()" style="padding:6px 14px">파일 다시 업로드</button>
+      </div>
+      <div id="gcInfo" style="font-size:12px;color:#64748b;margin-bottom:18px"></div>
+
+      <h3 style="margin:18px 0 8px;font-size:15px;color:#334155">계열별 (DB파일 C열 기준)</h3>
+      <div style="overflow-x:auto"><table id="gcSeriesTable" style="min-width:1300px;font-size:12.5px;border-collapse:collapse;width:100%"></table></div>
+
+      <h3 style="margin:24px 0 8px;font-size:15px;color:#334155">센터별</h3>
+      <div style="overflow-x:auto"><table id="gcCenterTable" style="min-width:1300px;font-size:12.5px;border-collapse:collapse;width:100%"></table></div>
+
+      <h3 style="margin:24px 0 8px;font-size:15px;color:#334155">개인별</h3>
+      <div style="overflow-x:auto"><table id="gcPersonTable" style="min-width:1400px;font-size:12px;border-collapse:collapse;width:100%"></table></div>
+    </div>
+  </div>
+</div><!-- /page-group-compare -->
+
 <script>
 // ═══════════════════════════════════════════
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup','missed-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup','missed-call','group-compare']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -8874,6 +8942,339 @@ async function mcOnShow(){
   mcUpdateEmptyHint();
   if(mcReady()){ if(!mcJudged) mcGenerate(false); else { document.getElementById('mcEmpty').classList.add('hidden'); document.getElementById('mcDashboard').classList.remove('hidden'); } }
   else { document.getElementById('mcDashboard').classList.add('hidden'); document.getElementById('mcEmpty').classList.remove('hidden'); }
+}
+
+// ═══════════════════════════════════════════
+//  그룹/차등 비교 (gc 네임스페이스)
+//  - 파일: WM_고객관리 DB/계약 + 신청자관리 취소 + 명단(선택)
+//  - 대상: (R_대전), (R_유성) 접두 담당자만
+//  - 기간: 한 세트만 업로드, 분배일/환불일이 4월·5월인 행 자동 분리
+//  - 휴일 필터 제거. 카운팅은 gd 로직 본문 그대로
+// ═══════════════════════════════════════════
+const GC_CENTER_PREFIX = {'(R_대전)':'대전','(R_유성)':'유성'};
+const GC_COL_SERIES = 2;        // C열 DB계열
+const GC_CANCEL_MGR = 13;       // N열
+const GC_CANCEL_CODE = 17;      // R열
+const GC_CANCEL_DIST = 41;      // AP열 분배일
+const GC_CANCEL_RETURN = 42;    // AQ열 환불일
+let gcFiles = {db:null, cont:null, cancel:null, attend:null};
+
+function gcOpenModal(){
+  document.getElementById('gcModalOverlay').classList.add('open');
+}
+function gcCloseModal(){
+  document.getElementById('gcModalOverlay').classList.remove('open');
+}
+
+function gcInit(){
+  ['db','cont','cancel','attend'].forEach(type=>{
+    const input = document.getElementById('file-gc-'+type);
+    if(!input) return;
+    input.addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        const data = await gcReadFile(file);
+        gcFiles[type] = {fileName: file.name, data};
+        document.getElementById('fname-gc-'+type).textContent = file.name;
+      }catch(err){
+        alert('파일 읽기 실패: '+err.message);
+      }
+      gcCheckReady();
+    });
+  });
+}
+
+function gcReadFile(file){
+  return new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = e => {
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+        res(data);
+      }catch(err){rej(err);}
+    };
+    fr.onerror = e => rej(e);
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+function gcCheckReady(){
+  const ready = gcFiles.db && gcFiles.cont && gcFiles.cancel;
+  document.getElementById('gcGenerateBtn').disabled = !ready;
+}
+
+function gcGetCenter(name){
+  if(!name) return null;
+  for(const p in GC_CENTER_PREFIX){
+    if(name.includes(p)) return GC_CENTER_PREFIX[p];
+  }
+  return null;
+}
+
+function gcMatches(name){ return gcGetCenter(name) !== null; }
+
+function gcStripPrefix(name){
+  return str(name).replace(/\(R_[^)]+\)/g,'').trim();
+}
+
+function gcMonth(d){ return d ? d.getMonth()+1 : null; }
+
+// agg shape: {month: {series: {center: {name: count}}}}
+function gcInc(agg, month, series, center, name){
+  if(!agg[month]) agg[month]={};
+  if(!agg[month][series]) agg[month][series]={};
+  if(!agg[month][series][center]) agg[month][series][center]={};
+  agg[month][series][center][name] = (agg[month][series][center][name]||0)+1;
+}
+
+function gcAggDb(rows){
+  const agg = {};
+  for(let i=1; i<rows.length; i++){
+    const row = rows[i]; if(!row) continue;
+    const obName = str(row[COL.obName]);
+    if(!gcMatches(obName)) continue;
+    const distDate = parseDate(row[COL.distributeDate]);
+    if(!distDate) continue;
+    const month = gcMonth(distDate);
+    if(month!==4 && month!==5) continue;
+    const dbInfo = str(row[COL.dbInfo]);
+    const mediaCode = str(row[COL.mediaCode]);
+    if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
+    if(dbInfo.includes('재콜')) continue;
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
+    if(mediaCode.toLowerCase().includes('talkis')) continue;
+    const series = str(row[GC_COL_SERIES]) || '(미분류)';
+    const center = gcGetCenter(obName);
+    gcInc(agg, month, series, center, obName);
+  }
+  return agg;
+}
+
+function gcAggCont(rows){
+  const agg = {};
+  for(let i=1; i<rows.length; i++){
+    const row = rows[i]; if(!row) continue;
+    const obName = str(row[COL.obName]);
+    if(!gcMatches(obName)) continue;
+    const distDate = parseDate(row[COL.distributeDate]);
+    if(!distDate) continue;
+    const month = gcMonth(distDate);
+    if(month!==4 && month!==5) continue;
+    const custStatus = str(row[COL.customerStatus]);
+    const lastCall = str(row[COL.lastCallTime]);
+    const orderDt = str(row[COL.orderDate]);
+    const orderDate = parseDate(orderDt);
+    const dbInfo = str(row[COL.dbInfo]);
+    const mediaCode = str(row[COL.mediaCode]);
+    if(!orderDate) continue;
+    if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
+    if(mediaCode.toLowerCase().includes('talkis')) continue;
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
+    const status = classifyStatus(custStatus, lastCall, orderDt);
+    if(status!=='계약' && status!=='취소') continue;
+    const series = str(row[GC_COL_SERIES]) || '(미분류)';
+    const center = gcGetCenter(obName);
+    gcInc(agg, month, series, center, obName);
+  }
+  return agg;
+}
+
+function gcAggCancel(rows){
+  const agg = {};
+  for(let i=1; i<rows.length; i++){
+    const row = rows[i]; if(!row) continue;
+    const mgr = str(row[GC_CANCEL_MGR]);
+    if(!gcMatches(mgr)) continue;
+    const returnDt = parseDate(row[GC_CANCEL_RETURN]);
+    if(!returnDt) continue;
+    const month = gcMonth(returnDt);
+    if(month!==4 && month!==5) continue;
+    const cxCode = str(row[GC_CANCEL_CODE]).toLowerCase();
+    if(cxCode.includes('in')) continue;
+    const series = str(row[GC_COL_SERIES]) || '(미분류)';
+    const center = gcGetCenter(mgr);
+    gcInc(agg, month, series, center, mgr);
+  }
+  return agg;
+}
+
+function gcSumBy(agg, month, filterFn){
+  let sum = 0;
+  if(!agg[month]) return 0;
+  for(const s in agg[month]){
+    for(const c in agg[month][s]){
+      for(const n in agg[month][s][c]){
+        if(filterFn(s,c,n)) sum += agg[month][s][c][n];
+      }
+    }
+  }
+  return sum;
+}
+
+function gcCalcRow(db4, db5, real4, real5, cx4, cx5){
+  const realRate4 = db4 ? real4/db4*100 : 0;
+  const realRate5 = db5 ? real5/db5*100 : 0;
+  const cancelRate4 = real4 ? cx4/real4*100 : 0;
+  const cancelRate5 = real5 ? cx5/real5*100 : 0;
+  const contract4 = real4 - cx4;
+  const contract5 = real5 - cx5;
+  const contractRate4 = db4 ? contract4/db4*100 : 0;
+  const contractRate5 = db5 ? contract5/db5*100 : 0;
+  return {db4,db5,real4,real5,realRate4,realRate5,cx4,cx5,cancelRate4,cancelRate5,contract4,contract5,contractRate4,contractRate5};
+}
+
+function gcFmtNum(n){ return Math.round(n).toLocaleString(); }
+function gcFmtPct(p){ return p.toFixed(1)+'%'; }
+function gcFmtDelta(prev, curr, isPct){
+  const d = curr - prev;
+  if(Math.abs(d) < (isPct ? 0.05 : 0.5)) return `<span style="color:#94a3b8">—</span>`;
+  const up = d > 0;
+  const col = up ? '#10b981' : '#e71d36';
+  const arrow = up ? '▲' : '▼';
+  return `<span style="color:${col}">${arrow}${Math.abs(d).toFixed(isPct?1:0)}${isPct?'pp':''}</span>`;
+}
+
+function gcBuildTable(rows, firstColLabel){
+  const subTh = (txt, extra='') => `<th style="background:#4a5568;color:#fff;padding:5px 6px;font-weight:500;font-size:11.5px;${extra}">${txt}</th>`;
+  const metrics = ['DB수','실계약수','실계약률','취소수','취소율','계약수','계약률'];
+  const head1 = `<tr>
+    <th rowspan="2" style="background:#2D3748;color:#fff;padding:8px 6px;font-weight:600;text-align:left;min-width:140px;position:sticky;left:0;z-index:2">${firstColLabel||'구분'}</th>
+    ${metrics.map(m=>`<th colspan="3" style="background:#2D3748;color:#fff;padding:8px 6px;font-weight:600;border-left:1px solid #4a5568">${m}</th>`).join('')}
+  </tr>`;
+  const subCells = () => ['4월','5월','증감'].map((l,i)=>subTh(l, (i===0?'border-left:1px solid #2d3748;':'')+'min-width:55px')).join('');
+  const head2 = `<tr>${metrics.map(()=>subCells()).join('')}</tr>`;
+
+  const td = (txt, extra='') => `<td style="padding:5px 8px;text-align:right;border-bottom:1px solid #e2e8f0;${extra}">${txt}</td>`;
+  const tbody = rows.map((r,idx)=>{
+    const v = r.vals;
+    const bg = idx%2===0 ? '#fff' : '#f8fafc';
+    const labelStyle = `padding:6px 10px;font-weight:500;border-bottom:1px solid #e2e8f0;background:${bg};position:sticky;left:0;z-index:1;text-align:left`;
+    return `<tr style="background:${bg}">
+      <td style="${labelStyle}">${r.label}</td>
+      ${td(gcFmtNum(v.db4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.db5))}${td(gcFmtDelta(v.db4,v.db5,false))}
+      ${td(gcFmtNum(v.real4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.real5))}${td(gcFmtDelta(v.real4,v.real5,false))}
+      ${td(gcFmtPct(v.realRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.realRate5))}${td(gcFmtDelta(v.realRate4,v.realRate5,true))}
+      ${td(gcFmtNum(v.cx4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.cx5))}${td(gcFmtDelta(v.cx4,v.cx5,false))}
+      ${td(gcFmtPct(v.cancelRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.cancelRate5))}${td(gcFmtDelta(v.cancelRate4,v.cancelRate5,true))}
+      ${td(gcFmtNum(v.contract4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.contract5))}${td(gcFmtDelta(v.contract4,v.contract5,false))}
+      ${td(gcFmtPct(v.contractRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.contractRate5))}${td(gcFmtDelta(v.contractRate4,v.contractRate5,true))}
+    </tr>`;
+  }).join('');
+
+  return `<thead>${head1}${head2}</thead><tbody>${tbody}</tbody>`;
+}
+
+function gcRenderInfo(){
+  document.getElementById('gcInfo').innerHTML =
+    `DB: ${gcFiles.db.fileName} · 계약: ${gcFiles.cont.fileName} · 취소: ${gcFiles.cancel.fileName}` +
+    (gcFiles.attend ? ` · 명단: ${gcFiles.attend.fileName}` : '') +
+    ` <span style="color:#94a3b8">· 대상: (R_대전), (R_유성) 담당자만 · 휴일 필터 미적용</span>`;
+}
+
+function gcRenderSeriesTable(dbAgg, contAgg, cxAgg){
+  const seriesSet = new Set();
+  for(const agg of [dbAgg, contAgg, cxAgg]){
+    for(const m in agg) for(const s in agg[m]) if(s) seriesSet.add(s);
+  }
+  const rows = [];
+  // 전체
+  rows.push({
+    label:'<b>전체</b>',
+    vals: gcCalcRow(
+      gcSumBy(dbAgg,4,()=>true), gcSumBy(dbAgg,5,()=>true),
+      gcSumBy(contAgg,4,()=>true), gcSumBy(contAgg,5,()=>true),
+      gcSumBy(cxAgg,4,()=>true), gcSumBy(cxAgg,5,()=>true))
+  });
+  Array.from(seriesSet).sort().forEach(s=>{
+    const f = (ss)=>ss===s;
+    rows.push({
+      label: s,
+      vals: gcCalcRow(
+        gcSumBy(dbAgg,4,f), gcSumBy(dbAgg,5,f),
+        gcSumBy(contAgg,4,f), gcSumBy(contAgg,5,f),
+        gcSumBy(cxAgg,4,f), gcSumBy(cxAgg,5,f))
+    });
+  });
+  document.getElementById('gcSeriesTable').innerHTML = gcBuildTable(rows, 'DB계열');
+}
+
+function gcRenderCenterTable(dbAgg, contAgg, cxAgg){
+  const centers = ['대전','유성'];
+  const rows = centers.map(ct=>{
+    const f = (s,c)=>c===ct;
+    return {
+      label: ct,
+      vals: gcCalcRow(
+        gcSumBy(dbAgg,4,f), gcSumBy(dbAgg,5,f),
+        gcSumBy(contAgg,4,f), gcSumBy(contAgg,5,f),
+        gcSumBy(cxAgg,4,f), gcSumBy(cxAgg,5,f))
+    };
+  });
+  document.getElementById('gcCenterTable').innerHTML = gcBuildTable(rows, '센터');
+}
+
+function gcRenderPersonTable(dbAgg, contAgg, cxAgg){
+  // collect all persons across 3 aggs with their (dominant) center/series
+  const persons = new Map();
+  for(const agg of [dbAgg, contAgg, cxAgg]){
+    for(const m in agg){
+      for(const s in agg[m]){
+        for(const c in agg[m][s]){
+          for(const n in agg[m][s][c]){
+            if(!persons.has(n)){
+              persons.set(n, {center:c, series:s, displayName: gcStripPrefix(n) || n});
+            }
+          }
+        }
+      }
+    }
+  }
+  const arr = Array.from(persons.entries()).map(([n,info])=>({rawName:n, ...info}));
+  arr.sort((a,b)=>{
+    if(a.center!==b.center) return a.center.localeCompare(b.center);
+    if(a.series!==b.series) return a.series.localeCompare(b.series);
+    return a.displayName.localeCompare(b.displayName);
+  });
+  const rows = arr.map(p=>{
+    const f = (s,c,n)=>n===p.rawName;
+    return {
+      label: `<span style="color:#64748b;font-size:11px">${p.center} · ${p.series}</span><br><b>${p.displayName}</b>`,
+      vals: gcCalcRow(
+        gcSumBy(dbAgg,4,f), gcSumBy(dbAgg,5,f),
+        gcSumBy(contAgg,4,f), gcSumBy(contAgg,5,f),
+        gcSumBy(cxAgg,4,f), gcSumBy(cxAgg,5,f))
+    };
+  });
+  document.getElementById('gcPersonTable').innerHTML = gcBuildTable(rows, '담당자');
+}
+
+function gcGenerate(){
+  if(!gcFiles.db || !gcFiles.cont || !gcFiles.cancel){
+    alert('DB·계약·취소 3종 파일이 필요합니다.');
+    return;
+  }
+  const dbAgg = gcAggDb(gcFiles.db.data);
+  const contAgg = gcAggCont(gcFiles.cont.data);
+  const cxAgg = gcAggCancel(gcFiles.cancel.data);
+
+  gcRenderInfo();
+  gcRenderSeriesTable(dbAgg, contAgg, cxAgg);
+  gcRenderCenterTable(dbAgg, contAgg, cxAgg);
+  gcRenderPersonTable(dbAgg, contAgg, cxAgg);
+
+  gcCloseModal();
+  document.getElementById('gcEmpty').classList.add('hidden');
+  document.getElementById('gcDashboard').classList.remove('hidden');
+}
+
+// 초기화
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', gcInit);
+} else {
+  gcInit();
 }
 </script>
 </body>
