@@ -251,6 +251,9 @@ tr.row-h td{background:var(--gh-light)}
 
 /* Inflow Analysis Tab */
 #page-inflow .container{max-width:100%;padding:28px 40px}
+#page-group-compare .container{max-width:100%;padding:24px 24px}
+#page-group-compare table{border-collapse:collapse;width:100%;table-layout:fixed}
+#page-group-compare table th, #page-group-compare table td{word-break:keep-all;overflow:hidden;text-overflow:ellipsis}
 .ia-upload-zone{background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .ia-upload-row{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap}
 .ia-upload-card{flex:1;min-width:240px}
@@ -1640,16 +1643,14 @@ tr.row-h td{background:var(--gh-light)}
         <h2 style="margin:0;font-size:20px">대전·유성 차등성과 — 4월 vs 5월</h2>
         <button class="btn-secondary" onclick="gcOpenModal()" style="padding:6px 14px">파일 다시 업로드</button>
       </div>
-      <div id="gcInfo" style="font-size:12px;color:#64748b;margin-bottom:18px"></div>
-
-      <h3 style="margin:18px 0 8px;font-size:15px;color:#334155">계열별 (DB파일 C열 기준)</h3>
-      <div style="overflow-x:auto"><table id="gcSeriesTable" style="min-width:1300px;font-size:12.5px;border-collapse:collapse;width:100%"></table></div>
+      <h3 style="margin:18px 0 8px;font-size:15px;color:#334155">계열별</h3>
+      <table id="gcSeriesTable" style="font-size:12.5px"></table>
 
       <h3 style="margin:24px 0 8px;font-size:15px;color:#334155">센터별</h3>
-      <div style="overflow-x:auto"><table id="gcCenterTable" style="min-width:1300px;font-size:12.5px;border-collapse:collapse;width:100%"></table></div>
+      <table id="gcCenterTable" style="font-size:12.5px"></table>
 
       <h3 style="margin:24px 0 8px;font-size:15px;color:#334155">개인별</h3>
-      <div style="overflow-x:auto"><table id="gcPersonTable" style="min-width:1400px;font-size:12px;border-collapse:collapse;width:100%"></table></div>
+      <table id="gcPersonTable" style="font-size:12px"></table>
     </div>
   </div>
 </div><!-- /page-group-compare -->
@@ -9194,42 +9195,53 @@ function gcFmtDelta(prev, curr, isPct){
   return `<span style="color:${col}">${arrow}${Math.abs(d).toFixed(isPct?1:0)}${isPct?'pp':''}</span>`;
 }
 
-function gcBuildTable(rows, firstColLabel){
-  const subTh = (txt, extra='') => `<th style="background:#4a5568;color:#fff;padding:5px 6px;font-weight:500;font-size:11.5px;${extra}">${txt}</th>`;
-  const metrics = ['DB수','실계약수','실계약률','취소수','취소율','계약수','계약률'];
-  const head1 = `<tr>
-    <th rowspan="2" style="background:#2D3748;color:#fff;padding:8px 6px;font-weight:600;text-align:left;min-width:140px;position:sticky;left:0;z-index:2">${firstColLabel||'구분'}</th>
-    ${metrics.map(m=>`<th colspan="3" style="background:#2D3748;color:#fff;padding:8px 6px;font-weight:600;border-left:1px solid #4a5568">${m}</th>`).join('')}
-  </tr>`;
-  const subCells = () => ['4월','5월','증감'].map((l,i)=>subTh(l, (i===0?'border-left:1px solid #2d3748;':'')+'min-width:55px')).join('');
-  const head2 = `<tr>${metrics.map(()=>subCells()).join('')}</tr>`;
+// 메트릭 정의: 실계약률·계약률만 증감 컬럼 보유. 나머지는 4월·5월만.
+const GC_METRICS = [
+  {label:'DB수',     subs:[{l:'4월',k:'db4',fmt:'num'},{l:'5월',k:'db5',fmt:'num'}]},
+  {label:'실계약수', subs:[{l:'4월',k:'real4',fmt:'num'},{l:'5월',k:'real5',fmt:'num'}]},
+  {label:'실계약률', subs:[{l:'4월',k:'realRate4',fmt:'pct'},{l:'5월',k:'realRate5',fmt:'pct'},{l:'증감',delta:['realRate4','realRate5'],pct:true}]},
+  {label:'취소수',   subs:[{l:'4월',k:'cx4',fmt:'num'},{l:'5월',k:'cx5',fmt:'num'}]},
+  {label:'취소율',   subs:[{l:'4월',k:'cancelRate4',fmt:'pct'},{l:'5월',k:'cancelRate5',fmt:'pct'}]},
+  {label:'계약수',   subs:[{l:'4월',k:'contract4',fmt:'num'},{l:'5월',k:'contract5',fmt:'num'}]},
+  {label:'계약률',   subs:[{l:'4월',k:'contractRate4',fmt:'pct'},{l:'5월',k:'contractRate5',fmt:'pct'},{l:'증감',delta:['contractRate4','contractRate5'],pct:true}]},
+];
 
-  const td = (txt, extra='') => `<td style="padding:5px 8px;text-align:right;border-bottom:1px solid #e2e8f0;${extra}">${txt}</td>`;
+function gcBuildTable(rows, firstColLabel){
+  // 헤더 1행: 라벨 + 메트릭 그룹 (colspan)
+  const head1 = `<tr>
+    <th rowspan="2" style="background:#2D3748;color:#fff;padding:8px 6px;font-weight:600;text-align:center;width:130px">${firstColLabel||'구분'}</th>
+    ${GC_METRICS.map(m=>`<th colspan="${m.subs.length}" style="background:#2D3748;color:#fff;padding:8px 4px;font-weight:600;border-left:1px solid #4a5568">${m.label}</th>`).join('')}
+  </tr>`;
+  // 헤더 2행: 서브 컬럼 (4월/5월/증감)
+  const head2 = `<tr>${GC_METRICS.map(m=>
+    m.subs.map((s,i)=>{
+      const borderLeft = i===0 ? '1px solid #2d3748' : '1px solid #6b7280';
+      return `<th style="background:#4a5568;color:#fff;padding:5px 3px;font-weight:500;font-size:11.5px;border-left:${borderLeft}">${s.l}</th>`;
+    }).join('')
+  ).join('')}</tr>`;
+
   const tbody = rows.map((r,idx)=>{
     const v = r.vals;
     const bg = idx%2===0 ? '#fff' : '#f8fafc';
-    const labelStyle = `padding:6px 10px;font-weight:500;border-bottom:1px solid #e2e8f0;background:${bg};position:sticky;left:0;z-index:1;text-align:left`;
-    return `<tr style="background:${bg}">
-      <td style="${labelStyle}">${r.label}</td>
-      ${td(gcFmtNum(v.db4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.db5))}${td(gcFmtDelta(v.db4,v.db5,false))}
-      ${td(gcFmtNum(v.real4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.real5))}${td(gcFmtDelta(v.real4,v.real5,false))}
-      ${td(gcFmtPct(v.realRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.realRate5))}${td(gcFmtDelta(v.realRate4,v.realRate5,true))}
-      ${td(gcFmtNum(v.cx4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.cx5))}${td(gcFmtDelta(v.cx4,v.cx5,false))}
-      ${td(gcFmtPct(v.cancelRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.cancelRate5))}${td(gcFmtDelta(v.cancelRate4,v.cancelRate5,true))}
-      ${td(gcFmtNum(v.contract4),'border-left:1px solid #e2e8f0')}${td(gcFmtNum(v.contract5))}${td(gcFmtDelta(v.contract4,v.contract5,false))}
-      ${td(gcFmtPct(v.contractRate4),'border-left:1px solid #e2e8f0')}${td(gcFmtPct(v.contractRate5))}${td(gcFmtDelta(v.contractRate4,v.contractRate5,true))}
-    </tr>`;
+    const labelCell = `<td style="padding:6px 8px;font-weight:500;border-bottom:1px solid #e2e8f0;background:${bg};text-align:center">${r.label}</td>`;
+    const dataCells = GC_METRICS.map(m =>
+      m.subs.map((s,i)=>{
+        const borderLeft = i===0 ? '1px solid #cbd5e1' : '1px solid #e2e8f0';
+        let val = '';
+        if(s.delta){
+          val = gcFmtDelta(v[s.delta[0]], v[s.delta[1]], !!s.pct);
+        }else if(s.fmt==='pct'){
+          val = gcFmtPct(v[s.k]);
+        }else{
+          val = gcFmtNum(v[s.k]);
+        }
+        return `<td style="padding:5px 4px;text-align:right;border-bottom:1px solid #e2e8f0;border-left:${borderLeft}">${val}</td>`;
+      }).join('')
+    ).join('');
+    return `<tr style="background:${bg}">${labelCell}${dataCells}</tr>`;
   }).join('');
 
   return `<thead>${head1}${head2}</thead><tbody>${tbody}</tbody>`;
-}
-
-function gcRenderInfo(){
-  const fmt = arr => arr.length===1 ? arr[0].fileName : `${arr.length}개 (${arr.map(f=>f.fileName).join(', ')})`;
-  document.getElementById('gcInfo').innerHTML =
-    `DB: ${fmt(gcFiles.db)} · 계약: ${fmt(gcFiles.cont)} · 취소: ${fmt(gcFiles.cancel)}` +
-    (gcFiles.attend ? ` · 명단: ${gcFiles.attend.fileName}` : '') +
-    ` <span style="color:#94a3b8">· 대상: (R_대전), (R_유성) 담당자만 · 휴일 필터 미적용</span>`;
 }
 
 function gcRenderSeriesTable(dbAgg, contAgg, cxAgg){
@@ -9339,7 +9351,6 @@ function gcGenerate(){
   const contAgg = gcAggCont(contRows);
   const cxAgg = gcAggCancel(cancelRows);
 
-  gcRenderInfo();
   gcRenderSeriesTable(dbAgg, contAgg, cxAgg);
   gcRenderCenterTable(dbAgg, contAgg, cxAgg);
   gcRenderPersonTable(dbAgg, contAgg, cxAgg);
