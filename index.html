@@ -8956,7 +8956,8 @@ async function mcOnShow(){
 //  - 휴일 필터 제거. 카운팅은 gd 로직 본문 그대로
 // ═══════════════════════════════════════════
 const GC_CENTER_PREFIX = {'(R_대전)':'대전','(R_유성)':'유성'};
-const GC_COL_SERIES = 2;        // C열 DB계열
+const GC_COL_SERIES = 2;        // DB·계약 파일 C열 DB계열
+const GC_CANCEL_SERIES = 64;    // 취소 파일 BM열 DB계열
 const GC_CANCEL_MGR = 13;       // N열
 const GC_CANCEL_CODE = 17;      // R열
 const GC_CANCEL_DIST = 41;      // AP열 분배일
@@ -9150,7 +9151,7 @@ function gcAggCancel(rows){
     if(month!==4 && month!==5) continue;
     const cxCode = str(row[GC_CANCEL_CODE]).toLowerCase();
     if(cxCode.includes('in')) continue;
-    const series = str(row[GC_COL_SERIES]) || '(미분류)';
+    const series = str(row[GC_CANCEL_SERIES]) || '(미분류)';
     const center = gcGetCenter(mgr);
     gcInc(agg, month, series, center, mgr);
   }
