@@ -1590,23 +1590,23 @@ tr.row-h td{background:var(--gh-light)}
       <button class="modal-close" onclick="gcCloseModal()">&times;</button>
       <div id="gcModalUpload">
         <h2>파일 업로드 — 그룹/차등 비교</h2>
-        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB·계약·취소 3종 + 명단(선택)을 한 번에 올리면 분배일 기준으로 4월·5월이 자동 분리됩니다. <b>(R_대전)·(R_유성)</b> 담당자만 집계.</p>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB·계약·취소는 <b>여러 파일을 한 번에 또는 추가로</b> 올릴 수 있습니다 (행이 합쳐짐). 분배일·환불일 기준으로 4월·5월이 자동 분리되고 <b>(R_대전)·(R_유성)</b> 담당자만 집계합니다.</p>
         <div class="upload-grid">
           <div class="upload-box" id="box-gc-db">
-            <input type="file" accept=".xlsx,.xls" id="file-gc-db">
-            <div class="icon">📋</div><div class="label">DB수</div>
+            <input type="file" accept=".xlsx,.xls" id="file-gc-db" multiple>
+            <div class="icon">📋</div><div class="label">DB수 (다중)</div>
             <div class="desc">WM_고객관리<br>분배일이 4·5월인 행</div>
             <div class="filename" id="fname-gc-db"></div>
           </div>
           <div class="upload-box" id="box-gc-cont">
-            <input type="file" accept=".xlsx,.xls" id="file-gc-cont">
-            <div class="icon">📝</div><div class="label">실계약수</div>
+            <input type="file" accept=".xlsx,.xls" id="file-gc-cont" multiple>
+            <div class="icon">📝</div><div class="label">실계약수 (다중)</div>
             <div class="desc">WM_고객관리<br>오더일 + 계약/취소 상태</div>
             <div class="filename" id="fname-gc-cont"></div>
           </div>
           <div class="upload-box" id="box-gc-cancel">
-            <input type="file" accept=".xlsx,.xls" id="file-gc-cancel">
-            <div class="icon">↩️</div><div class="label">취소수</div>
+            <input type="file" accept=".xlsx,.xls" id="file-gc-cancel" multiple>
+            <div class="icon">↩️</div><div class="label">취소수 (다중)</div>
             <div class="desc">신청자관리<br>환불일(AQ열)이 4·5월</div>
             <div class="filename" id="fname-gc-cancel"></div>
           </div>
@@ -8957,7 +8957,10 @@ const GC_CANCEL_MGR = 13;       // N열
 const GC_CANCEL_CODE = 17;      // R열
 const GC_CANCEL_DIST = 41;      // AP열 분배일
 const GC_CANCEL_RETURN = 42;    // AQ열 환불일
-let gcFiles = {db:null, cont:null, cancel:null, attend:null};
+// db/cont/cancel: array of {fileName, data} — 다중 업로드 지원 (누적)
+// attend: 단일 {fileName, data} — 선택
+let gcFiles = {db:[], cont:[], cancel:[], attend:null};
+const GC_MULTI = new Set(['db','cont','cancel']);
 
 function gcOpenModal(){
   document.getElementById('gcModalOverlay').classList.add('open');
@@ -8971,18 +8974,54 @@ function gcInit(){
     const input = document.getElementById('file-gc-'+type);
     if(!input) return;
     input.addEventListener('change', async (e)=>{
-      const file = e.target.files[0];
-      if(!file) return;
-      try{
-        const data = await gcReadFile(file);
-        gcFiles[type] = {fileName: file.name, data};
-        document.getElementById('fname-gc-'+type).textContent = file.name;
-      }catch(err){
-        alert('파일 읽기 실패: '+err.message);
+      const files = Array.from(e.target.files||[]);
+      if(!files.length) return;
+      for(const file of files){
+        try{
+          // 동일 이름 재업로드 시 스킵 (다중 슬롯에 한해)
+          if(GC_MULTI.has(type) && gcFiles[type].some(f=>f.fileName===file.name)){
+            continue;
+          }
+          const data = await gcReadFile(file);
+          if(GC_MULTI.has(type)){
+            gcFiles[type].push({fileName:file.name, data});
+          }else{
+            gcFiles[type] = {fileName:file.name, data};
+          }
+        }catch(err){
+          alert(`파일 읽기 실패 (${file.name}): `+err.message);
+        }
       }
+      gcRenderFileNames(type);
       gcCheckReady();
+      // 같은 파일 다시 올릴 수 있게 input 초기화
+      e.target.value = '';
     });
   });
+}
+
+function gcRenderFileNames(type){
+  const el = document.getElementById('fname-gc-'+type);
+  if(!el) return;
+  if(GC_MULTI.has(type)){
+    const list = gcFiles[type];
+    if(list.length===0){ el.textContent=''; return; }
+    el.innerHTML = list.map((f,i)=>
+      `<div style="display:flex;align-items:center;gap:4px;font-size:11px;line-height:1.3">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.fileName}</span>
+        <a href="#" onclick="event.preventDefault();event.stopPropagation();gcRemoveFile('${type}',${i})" style="color:#e71d36;text-decoration:none;font-size:14px;padding:0 2px">×</a>
+      </div>`
+    ).join('');
+  }else{
+    el.textContent = gcFiles[type] ? gcFiles[type].fileName : '';
+  }
+}
+
+function gcRemoveFile(type, idx){
+  if(!GC_MULTI.has(type)) return;
+  gcFiles[type].splice(idx,1);
+  gcRenderFileNames(type);
+  gcCheckReady();
 }
 
 function gcReadFile(file){
@@ -9002,7 +9041,7 @@ function gcReadFile(file){
 }
 
 function gcCheckReady(){
-  const ready = gcFiles.db && gcFiles.cont && gcFiles.cancel;
+  const ready = gcFiles.db.length>0 && gcFiles.cont.length>0 && gcFiles.cancel.length>0;
   document.getElementById('gcGenerateBtn').disabled = !ready;
 }
 
@@ -9168,8 +9207,9 @@ function gcBuildTable(rows, firstColLabel){
 }
 
 function gcRenderInfo(){
+  const fmt = arr => arr.length===1 ? arr[0].fileName : `${arr.length}개 (${arr.map(f=>f.fileName).join(', ')})`;
   document.getElementById('gcInfo').innerHTML =
-    `DB: ${gcFiles.db.fileName} · 계약: ${gcFiles.cont.fileName} · 취소: ${gcFiles.cancel.fileName}` +
+    `DB: ${fmt(gcFiles.db)} · 계약: ${fmt(gcFiles.cont)} · 취소: ${fmt(gcFiles.cancel)}` +
     (gcFiles.attend ? ` · 명단: ${gcFiles.attend.fileName}` : '') +
     ` <span style="color:#94a3b8">· 대상: (R_대전), (R_유성) 담당자만 · 휴일 필터 미적용</span>`;
 }
@@ -9251,14 +9291,35 @@ function gcRenderPersonTable(dbAgg, contAgg, cxAgg){
   document.getElementById('gcPersonTable').innerHTML = gcBuildTable(rows, '담당자');
 }
 
+// 다중 파일 → 행 병합 (각 파일의 헤더 1행 유지: aggregation 함수가 i=1부터 순회하므로
+// 1개 파일 헤더만 남기고 나머지는 헤더 행 제거하여 합침)
+function gcMergeRows(fileList){
+  if(!fileList || fileList.length===0) return [];
+  const out = [];
+  fileList.forEach((f, idx)=>{
+    if(!f.data || f.data.length===0) return;
+    if(idx===0){
+      // 첫 파일은 헤더 포함 전체
+      for(const r of f.data) out.push(r);
+    }else{
+      // 이후 파일은 헤더 1행 스킵
+      for(let i=1; i<f.data.length; i++) out.push(f.data[i]);
+    }
+  });
+  return out;
+}
+
 function gcGenerate(){
-  if(!gcFiles.db || !gcFiles.cont || !gcFiles.cancel){
+  if(gcFiles.db.length===0 || gcFiles.cont.length===0 || gcFiles.cancel.length===0){
     alert('DB·계약·취소 3종 파일이 필요합니다.');
     return;
   }
-  const dbAgg = gcAggDb(gcFiles.db.data);
-  const contAgg = gcAggCont(gcFiles.cont.data);
-  const cxAgg = gcAggCancel(gcFiles.cancel.data);
+  const dbRows = gcMergeRows(gcFiles.db);
+  const contRows = gcMergeRows(gcFiles.cont);
+  const cancelRows = gcMergeRows(gcFiles.cancel);
+  const dbAgg = gcAggDb(dbRows);
+  const contAgg = gcAggCont(contRows);
+  const cxAgg = gcAggCancel(cancelRows);
 
   gcRenderInfo();
   gcRenderSeriesTable(dbAgg, contAgg, cxAgg);
