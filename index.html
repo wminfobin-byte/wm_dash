@@ -7905,7 +7905,7 @@ function mcBindUploadBoxes(){
       const buf=await file.arrayBuffer();
       const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
       let parsed;
-      if(type==='incall') parsed=mcParseIncall(wb);
+      if(type==='incall'){parsed=mcParseIncall(wb);if(window.mcIncallDebug)window.mcIncallDebug.file=file.name;}
       else if(type==='callback') parsed=mcParseCallback(wb);
       else if(type==='customerdb'||type==='contract') parsed=mcParseCustomerLike(wb,type,corp);
       else if(type==='mapping') parsed=mcParseMapping(wb);
@@ -7916,7 +7916,7 @@ function mcBindUploadBoxes(){
       }
       const rec={type,corp,fileName:file.name,fileHash,uploadTime:Date.now(),rows:parsed.rows,warn:parsed.warn||''};
       const newId=await mcIdbAdd(rec);rec.id=newId;mcFiles.push(rec);
-      return {status:'ok',name:file.name,warn:parsed.warn||''};
+      return {status:'ok',name:file.name,warn:parsed.warn?`[${file.name}]\n${parsed.warn}`:''};
     };
     const handleMany=async files=>{
       const arr=Array.from(files||[]).filter(Boolean);
@@ -7960,7 +7960,7 @@ function mcBindUploadBoxes(){
 
 // ── 파서 ──
 function mcParseIncall(wb){
-  const rows=[];let badCorp=0,nullStart=0,skipNoPhone=0,dropEarly=0;const dbg={sheets:[]};
+  const rows=[];let badCorp=0,nullStart=0,skipNoPhone=0,dropEarly=0;const dbg={sheets:[],badCorpSamples:[]};
   let si=0;
   for(const sn of wb.SheetNames){
     si++;
@@ -7993,7 +7993,7 @@ function mcParseIncall(wb){
       const r=aoa[i];if(!r)continue;
       const rep=mcNormPhone(r[col.rep]), caller=mcNormPhone(r[col.caller]);
       if(!rep&&!caller){skipNoPhone++;continue;}
-      const corp=mcCorpFromGroup(r[col.grp]);if(!corp){badCorp++;continue;}
+      const corp=mcCorpFromGroup(r[col.grp]);if(!corp){badCorp++;if(dbg.badCorpSamples.length<20)dbg.badCorpSamples.push({sheet:sn,row:i+1,grp:String(r[col.grp]==null?'':r[col.grp]),caller,rep});continue;}
       const dp=mcDatePart(r[col.date]);
       const startTs=dp?dp.getTime()+mcTimeMs(r[col.start]):mcFullTs(r[col.start]);
       if(startTs==null){nullStart++;continue;}
@@ -8006,8 +8006,13 @@ function mcParseIncall(wb){
   }
   dbg.parsed=rows.length; dbg.badCorp=badCorp; dbg.nullStart=nullStart; dbg.skipNoPhone=skipNoPhone;
   dbg.sample=rows.slice(0,3);
-  window.mcIncallDebug=dbg; console.log('[부재인입 IN call 파싱 진단]',dbg);
-  return {rows,warn:badCorp?`IN call: 법인 미분류(I열 그룹에 뇌새김/케어 키워드 없음) ${badCorp.toLocaleString()}행 제외됨. (콘솔의 'IN call 파싱 진단' 확인)`:''};
+  window.mcIncallDebug=dbg; (window.mcIncallDebugAll=window.mcIncallDebugAll||[]).push(dbg); console.log('[부재인입 IN call 파싱 진단]',dbg);
+  let warn='';
+  if(badCorp){
+    const samples=dbg.badCorpSamples.slice(0,5).map(s=>`그룹="${s.grp}" 발신자=${s.caller||'-'} 대표=${s.rep||'-'} (${s.sheet} ${s.row}행)`).join('\n  · ');
+    warn=`IN call: 법인 미분류(I열 그룹에 뇌새김/케어 키워드 없음) ${badCorp.toLocaleString()}행 제외됨.\n  · ${samples}${badCorp>5?`\n  · …외 ${(badCorp-5).toLocaleString()}건`:''}\n(콘솔의 'IN call 파싱 진단' → badCorpSamples 에서 전체 확인)`;
+  }
+  return {rows,warn};
 }
 function mcParseCallback(wb){
   const rows=[];let noDate=0,total=0;
