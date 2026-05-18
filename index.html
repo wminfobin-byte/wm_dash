@@ -8135,6 +8135,9 @@ function mcParseMapping(wb){
 // ── 분석 ──
 function mcReady(){return mcFilesByType('callback',null).length>0 && mcFilesByType('mapping',null).length>0;}
 
+// 매칭 룰: 0 ≤ inStartTs - callTs ≤ MC_MATCH_WINDOW_MS (비대칭, 응대는 콜백 이후만)
+//         + 같은 (caller,rep) 그룹에서 그리디 1:1 매칭 (한 IN call은 한 콜백에만 소비)
+const MC_MATCH_WINDOW_MS=600000; // 10분
 function mcBuildJudged(){
   // 매핑
   const mapping=new Map();
@@ -8144,25 +8147,27 @@ function mcBuildJudged(){
   const dedupAdd=(map,corp,phone,rec)=>{if(!phone)return;const k=corp+'|'+phone;if(!map.has(k))map.set(k,[]);map.get(k).push(rec);};
   for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])) for(const p of (c.phones||[])) dedupAdd(contractMap,c.corp,p.v,c);
   for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])) for(const p of (d.phones||[])){const k=d.corp+'|'+p.v;if(!dbSet.has(k))dbSet.set(k,p.col);}
-  // IN call lookup (발신자|대표 → 레코드[]) + dedup
+  // IN call lookup (발신자|대표 → 레코드[]) + dedup + startTs 오름차순 정렬 (그리디 매칭용)
   const incallMap=new Map();const incSeen=new Set();const incCallerSet=new Set();
   for(const f of mcFilesByType('incall',null)) for(const ic of (f.rows||[])){
     const uk=ic.caller+'_'+ic.rep+'_'+ic.startTs+'_'+ic.dur;if(incSeen.has(uk))continue;incSeen.add(uk);
     const k=ic.caller+'|'+ic.rep;if(!incallMap.has(k))incallMap.set(k,[]);incallMap.get(k).push(ic);
     incCallerSet.add(ic.caller);
   }
+  for(const arr of incallMap.values()) arr.sort((a,b)=>a.startTs-b.startTs);
   // 진단용 카운터
   const dbg={incallRows:incSeen.size, incallFiles:mcFilesByType('incall',null).length,
     sampleIncall:Array.from(incSeen).slice(0,3), sampleIncallKeys:Array.from(incallMap.keys()).slice(0,3),
     cbWithCallerRepKey:0, cbWithCallerOnly:0, cbWithinTime:0, sampleCbKeys:[]};
-  // 콜백 dedup + judge
+  // 1차 패스: 콜백 dedup + 모수/제외 분류. 모수 행은 자리만 잡고 매칭 결과는 2차 패스에서 채움.
   const cbSeen=new Set();const out=[];let unmapped=0;const unmappedRepMap=new Map();
+  const denomByKey=new Map(); // (caller|rep) → [{cb, outIdx}, ...]
   for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
     const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
     if(dbg.sampleCbKeys.length<3)dbg.sampleCbKeys.push(cb.caller+'|'+cb.rep+' @'+new Date(cb.callTs).toISOString());
     if(incallMap.has(cb.caller+'|'+cb.rep))dbg.cbWithCallerRepKey++;
     if(incCallerSet.has(cb.caller))dbg.cbWithCallerOnly++;
-    if((incallMap.get(cb.caller+'|'+cb.rep)||[]).some(r=>Math.abs(r.startTs-cb.callTs)<=120000))dbg.cbWithinTime++;
+    if((incallMap.get(cb.caller+'|'+cb.rep)||[]).some(r=>{const d=r.startTs-cb.callTs;return d>=0&&d<=MC_MATCH_WINDOW_MS;}))dbg.cbWithinTime++;
     const corp=mapping.get(cb.rep);
     if(!corp){unmapped++;const k=cb.rep||'(빈값)';const e=unmappedRepMap.get(k)||{대표번호_정규화:k,원본:cb.repRaw||'',건수:0};e.건수++;unmappedRepMap.set(k,e);continue;}
     // Step3: 계약
@@ -8188,13 +8193,34 @@ function mcBuildJudged(){
       contractState='계약 없음';matchedCol=dbCol;
     }
     const dbState=(contractState==='계약 없음')?'DB 보유':(dbSet.has(corp+'|'+cb.caller)?'DB 보유':'DB 없음');
-    // Step5: IN call ±2분 — valid는 현재 룰로 동적 재판정(IDB의 r.valid는 파싱 당시 룰)
-    const ics=(incallMap.get(cb.caller+'|'+cb.rep)||[]).filter(r=>Math.abs(r.startTs-cb.callTs)<=120000);
-    let isMissed,reason;
-    if(ics.length===0){isMissed=true;reason='IN call 매칭 없음';}
-    else if(ics.some(mcIsValidCall)){isMissed=false;reason='유효통화 연결';}
-    else{isMissed=true;reason='유효통화 아님';}
-    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:ics.length,inStatuses:ics.map(r=>r.status),inDur:ics.map(r=>Math.round(r.dur)),isMissed,reason,allDenom:true,validDenom:true,matchedCol,contractValid,contractCount});
+    // 모수 행: 자리만 push, 매칭 결과는 2차 패스에서 채움
+    const outIdx=out.length;
+    out.push({corp,callTs:cb.callTs,caller:cb.caller,rep:cb.rep,contractState,dbState,inCount:0,inStatuses:[],inDur:[],isMissed:true,reason:'',allDenom:true,validDenom:true,matchedCol,contractValid,contractCount});
+    const key=cb.caller+'|'+cb.rep;
+    if(!denomByKey.has(key)) denomByKey.set(key,[]);
+    denomByKey.get(key).push({cb, outIdx});
+  }
+  // 2차 패스: 같은 (caller,rep) 그룹에서 그리디 1:1 매칭
+  // 콜백 callTs 오름차순 + IN call startTs 오름차순 → 단조 포인터로 O(N+M)
+  for(const [key, cbList] of denomByKey){
+    cbList.sort((a,b)=>a.cb.callTs-b.cb.callTs);
+    const ics=incallMap.get(key)||[];
+    let p=0;
+    for(const {cb, outIdx} of cbList){
+      const cbTs=cb.callTs;
+      // 콜백 이전 IN call은 스킵 (단조 증가)
+      while(p<ics.length && ics[p].startTs < cbTs) p++;
+      if(p>=ics.length){ out[outIdx].reason='IN call 매칭 없음'; continue; }
+      const cand=ics[p];
+      if(cand.startTs-cbTs > MC_MATCH_WINDOW_MS){ out[outIdx].reason='IN call 매칭 없음'; continue; }
+      // 1:1 소비
+      out[outIdx].inCount=1;
+      out[outIdx].inStatuses=[cand.status];
+      out[outIdx].inDur=[Math.round(cand.dur)];
+      if(mcIsValidCall(cand)){ out[outIdx].isMissed=false; out[outIdx].reason='유효통화 연결'; }
+      else { out[outIdx].isMissed=true; out[outIdx].reason='유효통화 아님'; }
+      p++;
+    }
   }
   dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
   dbg.missed=out.filter(r=>r.isMissed).length; dbg.validDenom=out.filter(r=>r.validDenom).length;
@@ -8289,11 +8315,11 @@ window.mcDiagnoseWindow=async function(){
 
   const scenarios=[
     {name:'±1분 (대칭)', test:d=>d.absDelta<=60000},
-    {name:'±2분 (현재 룰)', test:d=>d.absDelta<=120000},
+    {name:'±2분 (구 룰)', test:d=>d.absDelta<=120000},
     {name:'±5분 (대칭)', test:d=>d.absDelta<=300000},
     {name:'±10분 (대칭)', test:d=>d.absDelta<=600000},
-    {name:'0~+5분 (비대칭, IN call 이후만)', test:d=>d.delta>=0&&d.delta<=300000},
-    {name:'0~+10분 (비대칭)', test:d=>d.delta>=0&&d.delta<=600000},
+    {name:'0~+5분 (비대칭)', test:d=>d.delta>=0&&d.delta<=300000},
+    {name:'0~+10분 (현재 룰, 그리디 1:1은 미반영·상한값)', test:d=>d.delta>=0&&d.delta<=600000},
     {name:'0~+15분 (비대칭)', test:d=>d.delta>=0&&d.delta<=900000},
     {name:'-1분~+10분 (약비대칭)', test:d=>d.delta>=-60000&&d.delta<=600000},
   ];
