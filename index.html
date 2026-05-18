@@ -8392,6 +8392,176 @@ window.mcDiagnoseWindow=async function(){
   return {totalValidDenom, noCallerRepInIncall, matchable:deltas.length, deltas, scenarios:scenarios.map(s=>({name:s.name, recv:deltas.filter(s.test).filter(d=>d.validNearest).length}))};
 };
 
+// ── 모수(Denominator) 분석 진단 ──
+// 어디서 콜이 빠지는지 / 모수 정의를 어떻게 바꾸면 KPI가 어떻게 변하는지 분석.
+// 콘솔에서 mcDiagnoseDenom() 호출. 옵션: mcDiagnoseDenom({bhStart:9, bhEnd:18})
+window.mcDiagnoseDenom=async function(opts){
+  opts=opts||{};
+  const bhStart=opts.bhStart!=null?opts.bhStart:9;
+  const bhEnd=opts.bhEnd!=null?opts.bhEnd:18;
+
+  if((typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){
+    console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();
+  }
+  if(typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length){
+    console.warn('부재인입 파일이 비어있습니다. 부재인입 탭 한 번 클릭 후 재시도.');return;
+  }
+
+  // mcJudged(records 배열) 캐시 사용, 없으면 빌드
+  let records=null;
+  if(typeof mcJudged!=='undefined'&&Array.isArray(mcJudged)&&mcJudged.length){
+    records=mcJudged;
+  }else if(typeof mcBuildJudged==='function'){
+    const r=mcBuildJudged();records=r&&r.records;
+  }
+  if(!records||!records.length){console.warn('판정 결과(mcJudged)가 비었습니다.');return;}
+
+  // 매핑 + 콜백 원본 (unmapped 카운트용)
+  const mapping=new Map();
+  for(const f of mcFilesByType('mapping',null)) for(const [ph,cp] of (f.rows||[])) mapping.set(ph,cp);
+  const cbSeen=new Set();
+  let totalCb=0, unmappedCb=0;
+  const unmappedByRep=new Map();
+  for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
+    const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
+    totalCb++;
+    if(!mapping.get(cb.rep)){
+      unmappedCb++;
+      const k=cb.rep||'(빈값)';
+      const e=unmappedByRep.get(k)||{대표번호:k, 원본:cb.repRaw||'', 건수:0};
+      e.건수++; unmappedByRep.set(k,e);
+    }
+  }
+
+  const denomRecs=records.filter(r=>r.validDenom);
+  const excludeBefore=records.filter(r=>r.reason==='계약 후 콜백(제외)');
+  const excludeNotInDb=records.filter(r=>r.reason==='모수 아님(제외)');
+  const recvRecs=denomRecs.filter(r=>!r.isMissed);
+  const missRecs=denomRecs.filter(r=>r.isMissed);
+
+  console.log('%c━━━ 부재인입 모수(Denominator) 분석 ━━━','color:#7c3aed;font-weight:bold;font-size:14px');
+
+  // [1] 콜백 → 모수 흐름
+  console.log('\n%c[1] 콜백 → 모수 흐름','color:#7c3aed;font-weight:bold');
+  const pct=(n,d)=>d>0?((n/d)*100).toFixed(1)+'%':'-';
+  console.table([
+    {분류:'총 콜백(dedup)', 건수:totalCb, '전체대비':'100.0%'},
+    {분류:'  ├ 매핑 실패(대표번호 미등록)', 건수:unmappedCb, '전체대비':pct(unmappedCb,totalCb)},
+    {분류:'  └ 매핑 성공', 건수:totalCb-unmappedCb, '전체대비':pct(totalCb-unmappedCb,totalCb)},
+    {분류:'      ├ 콜백 이전 계약 있음(제외)', 건수:excludeBefore.length, '전체대비':pct(excludeBefore.length,totalCb)},
+    {분류:'      ├ 계약·DB 모두 없음(제외)', 건수:excludeNotInDb.length, '전체대비':pct(excludeNotInDb.length,totalCb)},
+    {분류:'      └ ★ 유효 모수', 건수:denomRecs.length, '전체대비':pct(denomRecs.length,totalCb)},
+    {분류:'          ├ 수신', 건수:recvRecs.length, '전체대비':pct(recvRecs.length,totalCb)+' / 모수대비 '+pct(recvRecs.length,denomRecs.length)},
+    {분류:'          └ 미수신', 건수:missRecs.length, '전체대비':pct(missRecs.length,totalCb)+' / 모수대비 '+pct(missRecs.length,denomRecs.length)},
+  ]);
+
+  // [2] 법인별
+  console.log('\n%c[2] 법인별 분포 (유효 모수)','color:#7c3aed;font-weight:bold');
+  const byCorp={};
+  for(const r of denomRecs){
+    const c=r.corp||'(unknown)';
+    if(!byCorp[c]) byCorp[c]={denom:0,recv:0,miss:0};
+    byCorp[c].denom++;
+    if(r.isMissed) byCorp[c].miss++; else byCorp[c].recv++;
+  }
+  console.table(Object.entries(byCorp).map(([corp,s])=>({
+    법인:corp, 모수:s.denom, 수신:s.recv, 미수신:s.miss, '미수신률':pct(s.miss,s.denom),
+  })));
+
+  // [3] 시간대별
+  console.log('\n%c[3] 시간대별 분포 (유효 모수, 0~23시)','color:#7c3aed;font-weight:bold');
+  const byHour=Array.from({length:24},()=>({denom:0,recv:0,miss:0}));
+  for(const r of denomRecs){
+    const h=new Date(r.callTs).getHours();
+    byHour[h].denom++;
+    if(r.isMissed) byHour[h].miss++; else byHour[h].recv++;
+  }
+  console.table(byHour.map((s,i)=>({
+    시:String(i).padStart(2,'0')+'시', 모수:s.denom, 수신:s.recv, 미수신:s.miss, '미수신률':pct(s.miss,s.denom),
+  })));
+
+  // [4] 요일별
+  console.log('\n%c[4] 요일별 분포','color:#7c3aed;font-weight:bold');
+  const dayLabels=['일','월','화','수','목','금','토'];
+  const byDay=dayLabels.map(()=>({denom:0,recv:0,miss:0}));
+  for(const r of denomRecs){
+    const d=new Date(r.callTs).getDay();
+    byDay[d].denom++;
+    if(r.isMissed) byDay[d].miss++; else byDay[d].recv++;
+  }
+  console.table(byDay.map((s,i)=>({
+    요일:dayLabels[i], 모수:s.denom, 수신:s.recv, 미수신:s.miss, '미수신률':pct(s.miss,s.denom),
+  })));
+
+  // [5] 고객당 콜백 횟수
+  console.log('\n%c[5] 고객당 콜백 횟수 분포 (유효 모수 caller 기준)','color:#7c3aed;font-weight:bold');
+  const cbPerCust=new Map();
+  for(const r of denomRecs) cbPerCust.set(r.caller, (cbPerCust.get(r.caller)||0)+1);
+  const freqBuckets={'1회':0,'2회':0,'3~5회':0,'6~10회':0,'11~20회':0,'21회+':0};
+  let maxFreq=0, maxCaller='';
+  for(const [c,cnt] of cbPerCust){
+    if(cnt===1) freqBuckets['1회']++;
+    else if(cnt===2) freqBuckets['2회']++;
+    else if(cnt<=5) freqBuckets['3~5회']++;
+    else if(cnt<=10) freqBuckets['6~10회']++;
+    else if(cnt<=20) freqBuckets['11~20회']++;
+    else freqBuckets['21회+']++;
+    if(cnt>maxFreq){maxFreq=cnt; maxCaller=c;}
+  }
+  const totCust=cbPerCust.size;
+  console.table(Object.entries(freqBuckets).map(([k,v])=>({구간:k, 고객수:v, '비중':pct(v,totCust)})));
+  console.log(`고유 고객 ${totCust.toLocaleString()}명 / 콜백 ${denomRecs.length.toLocaleString()}건 → 평균 ${(denomRecs.length/Math.max(1,totCust)).toFixed(2)}회/고객`);
+  if(maxFreq>0) console.log(`최다 콜백: caller ${maxCaller} → ${maxFreq}건`);
+
+  // [6] 모수 정의 시나리오 시뮬레이션
+  console.log('\n%c[6] 모수 정의 시나리오 시뮬레이션','color:#7c3aed;font-weight:bold');
+  console.log(`(영업시간: 평일 ${bhStart}~${bhEnd}시 / 변경: mcDiagnoseDenom({bhStart:9,bhEnd:18}))`);
+  const inBh=ts=>{const d=new Date(ts);const dow=d.getDay();if(dow===0||dow===6)return false;const h=d.getHours();return h>=bhStart&&h<bhEnd;};
+  const fmtDay=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+
+  const scenarios=[
+    {name:'A. 현재 정의 (모든 모수 콜백)', filter:()=>true, collapse:null},
+    {name:'B. 영업시간 내(평일 BH)만', filter:r=>inBh(r.callTs), collapse:null},
+    {name:'C. 고객·일자 단위 (같은 날 N콜=1건)', filter:()=>true, collapse:r=>`${r.caller}__${fmtDay(r.callTs)}`},
+    {name:'D. 고객·일자 + 영업시간', filter:r=>inBh(r.callTs), collapse:r=>`${r.caller}__${fmtDay(r.callTs)}`},
+    {name:'E. caller당 평생 1건만', filter:()=>true, collapse:r=>r.caller},
+  ];
+  console.table(scenarios.map(s=>{
+    let recs=denomRecs.filter(s.filter);
+    if(s.collapse){
+      const seenKey=new Map();
+      const sorted=recs.slice().sort((a,b)=>a.callTs-b.callTs);
+      for(const r of sorted){
+        const k=s.collapse(r);
+        if(seenKey.has(k)){
+          // 같은 그룹 안에서 한 건이라도 수신이면 수신으로 통합
+          const ex=seenKey.get(k);
+          if(!r.isMissed && ex.isMissed) seenKey.set(k,r);
+        }else seenKey.set(k,r);
+      }
+      recs=Array.from(seenKey.values());
+    }
+    const denom=recs.length, recv=recs.filter(r=>!r.isMissed).length, miss=denom-recv;
+    return {시나리오:s.name, 모수:denom, 수신:recv, 미수신:miss, '미수신률':pct(miss,denom)};
+  }));
+
+  // [7] 미매핑 대표번호 top
+  if(unmappedByRep.size>0){
+    console.log('\n%c[7] 매핑 실패한 대표번호 상위 (top 15)','color:#dc2626;font-weight:bold');
+    console.table(Array.from(unmappedByRep.values()).sort((a,b)=>b.건수-a.건수).slice(0,15));
+    console.log(`  → 매핑 테이블에 추가하면 모수가 ${unmappedCb.toLocaleString()}건 늘어남`);
+  }
+
+  console.log('\n%c판단 가이드','color:#059669;font-weight:bold');
+  console.log('  · [1] 매핑 실패가 크면 → 대표번호 매핑 보강만으로 모수 즉시 회복');
+  console.log('  · [1] "계약·DB 모두 없음" 큼 → DB 파일 갱신 누락 의심');
+  console.log('  · [3][4] 영업시간 외/주말 콜이 많으면 → 응대 불가능한 시간대가 KPI를 누름 → 시나리오 B 권장');
+  console.log('  · [5] 평균 N회/고객이 크면 → 같은 고객의 반복 콜이 미수신을 부풀림 → 시나리오 C 권장');
+  console.log('  · [6] 시나리오별 미수신률 비교: 현재 KPI vs 잠재 KPI 후보. 의미 있는 차이가 보이면 모수 정의 협의 필요');
+
+  return {totalCb, unmappedCb, denom:denomRecs.length, recv:recvRecs.length, miss:missRecs.length, uniqueCustomers:totCust};
+};
+
 function mcGenerate(force){
   if(!mcReady()){
     mcUpdateEmptyHint();
