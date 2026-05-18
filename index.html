@@ -8703,6 +8703,134 @@ window.mcDiagnosePhones=async function(){
   return {cbRows, icRows, cbCallers:cbCallers.size, icCallers:icCallers.size, callerOverlap:inBoth, callerOverlapPct:parseFloat(overlapPct), cbReps:cbReps.size, icReps:icReps.size, repOverlap:repInBoth};
 };
 
+// ── IN call 방향성(컬럼 뒤집힘) 진단 ──
+// outbound 콜이 IN call 파일에 섞여 caller·rep가 의미 반대로 들어갔는지 검증.
+// 콘솔에서 mcDiagnoseDirection() 호출.
+window.mcDiagnoseDirection=async function(){
+  if((typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){
+    console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();
+  }
+  if(typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length){console.warn('부재인입 파일이 비어있습니다.');return;}
+
+  // 우리 대표번호 집합 (매핑 테이블 키)
+  const mapping=new Map();
+  for(const f of mcFilesByType('mapping',null)) for(const [ph,cp] of (f.rows||[])) mapping.set(ph,cp);
+  const ourReps=new Set(mapping.keys());
+
+  // 콜백 dedup
+  const cbSeen=new Set(); const cbList=[]; const cbCallers=new Set();
+  for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
+    const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
+    cbList.push(cb); if(cb.caller) cbCallers.add(cb.caller);
+  }
+  // IN call dedup
+  const icSeen=new Set(); const ic=[];
+  for(const f of mcFilesByType('incall',null)) for(const r of (f.rows||[])){
+    const uk=r.caller+'_'+r.rep+'_'+r.startTs+'_'+r.dur;if(icSeen.has(uk))continue;icSeen.add(uk);
+    ic.push(r);
+  }
+
+  // IN call 행 분류
+  const icCustomer=[], icOurRep=[], icNoise=[];
+  for(const r of ic){
+    if(!r.caller||r.caller.length<5){icNoise.push(r);continue;}
+    if(ourReps.has(r.caller)){icOurRep.push(r);continue;}
+    icCustomer.push(r);
+  }
+
+  console.log('%c━━━ 부재인입 IN call 방향성 진단 ━━━','color:#dc2626;font-weight:bold;font-size:14px');
+  console.log(`\n매핑된 우리 대표번호: ${ourReps.size}종`);
+  console.log(`콜백 dedup: ${cbList.length.toLocaleString()}건 / 고유 caller ${cbCallers.size.toLocaleString()}명`);
+  console.log(`IN call dedup: ${ic.length.toLocaleString()}건`);
+
+  // [1] IN call 행 분류
+  console.log('\n%c[1] IN call 행 분류 (caller 컬럼 기준)','color:#dc2626;font-weight:bold');
+  console.table([
+    {분류:'caller=고객 (정상 inbound)', 건수:icCustomer.length, '%':((icCustomer.length/Math.max(1,ic.length))*100).toFixed(1)+'%'},
+    {분류:'caller=우리 대표번호 (outbound 의심)', 건수:icOurRep.length, '%':((icOurRep.length/Math.max(1,ic.length))*100).toFixed(1)+'%'},
+    {분류:'caller=노이즈(4자리 등)', 건수:icNoise.length, '%':((icNoise.length/Math.max(1,ic.length))*100).toFixed(1)+'%'},
+  ]);
+
+  // [2] 콜백 caller가 IN call 어디에 있는가
+  const icCallerSet=new Set(icCustomer.map(r=>r.caller));
+  const icRepSetAll=new Set(ic.map(r=>r.rep));
+  const icRepFromOutbound=new Set(icOurRep.map(r=>r.rep));
+  let inCallerCol=0, inRepColAll=0, inRepColOutbound=0;
+  for(const c of cbCallers){
+    if(icCallerSet.has(c)) inCallerCol++;
+    if(icRepSetAll.has(c)) inRepColAll++;
+    if(icRepFromOutbound.has(c)) inRepColOutbound++;
+  }
+  console.log('\n%c[2] 콜백 caller가 IN call 어디에 있는가 (★ 컬럼 뒤집힘 검증)','color:#dc2626;font-weight:bold');
+  console.table([
+    {위치:'IN call caller 열 (현재 매칭 대상)', 매칭:inCallerCol, '%':((inCallerCol/Math.max(1,cbCallers.size))*100).toFixed(1)+'%'},
+    {위치:'IN call rep 열 (전체 행)', 매칭:inRepColAll, '%':((inRepColAll/Math.max(1,cbCallers.size))*100).toFixed(1)+'%'},
+    {위치:'IN call rep 열 (outbound 의심 행만)', 매칭:inRepColOutbound, '%':((inRepColOutbound/Math.max(1,cbCallers.size))*100).toFixed(1)+'%'},
+  ]);
+
+  // [3] outbound swap 시뮬레이션
+  const W=600000;
+  // (caller|rep) → [ic records]
+  const mapInbound=new Map();
+  for(const r of icCustomer){const k=r.caller+'|'+r.rep;if(!mapInbound.has(k))mapInbound.set(k,[]);mapInbound.get(k).push(r);}
+  const mapAll=new Map();
+  for(const r of icCustomer){const k=r.caller+'|'+r.rep;if(!mapAll.has(k))mapAll.set(k,[]);mapAll.get(k).push(r);}
+  for(const r of icOurRep){
+    // swap: outbound의 rep(=고객) 자리를 caller로, caller(=대표번호)를 rep로
+    const k=r.rep+'|'+r.caller;
+    if(!mapAll.has(k))mapAll.set(k,[]);
+    mapAll.get(k).push({caller:r.rep, rep:r.caller, startTs:r.startTs, dur:r.dur, status:r.status});
+  }
+  for(const arr of mapInbound.values()) arr.sort((a,b)=>a.startTs-b.startTs);
+  for(const arr of mapAll.values()) arr.sort((a,b)=>a.startTs-b.startTs);
+
+  // 각 콜백마다 윈도우 안에 매칭 IN call이 있는지 (any-match) 및 유효통화가 있는지 (any-valid)
+  // 주의: 그리디 1:1은 시뮬레이션 안 함 — 단순 "잠재 매칭 가능량"을 비교
+  let matchInbound=0, validInbound=0, matchAll=0, validAll=0;
+  for(const cb of cbList){
+    const k=cb.caller+'|'+cb.rep;
+    const arr1=mapInbound.get(k)||[];
+    const arr2=mapAll.get(k)||[];
+    const win=r=>{const d=r.startTs-cb.callTs;return d>=0&&d<=W;};
+    const m1=arr1.filter(win), m2=arr2.filter(win);
+    if(m1.length) matchInbound++;
+    if(m2.length) matchAll++;
+    if(m1.some(mcIsValidCall)) validInbound++;
+    if(m2.some(mcIsValidCall)) validAll++;
+  }
+  console.log('\n%c[3] outbound swap 시뮬레이션 (any-match 기준, 그리디 1:1 미적용)','color:#dc2626;font-weight:bold');
+  console.log('  outbound 의심 행에서 caller↔rep 자리를 바꾼 뒤 동일 윈도우(0~+10분) 매칭');
+  console.table([
+    {시나리오:'현재 룰 (inbound caller만)', '윈도우 매칭':matchInbound, '유효통화':validInbound, '매칭률':((matchInbound/Math.max(1,cbList.length))*100).toFixed(2)+'%', '수신률(상한)':((validInbound/Math.max(1,cbList.length))*100).toFixed(2)+'%'},
+    {시나리오:'outbound swap 포함', '윈도우 매칭':matchAll, '유효통화':validAll, '매칭률':((matchAll/Math.max(1,cbList.length))*100).toFixed(2)+'%', '수신률(상한)':((validAll/Math.max(1,cbList.length))*100).toFixed(2)+'%'},
+  ]);
+  console.log(`  → swap 추가 효과: 매칭 +${(matchAll-matchInbound).toLocaleString()}, 유효통화 +${(validAll-validInbound).toLocaleString()}`);
+
+  // [4] outbound 의심 행 샘플
+  console.log('\n%c[4] outbound 의심 행 샘플 (caller=대표번호인 IN call 20건)','color:#dc2626;font-weight:bold');
+  console.log('  rep 컬럼이 10자리 고객 모바일이면 outbound 콜이 IN call에 섞인 것 확정');
+  console.table(icOurRep.slice(0,20).map(r=>({
+    caller:r.caller,
+    'caller(=대표번호)':mapping.get(r.caller)||'-',
+    rep:r.rep,
+    rep자리수:r.rep.length,
+    시작시각:mcFmtDateTime(r.startTs),
+    통화시간:Math.round(r.dur),
+    status:r.status,
+  })));
+
+  console.log('\n%c판단 가이드','color:#059669;font-weight:bold');
+  console.log('  · [2] "IN call rep 열" 매칭이 caller 열보다 비슷하거나 높으면 → 컬럼 뒤집힘 가설 강화');
+  console.log('  · [3] swap 포함 시 수신률 상한이 의미 있게 오르면 → 코드에 outbound swap 처리 추가 가치 있음');
+  console.log('  · [3] swap 효과가 적으면 → outbound 콜은 IN call에 안 섞임. 미수신 64%는 진짜 CMS 누락');
+  console.log('  · [4] rep 자리수가 10자리 모바일이면 outbound 확정 / 다른 대표번호면 내선 전환 등 다른 의미');
+
+  return {ourReps:ourReps.size, cbCount:cbList.length, icCount:ic.length,
+    icCustomer:icCustomer.length, icOurRep:icOurRep.length, icNoise:icNoise.length,
+    inCallerCol, inRepColAll, inRepColOutbound,
+    matchInbound, validInbound, matchAll, validAll};
+};
+
 function mcGenerate(force){
   if(!mcReady()){
     mcUpdateEmptyHint();
