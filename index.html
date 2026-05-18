@@ -1483,7 +1483,12 @@ tr.row-h td{background:var(--gh-light)}
           <div class="progress-bar hidden" id="prog-gd-attend"><div class="progress-fill"></div></div>
         </div>
       </div>
-      <h3 style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:15px">초기 등급 설정 (1회성)</h3>
+      <h3 onclick="gdToggleInitSection()" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
+        <span id="gd-init-arrow" style="display:inline-block;transition:transform .2s;font-size:11px;color:var(--gray)">▶</span>
+        초기 등급 설정 (1회성)
+        <span style="font-size:11px;color:var(--gray);font-weight:400;margin-left:auto">클릭하여 펼치기</span>
+      </h3>
+      <div id="gd-init-section" class="hidden">
       <div style="font-size:12px;color:var(--gray);margin-bottom:10px;line-height:1.5">두 가지 방식 중 하나를 선택하세요. 한 번만 등록하면 이후 회차 산정 시 streak 출발점이 됩니다.</div>
 
       <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:6px">방식 1. 이름+등급 엑셀 직접 업로드</div>
@@ -1528,6 +1533,7 @@ tr.row-h td{background:var(--gh-light)}
       </div>
       <button type="button" class="btn btn-primary" onclick="gdGenerateInitFromApril()" style="width:100%">📊 4월 실적 자동 산정 → 초기등급 저장</button>
       <div id="gd-april-result" style="margin-top:14px"></div>
+      </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="gdCloseModal()">닫기</button>
         <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdGenerate();gdCloseModal()">대시보드 생성</button>
@@ -6013,6 +6019,17 @@ function gdDownloadInitTemplate(){
     e.target.value='';
   });
 })();
+
+// 초기 등급 설정 섹션 접기/펴기
+function gdToggleInitSection(){
+  const sec=document.getElementById('gd-init-section');
+  const arrow=document.getElementById('gd-init-arrow');
+  const label=arrow&&arrow.nextElementSibling?arrow.nextElementSibling.nextElementSibling:null;
+  if(!sec||!arrow) return;
+  const collapsed=sec.classList.toggle('hidden');
+  arrow.style.transform=collapsed?'':'rotate(90deg)';
+  if(label) label.textContent=collapsed?'클릭하여 펼치기':'클릭하여 접기';
+}
 
 // ── 방식 2: 4월 실적 자동 초기등급 산정 (취소 미반영, 1/3 분할 A/B/C) ──
 // 4월 한달치 DB·계약·명단을 받아 실계약률 기준으로 줄세워 A/B/C 부여, sheetName=260430 고정
