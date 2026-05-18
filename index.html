@@ -1395,6 +1395,15 @@ tr.row-h td{background:var(--gh-light)}
           <button class="ia-view-btn" data-mcunit="week" onclick="mcSwitchUnit('week')">주차별</button>
           <button class="ia-view-btn" data-mcunit="month" onclick="mcSwitchUnit('month')">월별</button>
         </div>
+        <div style="width:1px;height:22px;background:#e2e8f0"></div>
+        <label>시간대:</label>
+        <select id="mcHourPresetSel" onchange="mcSetHourPreset(this.value)" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;font-family:inherit">
+          <option value="all">전체 시간</option>
+          <option value="bh">영업시간 (09~18시)</option>
+          <option value="bhNoLunch">점심 제외 (09~11, 13~18시)</option>
+          <option value="bhNoLunchClose">점심·마감 제외 (09~11, 13~17시)</option>
+          <option value="bhCore">핵심 시간 (10~17시)</option>
+        </select>
         <div style="flex:1"></div>
         <button class="ia-view-btn" onclick="mcDownloadExcel()" style="background:#16a34a;color:#fff;border-color:#16a34a">📥 엑셀 다운로드</button>
         <button class="ia-view-btn" onclick="mcGenerate(true)">🔄 재분석</button>
@@ -7752,6 +7761,17 @@ async function gdDownloadAprilInitExcel(){
 const MC_DB_NAME='missedCallDashboard', MC_DB_VER=1;
 let mcIdb=null, mcFiles=[], mcLoaded=false, mcJudged=null, mcMeta=null, mcCharts={};
 let mcCorpFilter='all', mcUnit='day', mcDetailPage=1;
+// 시간대 필터 (콜백 callTs의 시(0-23) 기준)
+const MC_HOUR_PRESETS={
+  'all':           {label:'전체 시간',                    match:()=>true},
+  'bh':            {label:'영업시간 (09~18시)',           match:h=>h>=9&&h<19},
+  'bhNoLunch':     {label:'점심 제외 (09~11, 13~18시)',    match:h=>(h>=9&&h<12)||(h>=13&&h<19)},
+  'bhNoLunchClose':{label:'점심·마감 제외 (09~11, 13~17시)', match:h=>(h>=9&&h<12)||(h>=13&&h<18)},
+  'bhCore':        {label:'핵심 시간 (10~17시)',           match:h=>h>=10&&h<18},
+};
+let mcHourPreset='all';
+function mcHourMatches(ts){const p=MC_HOUR_PRESETS[mcHourPreset]||MC_HOUR_PRESETS.all;return p.match(new Date(ts).getHours());}
+function mcSetHourPreset(v){mcHourPreset=v;mcDetailPage=1;mcRender();}
 const MC_TYPES=[
   {key:'incall',corp:'',id:'incall'},
   {key:'callback',corp:'',id:'callback'},
@@ -8641,7 +8661,7 @@ function mcStats(records){
 function mcRender(){
   if(!mcJudged)return;
   const [start,end]=mcRangeMs();
-  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end); // 매핑된 콜백 전체(법인 필터 무관)
+  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end&&mcHourMatches(r.callTs)); // 매핑된 콜백 전체(법인 필터 무관) + 시간대 필터
   // 경고바
   const warns=[];
   if(mcMeta&&mcMeta.unmapped){
@@ -8900,7 +8920,7 @@ function mcRenderCorpTable(dateScope,hasStatusMetaByCorp){
 function mcCurrentDetailRows(){
   if(!mcJudged)return [];
   const [start,end]=mcRangeMs();
-  let recs=mcJudged.filter(r=>r.isMissed&&r.callTs>=start&&r.callTs<end&&(mcCorpFilter==='all'||r.corp===mcCorpFilter));
+  let recs=mcJudged.filter(r=>r.isMissed&&r.callTs>=start&&r.callTs<end&&mcHourMatches(r.callTs)&&(mcCorpFilter==='all'||r.corp===mcCorpFilter));
   const q=(document.getElementById('mcDetailSearch').value||'').replace(/[^0-9]/g,'');
   if(q)recs=recs.filter(r=>r.caller.includes(q)||r.rep.includes(q));
   recs.sort((a,b)=>b.callTs-a.callTs);
@@ -8975,7 +8995,7 @@ async function mcDownloadExcel(){
   if(!mcJudged){alert('먼저 분석 실행이 필요합니다.');return;}
   if(typeof XLSX==='undefined'||!XLSX.utils){alert('xlsx 라이브러리 미로드');return;}
   const [start,end]=mcRangeMs();
-  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end);
+  const dateScope=mcJudged.filter(r=>r.callTs>=start&&r.callTs<end&&mcHourMatches(r.callTs));
 
   // ── 색상 팔레트 ──
   const C={
