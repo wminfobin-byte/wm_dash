@@ -8200,26 +8200,36 @@ function mcBuildJudged(){
     if(!denomByKey.has(key)) denomByKey.set(key,[]);
     denomByKey.get(key).push({cb, outIdx});
   }
-  // 2차 패스: 같은 (caller,rep) 그룹에서 그리디 1:1 매칭
-  // 콜백 callTs 오름차순 + IN call startTs 오름차순 → 단조 포인터로 O(N+M)
+  // 2차 패스: 같은 (caller,rep) 그룹에서 valid 우선 그리디 1:1 매칭
+  // - 콜백 callTs 오름차순으로 처리
+  // - 각 콜백마다 윈도우 안 미소비 IN call 후보를 모은 후, valid(60초+ 연결) 우선 선택
+  // - valid 없으면 가장 가까운 invalid 후보를 소비 (해당 콜백은 미수신 처리)
+  // - 후보 0개면 매칭 없음 (미수신)
   for(const [key, cbList] of denomByKey){
     cbList.sort((a,b)=>a.cb.callTs-b.cb.callTs);
     const ics=incallMap.get(key)||[];
-    let p=0;
+    const consumed=new Array(ics.length).fill(false);
+    let startP=0; // ics 내 다음 후보 시작 인덱스 (단조)
     for(const {cb, outIdx} of cbList){
       const cbTs=cb.callTs;
-      // 콜백 이전 IN call은 스킵 (단조 증가)
-      while(p<ics.length && ics[p].startTs < cbTs) p++;
-      if(p>=ics.length){ out[outIdx].reason='IN call 매칭 없음'; continue; }
-      const cand=ics[p];
-      if(cand.startTs-cbTs > MC_MATCH_WINDOW_MS){ out[outIdx].reason='IN call 매칭 없음'; continue; }
-      // 1:1 소비
+      while(startP<ics.length && ics[startP].startTs < cbTs) startP++;
+      let chosenIdx=-1, fallbackIdx=-1;
+      for(let q=startP;q<ics.length;q++){
+        const d=ics[q].startTs-cbTs;
+        if(d>MC_MATCH_WINDOW_MS) break;
+        if(consumed[q]) continue;
+        if(fallbackIdx<0) fallbackIdx=q;
+        if(mcIsValidCall(ics[q])){ chosenIdx=q; break; }
+      }
+      if(chosenIdx<0) chosenIdx=fallbackIdx;
+      if(chosenIdx<0){ out[outIdx].reason='IN call 매칭 없음'; continue; }
+      const cand=ics[chosenIdx];
+      consumed[chosenIdx]=true;
       out[outIdx].inCount=1;
       out[outIdx].inStatuses=[cand.status];
       out[outIdx].inDur=[Math.round(cand.dur)];
       if(mcIsValidCall(cand)){ out[outIdx].isMissed=false; out[outIdx].reason='유효통화 연결'; }
       else { out[outIdx].isMissed=true; out[outIdx].reason='유효통화 아님'; }
-      p++;
     }
   }
   dbg.callbackRows=cbSeen.size; dbg.unmapped=unmapped; dbg.contractKeys=contractMap.size; dbg.dbKeys=dbSet.size; dbg.mappingRows=mapping.size;
