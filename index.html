@@ -197,9 +197,9 @@ tr.row-h td{background:var(--gh-light)}
 .tab-item{padding:14px 28px;font-size:15px;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;user-select:none}
 .tab-item:hover{color:var(--dark);background:#f8f9fc}
 .tab-item.active{color:var(--primary);border-bottom-color:var(--primary)}
-.tab-item.dimmed:not(.active){color:#b3b8c2;font-weight:600}
+.tab-item.dimmed:not(.active){color:#b3b8c2;font-weight:600;order:1}
 .tab-item.dimmed:not(.active):hover{color:var(--gray)}
-.tab-item.placeholder{color:#ccc;cursor:default;font-weight:400;font-size:13px}
+.tab-item.placeholder{color:#ccc;cursor:default;font-weight:400;font-size:13px;order:2}
 .tab-item.placeholder:hover{background:transparent;color:#ccc}
 .page{display:none}
 .page.active{display:block}
@@ -716,10 +716,10 @@ tr.row-h td{background:var(--gh-light)}
 <div class="tab-nav">
   <div class="tab-item active" data-page="grade-dash" onclick="switchPage('grade-dash')">차등성과</div>
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
+  <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
-  <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
 
