@@ -8205,6 +8205,141 @@ function mcBuildJudged(){
   return {records:out,unmapped,unmappedReps:dbg.unmappedReps,counts:{incall:incSeen.size,callback:cbSeen.size,db:dbSet.size,mapping:mapping.size}};
 }
 
+// ── 매칭 윈도우 진단 ──
+// 콜백마다 같은 (caller,rep)의 가장 가까운 IN call까지 시간차를 측정.
+// 분포·후보 윈도우별 수신/미수신 시뮬레이션·현재 ±2분으로는 미수신이지만 더 넓은 윈도우에선 수신될 콜백 샘플 출력.
+// 콘솔에서 mcDiagnoseWindow() 호출.
+window.mcDiagnoseWindow=async function(){
+  if((!window.mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();}
+  if(!window.mcFiles||!mcFiles.length){console.warn('부재인입 파일이 비어있습니다.');return;}
+
+  // mcBuildJudged의 모수 판정 로직 재현
+  const mapping=new Map();
+  for(const f of mcFilesByType('mapping',null)) for(const [ph,cp] of (f.rows||[])) mapping.set(ph,cp);
+  const contractMap=new Map(), dbSet=new Map();
+  const dedupAdd=(map,corp,phone,rec)=>{if(!phone)return;const k=corp+'|'+phone;if(!map.has(k))map.set(k,[]);map.get(k).push(rec);};
+  for(const f of mcFilesByType('contract',null)) for(const c of (f.rows||[])) for(const p of (c.phones||[])) dedupAdd(contractMap,c.corp,p.v,c);
+  for(const f of mcFilesByType('customerdb',null)) for(const d of (f.rows||[])) for(const p of (d.phones||[])){const k=d.corp+'|'+p.v;if(!dbSet.has(k))dbSet.set(k,p.col);}
+  const incallMap=new Map();const incSeen=new Set();
+  for(const f of mcFilesByType('incall',null)) for(const ic of (f.rows||[])){
+    const uk=ic.caller+'_'+ic.rep+'_'+ic.startTs+'_'+ic.dur;if(incSeen.has(uk))continue;incSeen.add(uk);
+    const k=ic.caller+'|'+ic.rep;if(!incallMap.has(k))incallMap.set(k,[]);incallMap.get(k).push(ic);
+  }
+
+  const cbSeen=new Set();
+  const deltas=[]; // {delta, absDelta, validNearest, ...}
+  let noCallerRepInIncall=0, totalValidDenom=0, excludedNonDenom=0;
+
+  for(const f of mcFilesByType('callback',null)) for(const cb of (f.rows||[])){
+    const uk=cb.caller+'_'+cb.rep+'_'+cb.callTs;if(cbSeen.has(uk))continue;cbSeen.add(uk);
+    const corp=mapping.get(cb.rep);
+    if(!corp){excludedNonDenom++;continue;}
+    const cConts=contractMap.get(corp+'|'+cb.caller)||[];
+    if(cConts.length){
+      const hasBefore=cConts.some(c=>c.orderTs!=null&&c.orderTs<=cb.callTs);
+      if(hasBefore){excludedNonDenom++;continue;}
+    }else{
+      if(!dbSet.has(corp+'|'+cb.caller)){excludedNonDenom++;continue;}
+    }
+    totalValidDenom++;
+
+    const arr=incallMap.get(cb.caller+'|'+cb.rep)||[];
+    if(arr.length===0){noCallerRepInIncall++;continue;}
+    let nearest=null, minAbs=Infinity;
+    for(const ic of arr){const d=ic.startTs-cb.callTs;if(Math.abs(d)<minAbs){minAbs=Math.abs(d);nearest=ic;}}
+    deltas.push({
+      delta:nearest.startTs-cb.callTs, absDelta:minAbs,
+      validNearest:mcIsValidCall(nearest),
+      nearestDur:Math.round(nearest.dur||0), nearestStatus:nearest.status||'',
+      nearestTs:nearest.startTs, callbackTs:cb.callTs,
+      caller:cb.caller, rep:cb.rep, corp
+    });
+  }
+
+  const buckets=[
+    {label:'0~30초', max:30000},
+    {label:'30초~1분', max:60000},
+    {label:'1~2분', max:120000},
+    {label:'2~5분', max:300000},
+    {label:'5~10분', max:600000},
+    {label:'10~30분', max:1800000},
+    {label:'30분~1시간', max:3600000},
+    {label:'1시간 이상', max:Infinity},
+  ];
+  const histBefore=buckets.map(()=>0), histAfter=buckets.map(()=>0);
+  for(const d of deltas){
+    const idx=buckets.findIndex(b=>d.absDelta<=b.max);
+    if(d.delta<0) histBefore[idx]++; else histAfter[idx]++;
+  }
+
+  const scenarios=[
+    {name:'±1분 (대칭)', test:d=>d.absDelta<=60000},
+    {name:'±2분 (현재 룰)', test:d=>d.absDelta<=120000},
+    {name:'±5분 (대칭)', test:d=>d.absDelta<=300000},
+    {name:'±10분 (대칭)', test:d=>d.absDelta<=600000},
+    {name:'0~+5분 (비대칭, IN call 이후만)', test:d=>d.delta>=0&&d.delta<=300000},
+    {name:'0~+10분 (비대칭)', test:d=>d.delta>=0&&d.delta<=600000},
+    {name:'0~+15분 (비대칭)', test:d=>d.delta>=0&&d.delta<=900000},
+    {name:'-1분~+10분 (약비대칭)', test:d=>d.delta>=-60000&&d.delta<=600000},
+  ];
+
+  console.log('%c━━━ 부재인입 매칭 윈도우 진단 ━━━','color:#2563eb;font-weight:bold;font-size:14px');
+  console.log(`유효 모수 콜백: ${totalValidDenom}건 / 모수 제외(매핑·계약·DB): ${excludedNonDenom}건`);
+  console.log(`(caller+rep) 자체가 IN call에 없는 콜백: ${noCallerRepInIncall}건 — 어떤 윈도우로도 매칭 불가(미수신 확정)`);
+  console.log(`최근접 IN call 측정 가능한 콜백: ${deltas.length}건`);
+
+  console.log('\n%c[1] 최근접 IN call까지 시간차 분포','color:#2563eb;font-weight:bold');
+  console.log('  · "콜백 이전 IN call" — 큐 지연 가설이면 0에 가까워야 함 (음수 매칭은 의심)');
+  console.log('  · "콜백 이후 IN call" — 정상적 큐 지연이면 여기에 분포가 몰림');
+  console.table(buckets.map((b,i)=>({
+    구간:b.label,
+    '콜백 이전':histBefore[i],
+    '콜백 이후':histAfter[i],
+    '합계':histBefore[i]+histAfter[i],
+    '누적 %':(((histBefore.slice(0,i+1).reduce((a,b)=>a+b,0)+histAfter.slice(0,i+1).reduce((a,b)=>a+b,0))/Math.max(1,deltas.length))*100).toFixed(1)+'%',
+  })));
+
+  console.log('\n%c[2] 윈도우 후보별 수신/미수신 시뮬레이션','color:#2563eb;font-weight:bold');
+  console.table(scenarios.map(s=>{
+    const matched=deltas.filter(s.test);
+    const recv=matched.filter(d=>d.validNearest).length; // 윈도우 안에 유효통화 있는 콜백
+    const missed=totalValidDenom-recv;
+    return {
+      윈도우:s.name,
+      '윈도우 안 매칭':matched.length,
+      '수신(유효통화)':recv,
+      '미수신':missed,
+      '미수신률':(missed/Math.max(1,totalValidDenom)*100).toFixed(2)+'%',
+    };
+  }));
+
+  // 현재 ±2분 미매칭 + 더 넓은 윈도우에서 유효통화 매칭 = "현재 룰의 false missed 후보"
+  const late=deltas.filter(d=>d.absDelta>120000&&d.absDelta<=600000&&d.validNearest)
+    .sort((a,b)=>a.absDelta-b.absDelta);
+  console.log(`\n%c[3] 현재 ±2분으론 미수신, 2~10분 윈도우에선 수신 가능 콜백: ${late.length}건`,'color:#dc2626;font-weight:bold');
+  if(late.length>0){
+    console.table(late.slice(0,30).map(d=>({
+      법인:d.corp,
+      caller:d.caller,
+      rep:d.rep,
+      콜백시각:mcFmtDateTime(d.callbackTs),
+      IN_call시각:mcFmtDateTime(d.nearestTs),
+      '시간차(분)':(d.delta/60000).toFixed(2),
+      '통화시간(초)':d.nearestDur,
+      status:d.nearestStatus,
+    })));
+    if(late.length>30) console.log(`  … 외 ${late.length-30}건`);
+  }
+
+  console.log('\n%c판단 가이드','color:#059669;font-weight:bold');
+  console.log('  · [1] 표에서 "콜백 이후" 분포가 0~5분에 몰리면 → +5분 비대칭 윈도우 안전');
+  console.log('  · "콜백 이전"에 의미 있는 분포가 있으면 → 클록 스큐 또는 두 시스템 timestamp 의미 차이 있음(룰 변경 전 점검 필요)');
+  console.log('  · [2] 표에서 ±2분 → 더 넓은 윈도우로 가도 미수신률이 거의 안 떨어지면 → 현행 유지');
+  console.log('  · [3] 표 샘플들이 "정말 응대한 콜인지" 육안 검증 후 윈도우 결정');
+
+  return {totalValidDenom, noCallerRepInIncall, matchable:deltas.length, deltas, scenarios:scenarios.map(s=>({name:s.name, recv:deltas.filter(s.test).filter(d=>d.validNearest).length}))};
+};
+
 function mcGenerate(force){
   if(!mcReady()){
     mcUpdateEmptyHint();
