@@ -8210,8 +8210,8 @@ function mcBuildJudged(){
 // 분포·후보 윈도우별 수신/미수신 시뮬레이션·현재 ±2분으로는 미수신이지만 더 넓은 윈도우에선 수신될 콜백 샘플 출력.
 // 콘솔에서 mcDiagnoseWindow() 호출.
 window.mcDiagnoseWindow=async function(){
-  if((!window.mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();}
-  if(!window.mcFiles||!mcFiles.length){
+  if((typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();}
+  if(typeof mcFiles==='undefined'||!mcFiles||!mcFiles.length){
     console.warn('부재인입 파일이 비어있습니다.');
     console.log('체크리스트:');
     console.log('  1) 좌측 탭에서 "부재인입"을 한 번 클릭해 페이지가 정상 렌더되는지 확인 (클라우드 싱크가 완료되어야 함)');
