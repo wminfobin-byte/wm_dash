@@ -8211,7 +8211,22 @@ function mcBuildJudged(){
 // 콘솔에서 mcDiagnoseWindow() 호출.
 window.mcDiagnoseWindow=async function(){
   if((!window.mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){console.log('IDB에서 부재인입 파일 로드 중…');await mcLoadFiles();}
-  if(!window.mcFiles||!mcFiles.length){console.warn('부재인입 파일이 비어있습니다.');return;}
+  if(!window.mcFiles||!mcFiles.length){
+    console.warn('부재인입 파일이 비어있습니다.');
+    console.log('체크리스트:');
+    console.log('  1) 좌측 탭에서 "부재인입"을 한 번 클릭해 페이지가 정상 렌더되는지 확인 (클라우드 싱크가 완료되어야 함)');
+    console.log('  2) 페이지 상단에 KPI 카드/표가 보이면 다시 mcDiagnoseWindow() 호출');
+    console.log('  3) 그래도 비어있으면 → 부재인입 탭의 "파일 업로드"로 콜백·IN call·매핑 등 업로드 필요');
+    return;
+  }
+  // 파일 현황 사전 점검
+  const cnt=t=>mcFilesByType(t,null).length;
+  const fileSummary={callback:cnt('callback'), incall:cnt('incall'), mapping:cnt('mapping'), contract:cnt('contract'), customerdb:cnt('customerdb')};
+  console.log('파일 현황:',fileSummary);
+  if(fileSummary.callback===0||fileSummary.incall===0||fileSummary.mapping===0){
+    console.warn('필수 파일 부족: callback / incall / mapping 중 하나가 0건이면 진단 불가');
+    return;
+  }
 
   // mcBuildJudged의 모수 판정 로직 재현
   const mapping=new Map();
