@@ -7154,7 +7154,7 @@ async function gdGenerate(dbFileId){
       const allOfGrp=members.filter(name=>groups[name]===targetGrp);
       const excluded={};
       const pool=allOfGrp.filter(name=>{
-        // 수동 그룹은 풀에 포함 (사용자 의도: 수동 베이스라인 + 프로모션 동시 적용)
+        // 수동 그룹은 풀에 포함 (사용자가 수동으로 이 그룹에 옮긴 의도 = 이 그룹의 1등 후보로 등록)
         if(legitimateMembers.has(name)){(excluded.legitimate=excluded.legitimate||[]).push(name);return false;}
         if(escapedFromH[name]){(excluded.hExit=excluded.hExit||[]).push(name);return false;}
         if(protectedMembers.has(name)){(excluded.newbie=excluded.newbie||[]).push(name);return false;}
@@ -7166,26 +7166,31 @@ async function gdGenerate(dbFileId){
         }
         return true;
       });
-      pool.sort((a,b)=>{
+      // 수동으로 이 targetGrp에 명시적으로 옮겨진 멤버 = 1등 후보 우선순위
+      // (사용자 의도 반영: "이 사람을 이 그룹에 두고 싶다 = 이 그룹 1등 후보로 봐달라")
+      const manualInGrp=pool.filter(n=>manualSet.has(n) && manualGroups[n]===targetGrp);
+      const candidates=manualInGrp.length>0 ? manualInGrp : pool;
+      candidates.sort((a,b)=>{
         const dc=(stats[b].contract||0)-(stats[a].contract||0);
         if(dc!==0) return dc;
         return (stats[b].refAdjRate||0)-(stats[a].refAdjRate||0);
       });
-      console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 → 후보 ${pool.length}명 (실계약수 desc):`);
-      console.log('  ',pool.map(n=>`${n}(실계약${stats[n].contract}건/${(stats[n].refAdjRate*100).toFixed(1)}%)`).join(' / ')||'(빈 풀)');
+      const pickFrom=candidates;
+      console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 / 풀 ${pool.length}명${manualInGrp.length>0?` / 수동 우선 ${manualInGrp.length}명`:''}:`);
+      console.log('  ',pickFrom.map(n=>`${n}(실계약${stats[n].contract}건/${(stats[n].refAdjRate*100).toFixed(1)}%)`).join(' / ')||'(빈 풀)');
       if(Object.keys(excluded).length>0){
         for(const [reason,names] of Object.entries(excluded)){
           console.log(`    [제외 - ${reason}]`, names.join(', '));
         }
       }
-      if(pool.length===0) return [];
+      if(pickFrom.length===0) return [];
       // 1등과 표시 데이터(DB수·실계약수·실계약률·취소수·취소반영계약수·취소반영계약률·D등급연속)가
       // 모두 동일한 멤버 전원 동시 승급
-      const topName=pool[0];
+      const topName=pickFrom[0];
       const top=stats[topName];
       const topStreak=streaks[topName]||0;
       const eq=(a,b)=>Math.abs((a||0)-(b||0))<1e-9;
-      const winners=pool.filter(n=>{
+      const winners=pickFrom.filter(n=>{
         const s=stats[n];
         return s.db===top.db
           && s.contract===top.contract
