@@ -1906,7 +1906,7 @@ async function doSyncUpload(token){
     const gdData={files:gdSyncFiles,results:gdResultsSync};
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_contract_adj'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_contract_adj','gd_cancel_adj'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
@@ -5859,6 +5859,7 @@ const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
 const GD_CONTRACT_ADJ_KEY='gd_contract_adj';   // {sheetName: {name: delta}} — 해당 회차에만 적용되는 실계약수 ±조정
+const GD_CANCEL_ADJ_KEY='gd_cancel_adj';       // {sheetName: {name: delta}} — 해당 회차에만 적용되는 취소수 ±조정
 // 2026-05-18 이후 업로드된 cont/cancel 파일부터 'IN'(정확 일치) 행을 카운트에 포함
 const GD_IN_RULE_CUTOFF=new Date(2026,4,18,0,0,0).getTime();
 const gdApplyInRule=(uploadTime)=>typeof uploadTime==='number' && uploadTime>=GD_IN_RULE_CUTOFF;
@@ -6955,10 +6956,12 @@ async function gdGenerate(dbFileId){
     const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart);
     members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(vanishedCounts[name]||0); });
 
-    // 회차별 수동 실계약수 조정 (해당 회차에만 적용 — sheetName 키)
+    // 회차별 수동 실계약수/취소수 조정 (해당 회차에만 적용 — sheetName 키)
     const _sheetForAdj=_currentSheetName;
     const _allContractAdj=JSON.parse(localStorage.getItem(GD_CONTRACT_ADJ_KEY)||'{}');
     const contractAdj=_allContractAdj[_sheetForAdj]||{};
+    const _allCancelAdj=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
+    const cancelAdj=_allCancelAdj[_sheetForAdj]||{};
 
     const stats={};
     members.forEach(name=>{
@@ -6966,11 +6969,13 @@ async function gdGenerate(dbFileId){
       const rawCont=contCounts[name]||0;
       const cAdj=contractAdj[name]||0;
       const cont=Math.max(0, rawCont+cAdj);
-      const cx=cancelCounts[name]||0;
+      const rawCx=cancelCounts[name]||0;
+      const cxAdj=cancelAdj[name]||0;
+      const cx=Math.max(0, rawCx+cxAdj);
       const contractRate=db>0?cont/db:0;
       const refAdjContract=cont-cx;                        // 음수 가능
       const refAdjRate=db>0?refAdjContract/db:0;            // 음수 가능
-      stats[name]={db,contract:cont,rawContract:rawCont,contractAdj:cAdj,contractRate,cancelCount:cx,refAdjContract,refAdjRate};
+      stats[name]={db,contract:cont,rawContract:rawCont,contractAdj:cAdj,contractRate,cancelCount:cx,rawCancel:rawCx,cancelAdj:cxAdj,refAdjContract,refAdjRate};
     });
 
     const {groups,cutlines}=gdAssignGroups(stats);
@@ -7351,10 +7356,12 @@ function gdRenderTable(){
     ...s
   }));
   rows=gdSortRows(rows);
-  // 회차별 실계약수 수동 조정값 맵
+  // 회차별 실계약수/취소수 수동 조정값 맵
   const _adjSheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const _allContractAdjMap=JSON.parse(localStorage.getItem(GD_CONTRACT_ADJ_KEY)||'{}');
   const contractAdjMap=(_adjSheetName&&_allContractAdjMap[_adjSheetName])||{};
+  const _allCancelAdjMap=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
+  const cancelAdjMap=(_adjSheetName&&_allCancelAdjMap[_adjSheetName])||{};
   // streak 수동 조정값 맵 (글로벌)
   const streakAdjMap=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
@@ -7383,6 +7390,11 @@ function gdRenderTable(){
     const contractCell=gdGroupEditMode
       ? `<button title="실계약수 -1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px">${r.contract.toLocaleString()}</span><button title="실계약수 +1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustContract('${safeName}',+1)">+</button>${cAdjBadge}`
       : r.contract.toLocaleString();
+    const cxAdj=cancelAdjMap[r.name]||0;
+    const cxAdjBadge=cxAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${cxAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetCancelAdj('${safeName}')">${cxAdj>0?'+':''}${cxAdj}</span>`:'';
+    const cancelCell=gdGroupEditMode
+      ? `<button title="취소수 -1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustCancel('${safeName}',-1)">−</button><span style="margin:0 6px;display:inline-block;min-width:16px${r.cancelCount>0?';color:var(--danger);font-weight:700':''}">${r.cancelCount.toLocaleString()}</span><button title="취소수 +1 (해당 회차)" style="width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569" onclick="gdAdjustCancel('${safeName}',+1)">+</button>${cxAdjBadge}`
+      : r.cancelCount.toLocaleString();
     const sAdj=streakAdjMap[r.name]||0;
     const sAdjBadge=sAdj!==0?` <span title="streak 수동 조정값" style="margin-left:4px;font-size:10px;color:#fff;background:${sAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700">${sAdj>0?'+':''}${sAdj}</span>`:'';
     const streakCell=gdGroupEditMode
@@ -7394,7 +7406,7 @@ function gdRenderTable(){
       <td>${r.db.toLocaleString()}</td>
       <td>${contractCell}</td>
       <td>${pct(r.contractRate)}</td>
-      <td${r.cancelCount>0?' style="color:var(--danger);font-weight:700"':''}>${r.cancelCount.toLocaleString()}</td>
+      <td${(!gdGroupEditMode && r.cancelCount>0)?' style="color:var(--danger);font-weight:700"':''}>${cancelCell}</td>
       <td${adjNeg?' style="color:var(--danger);font-weight:700"':''}>${r.refAdjContract.toLocaleString()}</td>
       <td style="font-weight:800${adjNeg?';color:var(--danger)':''}">${pct2(r.refAdjRate)}</td>
       <td>${streakCell}</td>
@@ -7599,6 +7611,42 @@ async function gdResetContractAdj(name){
   if(gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
 }
 
+async function gdAdjustCancel(name, delta){
+  if(!gdResult || !gdResult.maxDistDate){ alert('먼저 대시보드를 생성해주세요.'); return; }
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
+  const cur=(all[sheetName] && all[sheetName][name])||0;
+  const newAdj=cur+delta;
+  const s=gdResult.stats[name]||{};
+  const rawCx=(s.rawCancel!==undefined)?s.rawCancel:(s.cancelCount||0);
+  const prevDisp=Math.max(0, rawCx+cur);
+  const newDisp=Math.max(0, rawCx+newAdj);
+  const sgnCur=cur>0?'+':'';
+  const sgnNew=newAdj>0?'+':'';
+  if(!confirm(`${name}\n취소수: ${prevDisp} → ${newDisp}\n조정값: ${sgnCur}${cur} → ${sgnNew}${newAdj}\n\n해당 회차(${sheetName})에만 적용됩니다. 진행하시겠습니까?`)) return;
+  if(!all[sheetName]) all[sheetName]={};
+  all[sheetName][name]=newAdj;
+  if(all[sheetName][name]===0) delete all[sheetName][name];
+  if(Object.keys(all[sheetName]).length===0) delete all[sheetName];
+  localStorage.setItem(GD_CANCEL_ADJ_KEY,JSON.stringify(all));
+  wmSyncMarkDirty();
+  if(gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
+}
+
+async function gdResetCancelAdj(name){
+  if(!gdResult || !gdResult.maxDistDate) return;
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
+  const cur=(all[sheetName] && all[sheetName][name])||0;
+  if(cur===0) return;
+  if(!confirm(`${name}\n취소수 조정값 ${cur>0?'+':''}${cur}을(를) 초기화하시겠습니까?`)) return;
+  delete all[sheetName][name];
+  if(Object.keys(all[sheetName]).length===0) delete all[sheetName];
+  localStorage.setItem(GD_CANCEL_ADJ_KEY,JSON.stringify(all));
+  wmSyncMarkDirty();
+  if(gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
+}
+
 async function gdRenderHistory(){
   const all=await gdGetAllResults(); // desc by sheetName
   const list=document.getElementById('gdHistoryList');
@@ -7640,7 +7688,7 @@ async function gdRenderHistory(){
 }
 
 async function gdClearHistory(){
-  if(!confirm('차등성과 이력(IDB results + streak 조정 + 실계약수 조정)을 모두 초기화하시겠습니까? (초기등급 및 업로드 파일은 유지)')) return;
+  if(!confirm('차등성과 이력(IDB results + streak 조정 + 실계약수 조정 + 취소수 조정)을 모두 초기화하시겠습니까? (초기등급 및 업로드 파일은 유지)')) return;
   const all=await gdGetAllResults();
   const initSheet=localStorage.getItem(GD_INIT_KEY);
   for(const p of all){
@@ -7648,6 +7696,7 @@ async function gdClearHistory(){
   }
   localStorage.removeItem(GD_STREAK_ADJ_KEY);
   localStorage.removeItem(GD_CONTRACT_ADJ_KEY);
+  localStorage.removeItem(GD_CANCEL_ADJ_KEY);
   alert('이력이 초기화되었습니다.');
   if(gdResult) gdRenderHistory();
 }
