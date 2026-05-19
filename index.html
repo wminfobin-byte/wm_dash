@@ -7511,7 +7511,8 @@ async function gdApplyGroupEdit(){
         attendIssues:prevSavedMeta[name]?.attendIssues||0,
         workCount:prevSavedMeta[name]?.workCount||0,
         totalDays:prevSavedMeta[name]?.totalDays||0,
-        promoted:prevSavedMeta[name]?.promoted||false,
+        // promoted는 직후 gdGenerate가 새로 산정해서 덮어쓰므로 false로 초기화 (옛 1등 마크 잔존 방지)
+        promoted:false,
         db:s.db, contract:s.contract, contractRate:s.contractRate,
         cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
         streak:gdResult.streaks[name]||0
@@ -7522,9 +7523,9 @@ async function gdApplyGroupEdit(){
     const _fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
     await gdSaveResult({sheetName, startStr:gdResult.minDistDate?_fd(gdResult.minDistDate):'', endStr:gdResult.maxDistDate?_fd(gdResult.maxDistDate):'', rows:periodRows});
     wmSyncMarkDirty();
-    // 즉시 재계산 — 수동 변경된 그룹을 베이스라인으로 프로모션 등 자동 룰 다시 적용
+    // 즉시 재계산 — 수동 변경된 그룹을 베이스라인으로 프로모션 등 자동 룰 다시 적용 (await로 완료 보장)
     if(gdResult.dbFileId){
-      gdGenerate(gdResult.dbFileId);
+      await gdGenerate(gdResult.dbFileId);
       return;
     }
   }
