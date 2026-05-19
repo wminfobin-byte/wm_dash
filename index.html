@@ -3413,6 +3413,30 @@ function fmtDateTime(d){
 // ═══════════════════════════════════════════
 //  Init: 페이지 로드 시 IndexedDB에서 복원
 // ═══════════════════════════════════════════
+
+// ESC 키로 열려 있는 모달 닫기 (가장 최근에 열린 것 우선)
+document.addEventListener('keydown',(e)=>{
+  if(e.key!=='Escape') return;
+  // 1) 동기화 토큰/액션 모달 (동적 생성, 최상위)
+  const syncModal=document.getElementById('syncModal');
+  if(syncModal){ syncModal.remove(); return; }
+  // 2) modal-overlay 중 .open 클래스 가진 것 — 가장 마지막에 열린 것 닫기
+  const overlays=document.querySelectorAll('.modal-overlay.open');
+  if(overlays.length===0) return;
+  const last=overlays[overlays.length-1];
+  // 각 모달의 close 함수 매핑
+  const closers={
+    modalOverlay:()=>typeof closeModal==='function'&&closeModal(),
+    cdModalOverlay:()=>typeof cdCloseModal==='function'&&cdCloseModal(),
+    iaModalOverlay:()=>typeof iaCloseModal==='function'&&iaCloseModal(),
+    mcModalOverlay:()=>typeof mcCloseModal==='function'&&mcCloseModal(),
+    gdModalOverlay:()=>typeof gdCloseModal==='function'&&gdCloseModal(),
+  };
+  const fn=closers[last.id];
+  if(fn) fn();
+  else last.classList.remove('open');
+});
+
 (async function init(){
   try {
     await openIDB();
