@@ -1462,7 +1462,7 @@ tr.row-h td{background:var(--gh-light)}
         <div class="upload-box" id="box-gd-cont">
           <input type="file" accept=".xlsx,.xls" id="file-gd-cont">
           <div class="icon">📝</div><div class="label">계약수</div>
-          <div class="desc">WM_고객관리<br>누적 저장 (3일 주기)</div>
+          <div class="desc">WM_고객관리 · 최근 3개월 누적<br>회차 매칭은 오더일 기준</div>
           <div class="filename" id="fname-gd-cont"></div>
           <div class="badge-count hidden" id="count-gd-cont"></div>
           <div class="progress-bar hidden" id="prog-gd-cont"><div class="progress-fill"></div></div>
@@ -2301,14 +2301,11 @@ const STATUS_EXCLUDE=['결제보류','상담취소','상담요청','상담대기
 const STATUS_CONTRACT=['배송대기','배송중','자동구매완료','구매완료'];
 const STATUS_CANCEL_CHECK=['반품입고','승인요청','입고대기','환불요청','환불완료'];
 function classifyStatus(s,lastCall,orderDt){
+  // lastCall==orderDate 가드는 cancel 파일 D열 매칭(차등성과)으로 대체되어 제거됨 (2026-05-19)
   if(STATUS_EXCLUDE.some(k=>s.includes(k))) return '제외';
   if(STATUS_CONTRACT.some(k=>s.includes(k))) return '계약';
   if(s.toLowerCase().includes('as')) return '계약';
-  if(STATUS_CANCEL_CHECK.some(k=>s.includes(k))){
-    const c=parseDate(lastCall),o=parseDate(orderDt);
-    if(c&&o&&sameDay(c,o)) return '제외';
-    return '취소';
-  }
+  if(STATUS_CANCEL_CHECK.some(k=>s.includes(k))) return '취소';
   return '기타';
 }
 function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
@@ -6077,8 +6074,9 @@ async function gdGenerateInitFromApril(){
     if(members.length===0) throw new Error('뇌새김영어 W/E/A/B/H 그룹 멤버를 찾을 수 없습니다.');
 
     // DB수 / 계약수 집계 (취소수는 0 강제)
+    // 초기등급은 4월 단일 회차(2026-05-18 cutoff 이전) — uploadTime 미전달, cancelData 미전달
     const dbCounts=gdCountDb(dbData,members);
-    const contCounts=gdCountContracts(contData,members);
+    const {counts:contCounts}=gdCountContracts(contData,members);
 
     const stats={};
     members.forEach(name=>{
@@ -6414,10 +6412,12 @@ function gdGetMembers(data){
   return {members, cmsGroups, excluded};
 }
 
-function gdCountDb(data, members){
+function gdCountDb(data, members, uploadTime){
   // N그룹과 동일 로직 (countDb 참조)
+  // 2026-05-18 이후 업로드 파일: DB정보가 정확히 'IN'인 행은 (매체 공란이어도) 카운트에 포함 — 계약수/취소수와 동일 룰
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
+  const applyIn=gdApplyInRule(uploadTime);
   for(let i=1;i<data.length;i++){
     const row=data[i];
     const obName=str(row[COL.obName]);
@@ -6427,7 +6427,8 @@ function gdCountDb(data, members){
     if(!obName||!distDate) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(dbInfo.includes('재콜')) continue;
-    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
+    const isExactIn=dbInfo.trim()==='IN';
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode && !(applyIn&&isExactIn)) continue;
     if(mediaCode.toLowerCase().includes('talkis')) continue;
     if(isHoliday(distDate)) continue;
     if(!set.has(obName)) continue;
@@ -6436,13 +6437,35 @@ function gdCountDb(data, members){
   return counts;
 }
 
-function gdCountContracts(data, members, uploadTime){
-  // N그룹과 동일 — 실계약 = 계약 + 취소
-  // 휴일 판정은 '분배일' 기준 (회차가 분배일 기준이므로, 평일 분배 + 휴일 오더도 포함)
+function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist, prevMaxDist){
+  // 실계약 = 계약 + (취소 AND cancel 파일에 D열 매칭됨)
+  // 휴일 판정: '분배일' 기준 (평일 분배 + 휴일 오더는 포함)
+  // 회차 매칭: '오더일' 기준 — (prevMaxDist, currentMaxDist] 범위가 현재 회차
+  //   - 직전 회차 max 이후 ~ 현재 회차 분배 max까지의 오더일이 현재 회차 계약
+  //   - prevMaxDist가 없으면(첫 회차) 모든 과거 오더 포함
+  // 배송전 취소 분기:
+  //   - 현재 회차 + 상태 취소계열 + cancel D 매칭 X → 둘 다 제외(배송전 취소 신규)
+  //   - 과거 회차(오더일 ≤ prevMaxDist) + 상태 취소계열 + cancel D 매칭 X → extraCancel +1(이전 회차 계약의 배송전 취소가 사후 발생 → 현재 회차 cancel로 합산)
   // 2026-05-18 이후 업로드 파일: DB정보가 정확히 'IN'인 행은 (매체코드 공란이어도) 카운트에 포함
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
+  const extraCancel={}; members.forEach(m=>extraCancel[m]=0);
   const applyIn=gdApplyInRule(uploadTime);
+
+  // cancel 파일 D열 고객키 set (배송전 취소 판정용)
+  // cancelData가 undefined/null이면 매칭 비활성(구버전 호환: 초기등급 산정 등 cancel 파일 미사용 경로)
+  const useCancelMatching=(cancelData!==undefined && cancelData!==null);
+  const cancelKeySet=new Set();
+  if(useCancelMatching){
+    for(let i=1;i<cancelData.length;i++){
+      const ck=str(cancelData[i]?.[GD_CANCEL_COL.customerKey]);
+      if(ck) cancelKeySet.add(ck);
+    }
+  }
+
+  const peMs=currentMaxDist ? new Date(currentMaxDist.getFullYear(),currentMaxDist.getMonth(),currentMaxDist.getDate(),23,59,59,999).getTime() : null;
+  const prevMs=prevMaxDist ? new Date(prevMaxDist.getFullYear(),prevMaxDist.getMonth(),prevMaxDist.getDate(),23,59,59,999).getTime() : null;
+
   for(let i=1;i<data.length;i++){
     const row=data[i];
     const obName=str(row[COL.obName]);
@@ -6453,6 +6476,7 @@ function gdCountContracts(data, members, uploadTime){
     const distDate=parseDate(row[COL.distributeDate]);
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
+    const custKey=str(row[COL.customerKey]);
     if(!obName) continue;
     if(!set.has(obName)) continue;
     if(!orderDate) continue;
@@ -6462,9 +6486,34 @@ function gdCountContracts(data, members, uploadTime){
     const isExactIn=dbInfo.trim()==='IN';
     if(dbInfo.toLowerCase().includes('in')&&!mediaCode && !(applyIn&&isExactIn)) continue;
     const status=classifyStatus(custStatus,lastCall,orderDt);
-    if(status==='계약'||status==='취소') counts[obName]++;
+    if(status!=='계약' && status!=='취소') continue;
+
+    // 회차 매칭 (오더일 기준)
+    const ordMs=orderDate.getTime();
+    const beyondCurrent=peMs!==null && ordMs>peMs;       // 미래(이번 회차 이후) → 무시
+    const inCurrent=peMs===null ? true : (ordMs<=peMs && (prevMs===null || ordMs>prevMs));
+    const inPast=prevMs!==null && ordMs<=prevMs;
+
+    if(beyondCurrent) continue;
+
+    if(inCurrent){
+      if(status==='계약'){
+        counts[obName]++;
+      } else { // 취소
+        if(!useCancelMatching || cancelKeySet.has(custKey)){
+          counts[obName]++; // 정상 취소(반품 등) 또는 매칭 비활성 모드 → 실계약수 포함
+        }
+        // else: 배송전 취소(신규) → 둘 다 제외
+      }
+    } else if(inPast){
+      // 과거 회차에서 이미 카운트됨 — 통상은 무시
+      // 단, cancel 매칭 모드이고 상태가 취소계열인데 D열 매칭 없음 → 사후 배송전 취소
+      if(useCancelMatching && status==='취소' && !cancelKeySet.has(custKey)){
+        extraCancel[obName]++;
+      }
+    }
   }
-  return counts;
+  return {counts, extraCancel};
 }
 
 // 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드에 'in' 없음 + 매칭된 계약의 오더일이 달력상 3개월 이내
@@ -6580,28 +6629,54 @@ window.gdDebugCancels=function(keys){
 
 // 디버그: 코디명 배열을 넘기면 계약(cont) 파일에서 해당 OB담당자의 행을 전부 펼쳐 실계약수 판정 추적
 // 사용: gdDebugContractsByMember(['(R_대전)신미경', ...])
-window.gdDebugContractsByMember=function(names){
+window.gdDebugContractsByMember=async function(names){
   if(!Array.isArray(names)||names.length===0){console.warn('이름 배열 필요');return;}
   const attendFile=gdGetLatest('attend');
   const dbFile=gdGetLatest('db');
   const contFiles=gdGetFilesByType('cont');
   let contFile=null,bd=Infinity;
   for(const c of contFiles){const d=Math.abs(c.uploadTime-(dbFile?.uploadTime||0));if(d<bd){bd=d;contFile=c;}}
+  const cancelFiles=gdGetFilesByType('cancel');
+  let cancelFile=null,bdc=Infinity;
+  for(const c of cancelFiles){const d=Math.abs(c.uploadTime-(dbFile?.uploadTime||0));if(d<bdc){bdc=d;cancelFile=c;}}
   if(!attendFile||!contFile||!dbFile){console.warn('파일 부족 (db/cont/attend)');return;}
   const {members}=gdGetMembers(attendFile.data);
   const memberSet=new Set(members);
   const fmt=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   const norm=n=>(n||'').replace(/\(R_[^)]+\)/,'').trim();
 
-  // 회차(분배일 min~max) 구해서 참고용으로 표시
+  // 회차(분배일 min~max) — 휴일 판정용으로만 사용. 회차 매칭은 '오더일' 기준
   let minDD=null,maxDD=null;
   for(let i=1;i<dbFile.data.length;i++){
     const d=parseDate(dbFile.data[i][COL.distributeDate]);
     if(d){if(!maxDD||d>maxDD)maxDD=d;if(!minDD||d<minDD)minDD=d;}
   }
-  console.log(`회차(분배일): ${fmt(minDD)} ~ ${fmt(maxDD)} / 멤버 ${members.length}명 / cont 행 ${contFile.data.length-1}`);
 
-  const wantedNorms=new Set(names.map(norm));
+  // 직전 회차 분배 max (오더일 회차 cutoff)
+  const _curSn=maxDD?fmtDateShort(maxDD):null;
+  const _allR=await gdGetAllResults();
+  const _prevR=_curSn?_allR.find(r=>r.sheetName<_curSn):null;
+  let prevMaxDist=null;
+  if(_prevR && /^\d{6}$/.test(_prevR.sheetName)){
+    const yy=2000+parseInt(_prevR.sheetName.slice(0,2),10);
+    const mm=parseInt(_prevR.sheetName.slice(2,4),10)-1;
+    const dd=parseInt(_prevR.sheetName.slice(4,6),10);
+    prevMaxDist=new Date(yy,mm,dd);
+  }
+  const peMs=maxDD?new Date(maxDD.getFullYear(),maxDD.getMonth(),maxDD.getDate(),23,59,59,999).getTime():null;
+  const prevMs=prevMaxDist?new Date(prevMaxDist.getFullYear(),prevMaxDist.getMonth(),prevMaxDist.getDate(),23,59,59,999).getTime():null;
+
+  // cancel D 고객키 set
+  const cancelKeySet=new Set();
+  if(cancelFile){
+    for(let i=1;i<cancelFile.data.length;i++){
+      const ck=str(cancelFile.data[i]?.[GD_CANCEL_COL.customerKey]);
+      if(ck) cancelKeySet.add(ck);
+    }
+  }
+
+  console.log(`회차 분배: ${fmt(minDD)} ~ ${fmt(maxDD)} / 직전회차 max: ${fmt(prevMaxDist)||'(없음)'} / 멤버 ${members.length}명 / cont ${contFile.data.length-1}행 / cancel ${cancelKeySet.size}건`);
+
   const grouped={}; names.forEach(n=>grouped[n]=[]);
 
   for(let i=1;i<contFile.data.length;i++){
@@ -6609,7 +6684,6 @@ window.gdDebugContractsByMember=function(names){
     const obRaw=str(row[COL.obName]);
     if(!obRaw) continue;
     const obNorm=norm(obRaw);
-    // 어떤 요청 이름과 매칭되는지
     const matched=names.find(n=>n===obRaw||norm(n)===obNorm);
     if(!matched) continue;
 
@@ -6622,7 +6696,7 @@ window.gdDebugContractsByMember=function(names){
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
 
-    // 실제 gdCountContracts 필터를 그대로 재현
+    // gdCountContracts 필터 + 회차/배송전 취소 분기 그대로 재현
     const reasons=[];
     if(!orderDate) reasons.push('오더일 공란(계약 아님)');
     if(distDate && isHoliday(distDate)) reasons.push(`분배일 휴일(${fmt(distDate)})`);
@@ -6636,18 +6710,39 @@ window.gdDebugContractsByMember=function(names){
     const memberOK=memberSet.has(obRaw);
     if(!memberOK && reasons.length===0) reasons.push(`명단 미일치("${obRaw}")`);
 
+    // 결과 분류
+    let result='❌ '+(reasons.join(' / ')||'unknown');
+    if(reasons.length===0){
+      const ordMs=orderDate.getTime();
+      const beyondCurrent=peMs!==null && ordMs>peMs;
+      const inCurrent=peMs===null ? true : (ordMs<=peMs && (prevMs===null || ordMs>prevMs));
+      const inPast=prevMs!==null && ordMs<=prevMs;
+      if(beyondCurrent) result='⏭ 오더일 현재 회차 이후 → 무시';
+      else if(inCurrent){
+        if(cls==='계약') result='✅ 실계약카운트(계약)';
+        else if(cls==='취소'){
+          if(cancelKeySet.has(ck)) result='✅ 실계약카운트(정상취소·매칭O)';
+          else result='⚠ 배송전 취소 신규 → 둘 다 제외';
+        }
+      } else if(inPast){
+        if(cls==='취소' && !cancelKeySet.has(ck)) result='⚠ 사후 배송전 취소 → 현재 회차 cancel +1';
+        else result='⏮ 과거 회차에서 카운트됨 → 무시';
+      }
+    }
+
     grouped[matched].push({
       row:i+1, key:ck, ob:obRaw,
       distDate:fmt(distDate), orderDate:fmt(orderDate),
       custStatus, dbInfo, mediaCode, cls,
-      status: reasons.length===0?'✅ 실계약카운트':`❌ ${reasons.join(' / ')}`
+      result
     });
   }
 
   for(const name of names){
     const rows=grouped[name];
-    const ok=rows.filter(r=>r.status==='✅ 실계약카운트').length;
-    console.log(`\n=== ${name} → ${ok}/${rows.length}행 카운트 ===`);
+    const ok=rows.filter(r=>String(r.result).startsWith('✅')).length;
+    const extra=rows.filter(r=>String(r.result).includes('사후 배송전 취소')).length;
+    console.log(`\n=== ${name} → 실계약 ${ok}건 / 사후 배송전 취소 ${extra}건 / 전체 ${rows.length}행 ===`);
     if(rows.length>0) console.table(rows);
     else console.log('(cont 파일에 해당 OB담당자 행 없음)');
   }
@@ -6791,12 +6886,27 @@ async function gdGenerate(dbFileId){
       const d=parseDate(dbFile.data[i][COL.distributeDate]);
       if(d){if(!maxDistDate||d>maxDistDate)maxDistDate=d;if(!minDistDate||d<minDistDate)minDistDate=d;}
     }
-    const dbCounts=gdCountDb(dbFile.data, members);
-    const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime);
+    // 회차 매칭: 오더일 기준. 직전 회차 분배 max(prevMaxDist) 이후 ~ 현재 분배 max(maxDistDate)까지의 오더가 현재 회차.
+    // 직전 회차는 IDB results에서 현재 sheetName 직전 시트(YYMMDD desc)로 산출.
+    const _currentSheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
+    const _allResultsForPrev=await gdGetAllResults();
+    const _prevSheet=_allResultsForPrev.find(r=>r.sheetName<_currentSheetName);
+    let prevMaxDist=null;
+    if(_prevSheet && /^\d{6}$/.test(_prevSheet.sheetName)){
+      const yy=2000+parseInt(_prevSheet.sheetName.slice(0,2),10);
+      const mm=parseInt(_prevSheet.sheetName.slice(2,4),10)-1;
+      const dd=parseInt(_prevSheet.sheetName.slice(4,6),10);
+      prevMaxDist=new Date(yy,mm,dd);
+    }
+
+    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime);
+    const {counts:contCounts, extraCancel}=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist);
     const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime);
+    // 이전 회차 계약의 사후 배송전 취소 → 현재 회차 cancel에 합산
+    members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(extraCancel[name]||0); });
 
     // 회차별 수동 실계약수 조정 (해당 회차에만 적용 — sheetName 키)
-    const _sheetForAdj=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
+    const _sheetForAdj=_currentSheetName;
     const _allContractAdj=JSON.parse(localStorage.getItem(GD_CONTRACT_ADJ_KEY)||'{}');
     const contractAdj=_allContractAdj[_sheetForAdj]||{};
 
@@ -6814,7 +6924,7 @@ async function gdGenerate(dbFileId){
     });
 
     const {groups,cutlines}=gdAssignGroups(stats);
-    const sheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
+    const sheetName=_currentSheetName;
 
     // ── 적용 순서: ① assign → 회차근태분석 → 정당사유 → ② H 탈출 → ③ streak/H 진입
     //              → 근태강등 → ④ 신입 보호 → ⑤ 수동 그룹 (최종)
@@ -6832,8 +6942,8 @@ async function gdGenerate(dbFileId){
       }
     }
 
-    // 이전 회차 이력 (현재 회차 제외, 시트명 desc)
-    const allResults=await gdGetAllResults();
+    // 이전 회차 이력 (현재 회차 제외, 시트명 desc) — 위에서 prev 산출 시 가져온 결과 재사용
+    const allResults=_allResultsForPrev;
     const olderResults=allResults.filter(r=>r.sheetName<sheetName);
     const latestPrev=olderResults[0];
 
