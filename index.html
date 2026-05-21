@@ -1894,7 +1894,7 @@ async function doSyncUpload(token){
 
     // 차등성과 IDB 데이터 수집 (db/cont/cancel은 필요 컬럼만, attend는 원본)
     const GD_DBCONT_COLS=[6,7,8,15,19,21,23,29];   // 고객키/OB명/분배일/DB정보/매체코드/최종통화/오더일/고객상태
-    const GD_CX_COLS=[3,13,17,41,42];              // 신청자관리: 고객키(D)/담당자(N)/코드(R)/분배일(AP)/반품일(AQ)
+    const GD_CX_COLS=[3,13,16,17,41,42];           // 신청자관리: 고객키(D)/담당자(N)/분류(Q)/코드(R)/분배일(AP)/반품일(AQ)
     const gdSyncFiles=[];
     for(const f of (gdAllFiles||[])){
       if(f.type==='attend'){gdSyncFiles.push({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});continue;}
@@ -5878,13 +5878,13 @@ let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고
 let gdMemberCenters={};     // {name: '센터명'}
 let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
-const GD_CANCEL_COL={customerKey:3, manager:13, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
+const GD_CANCEL_COL={customerKey:3, manager:13, classification:16, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), N=13(담당자), Q=16(분류/매체코드), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
 const GD_CONTRACT_ADJ_KEY='gd_contract_adj';   // {sheetName: {name: delta}} — 해당 회차에만 적용되는 실계약수 ±조정
 const GD_CANCEL_ADJ_KEY='gd_cancel_adj';       // {sheetName: {name: delta}} — 해당 회차에만 적용되는 취소수 ±조정
-// 2026-05-18 이후 업로드된 cont/cancel 파일부터 'IN'(정확 일치) 행을 카운트에 포함
+// 2026-05-18 이후 업로드된 cancel 파일부터: 코드(R)='IN' + 분류(Q)에 매체코드 있음 → 취소수에 포함
 const GD_IN_RULE_CUTOFF=new Date(2026,4,18,0,0,0).getTime();
 const gdApplyInRule=(uploadTime)=>typeof uploadTime==='number' && uploadTime>=GD_IN_RULE_CUTOFF;
 
@@ -6439,10 +6439,9 @@ function gdGetMembers(data){
 
 function gdCountDb(data, members, uploadTime){
   // N그룹과 동일 로직 (countDb 참조)
-  // 2026-05-18 이후 업로드 파일: DB정보가 정확히 'IN'인 행은 (매체 공란이어도) 카운트에 포함 — 계약수/취소수와 동일 룰
+  // DB정보에 'in' 포함 + 매체코드(T) 공란이면 제외 (IN 행은 매체코드가 있어야 산정)
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
-  const applyIn=gdApplyInRule(uploadTime);
   for(let i=1;i<data.length;i++){
     const row=data[i];
     const obName=str(row[COL.obName]);
@@ -6452,8 +6451,7 @@ function gdCountDb(data, members, uploadTime){
     if(!obName||!distDate) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(dbInfo.includes('재콜')) continue;
-    const isExactIn=dbInfo.trim()==='IN';
-    if(dbInfo.toLowerCase().includes('in')&&!mediaCode && !(applyIn&&isExactIn)) continue;
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
     if(mediaCode.toLowerCase().includes('talkis')) continue;
     if(isHoliday(distDate)) continue;
     if(!set.has(obName)) continue;
@@ -6470,10 +6468,9 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
   //   - prevMaxDist가 없으면(첫 회차) 모든 과거 오더 포함
   // 배송전 취소 신규(현재 회차 발생): 상태 취소계열 + cancel D 매칭 X → 둘 다 제외
   // 사후 배송전 취소(과거 회차 계약자의 사후 배송전 취소)는 cancel 파일 diff(`gdCountVanishedCancels`)로 별도 처리 — 여기서는 과거 회차 행은 무조건 무시
-  // 2026-05-18 이후 업로드 파일: DB정보가 정확히 'IN'인 행은 (매체코드 공란이어도) 카운트에 포함
+  // DB정보에 'in' 포함 + 매체코드(T) 공란이면 제외 (IN 행은 매체코드가 있어야 산정)
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
-  const applyIn=gdApplyInRule(uploadTime);
 
   // cancel 파일 D열 고객키 set (배송전 취소 신규 판정용)
   // cancelData가 undefined/null이면 매칭 비활성(구버전 호환: 초기등급 산정 등 cancel 파일 미사용 경로)
@@ -6506,8 +6503,7 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
     if(distDate && isHoliday(distDate)) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(mediaCode.toLowerCase().includes('talkis')) continue;
-    const isExactIn=dbInfo.trim()==='IN';
-    if(dbInfo.toLowerCase().includes('in')&&!mediaCode && !(applyIn&&isExactIn)) continue;
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
     const status=classifyStatus(custStatus,lastCall,orderDt);
     if(status!=='계약' && status!=='취소') continue;
 
@@ -6572,13 +6568,13 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
   return counts;
 }
 
-// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드에 'in' 없음 + 매칭된 계약의 오더일이 달력상 3개월 이내
+// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드 'in' 제외(단 'IN'+Q열 분류 있으면 포함) + 매칭된 계약의 오더일이 달력상 3개월 이내
 function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, uploadTime){
   // 룰: cancel 파일에서 반품일이 회차 분배일 min~max 범위 안인 행을 카운트.
   //     담당자는 cancel 파일 N열 그대로 사용 ((R_xxx) 접두 제거하여 멤버 매칭).
   //     계약(cont) 파일과의 고객키 매칭은 하지 않음 — cancel 파일의 오더일 범위가
   //     cont 스냅샷보다 훨씬 길기 때문에 cont 미존재 = 정상 케이스.
-  // 2026-05-18 이후 업로드 파일: 코드번호(R열)가 정확히 'IN'인 행은 카운트에 포함
+  // 2026-05-18 이후 업로드 파일: 코드번호(R열)가 'IN'이고 분류(Q열)에 매체코드가 있으면 카운트에 포함
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
   if(!cancelData||!periodStart||!periodEnd) return counts;
@@ -6599,8 +6595,9 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     if(cxDistDate && isHoliday(cxDistDate)){ holidaySkip++; continue; }
     const cxCodeRaw=str(row[GD_CANCEL_COL.code]).trim();
     const cxCode=cxCodeRaw.toLowerCase();
+    const cxClass=str(row[GD_CANCEL_COL.classification]).trim();   // Q열 분류(매체코드)
     const isExactIn=cxCodeRaw==='IN';
-    if(cxCode.includes('in') && !(applyIn&&isExactIn)){ inCodeSkip++; continue; }
+    if(cxCode.includes('in') && !(applyIn&&isExactIn&&cxClass)){ inCodeSkip++; continue; }
 
     if(!cancelManager) continue;
     if(set.has(cancelManager)){ counts[cancelManager]++; continue; }
@@ -6666,7 +6663,8 @@ window.gdDebugCancels=function(keys){
       if(cxDistDate && isHoliday(cxDistDate)) reasons.push(`분배일 휴일(${fmt(cxDistDate)})`);
       const _applyInCx=gdApplyInRule(cancelFile.uploadTime);
       const _exactInCx=str(row[GD_CANCEL_COL.code]).trim()==='IN';
-      if(cxCode.includes('in') && !(_applyInCx&&_exactInCx)) reasons.push(`코드 'in' 포함("${cxCode}")`);
+      const _classCx=str(row[GD_CANCEL_COL.classification]).trim();
+      if(cxCode.includes('in') && !(_applyInCx&&_exactInCx&&_classCx)) reasons.push(`코드 'in' 포함("${cxCode}"${_exactInCx&&!_classCx?' / 분류(Q) 공란':''})`);
       if(!memberOK && reasons.length===0) reasons.push(`담당자 미매칭("${mgrRaw}")`);
 
       out.push({
@@ -6758,9 +6756,7 @@ window.gdDebugContractsByMember=async function(names){
     if(distDate && isHoliday(distDate)) reasons.push(`분배일 휴일(${fmt(distDate)})`);
     if(obRaw.includes('군자')||obRaw.includes('관리자')||obRaw.includes('삭제요청')) reasons.push('OB 군자/관리자/삭제요청');
     if(mediaCode.toLowerCase().includes('talkis')) reasons.push('매체 talkis');
-    const _applyInCt=gdApplyInRule(contFile.uploadTime);
-    const _exactInCt=dbInfo.trim()==='IN';
-    if(dbInfo.toLowerCase().includes('in')&&!mediaCode && !(_applyInCt&&_exactInCt)) reasons.push(`dbInfo 'in'+무매체("${dbInfo}")`);
+    if(dbInfo.toLowerCase().includes('in')&&!mediaCode) reasons.push(`dbInfo 'in'+무매체("${dbInfo}")`);
     const cls=classifyStatus(custStatus,lastCall,orderDt);
     if(!(cls==='계약'||cls==='취소')) reasons.push(`상태 ${cls}("${custStatus}")`);
     const memberOK=memberSet.has(obRaw);
@@ -6840,10 +6836,13 @@ window.gdDebugByMember=function(names){
 
     const ck=str(row[GD_CANCEL_COL.customerKey]);
     const cxDistDate=parseDate(row[GD_CANCEL_COL.distributeDate]);
-    const cxCode=str(row[GD_CANCEL_COL.code]).toLowerCase();
+    const cxCodeRaw=str(row[GD_CANCEL_COL.code]).trim();
+    const cxCode=cxCodeRaw.toLowerCase();
+    const cxClass=str(row[GD_CANCEL_COL.classification]).trim();
     const reasons=[];
     if(cxDistDate && isHoliday(cxDistDate)) reasons.push(`분배일 휴일(${fmt(cxDistDate)})`);
-    if(cxCode.includes('in')) reasons.push(`코드 'in' 포함("${cxCode}")`);
+    const _applyIn=gdApplyInRule(cancelFile.uploadTime);
+    if(cxCode.includes('in') && !(_applyIn&&cxCodeRaw==='IN'&&cxClass)) reasons.push(`코드 'in' 포함("${cxCode}"${cxCodeRaw==='IN'&&!cxClass?' / 분류(Q) 공란':''})`);
     const memberOK=memberSet.has(mgrRaw)||memberSet.has(mgrNorm);
     if(!memberOK && reasons.length===0) reasons.push(`담당자 미매칭("${mgrRaw}")`);
 
