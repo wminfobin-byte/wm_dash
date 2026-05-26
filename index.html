@@ -1567,7 +1567,6 @@ tr.row-h td{background:var(--gh-light)}
     <div class="group-summary" id="gdGroupSummary"></div>
     <div class="download-bar">
       <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (실계약수 기준) 룰 ON/OFF">프로모션: ON</button>
-      <button class="btn btn-outline btn-sm" id="gdBtnIncludeAbsent" onclick="gdToggleIncludeAbsent()" title="장기공석을 풀에 포함(정당사유 취급, 직전 회차 등급 유지) ON/OFF">장기공석 포함: OFF</button>
       <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">수정</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
@@ -1575,6 +1574,7 @@ tr.row-h td{background:var(--gh-light)}
     <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
       <div id="gdPeriodRange" style="display:flex;gap:24px;margin-bottom:12px;font-size:14px;font-weight:600;color:var(--dark)"></div>
+      <div id="gdLongAbsentEditPanel" style="display:none"></div>
       <table id="gdMainTable">
         <thead><tr>
           <th>등급</th>
@@ -1907,7 +1907,7 @@ async function doSyncUpload(token){
     const gdData={files:gdSyncFiles,results:gdResultsSync};
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_include_long_absent','gd_contract_adj','gd_cancel_adj'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
@@ -5883,7 +5883,7 @@ const GD_CANCEL_COL={customerKey:3, manager:13, classification:16, code:17, dist
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
-const GD_INCLUDE_ABSENT_KEY='gd_include_long_absent';  // '1'=장기공석을 풀에 포함(정당사유 취급), 그 외=현행대로 풀에서 제외
+const GD_LONG_ABSENT_INCLUDE_KEY='gd_long_absent_include';  // JSON array of names — 이 인원의 장기공석은 풀에 포함(정당사유 취급)
 const GD_CONTRACT_ADJ_KEY='gd_contract_adj';   // {sheetName: {name: delta}} — 해당 회차에만 적용되는 실계약수 ±조정
 const GD_CANCEL_ADJ_KEY='gd_cancel_adj';       // {sheetName: {name: delta}} — 해당 회차에만 적용되는 취소수 ±조정
 // 2026-05-18 이후 업로드된 cancel 파일부터: 코드(R)='IN' + 분류(Q)에 매체코드 있음 → 취소수에 포함
@@ -6349,11 +6349,15 @@ const GD_LEGITIMATE_ABSENCE = new Set([
   '연차','휴가','공가','경조','대체휴무','오전 반차','오후 반차'
 ]);
 
-// 장기공석 포함 토글(GD_INCLUDE_ABSENT_KEY)이 ON이면 장기공석도 정당사유로 취급
-function gdIsLegitimateStatus(v){
-  if(GD_LEGITIMATE_ABSENCE.has(v)) return true;
-  if(v==='장기공석' && localStorage.getItem(GD_INCLUDE_ABSENT_KEY)==='1') return true;
-  return false;
+// 장기공석 풀 포함 인원 — 수정 모드에서 개별 선택 (이 Set에 든 이름은 장기공석이어도 풀에 포함, 정당사유 취급)
+function gdGetLongAbsentIncludeSet(){
+  try {
+    const arr=JSON.parse(localStorage.getItem(GD_LONG_ABSENT_INCLUDE_KEY)||'[]');
+    return new Set(Array.isArray(arr)?arr:[]);
+  } catch { return new Set(); }
+}
+function gdSetLongAbsentIncludeSet(set){
+  localStorage.setItem(GD_LONG_ABSENT_INCLUDE_KEY, JSON.stringify(Array.from(set)));
 }
 
 // 근태이슈 (회차당 카운트 → 2회 이상 한 단계 강등)
@@ -6378,7 +6382,8 @@ function gdParseColKeyAsDate(key, periodHint){
 }
 
 // 회차(periodStart~periodEnd) 내 한 멤버의 일자별 근태 분석
-function gdAnalyzePeriodAttend(memberRow, periodStart, periodEnd){
+// treatLongAbsentAsLegit=true → 장기공석 일자도 정당사유로 카운트 (개인 포함 설정 시)
+function gdAnalyzePeriodAttend(memberRow, periodStart, periodEnd, treatLongAbsentAsLegit){
   const ps=new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate());
   const pe=new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999);
   let workCount=0, legitCount=0, penaltyCount=0, totalDays=0, longAbsentCount=0;
@@ -6389,7 +6394,7 @@ function gdAnalyzePeriodAttend(memberRow, periodStart, periodEnd){
     if(!d || d<ps || d>pe) continue;
     totalDays++;
     if(v==='출근') workCount++;
-    if(gdIsLegitimateStatus(v)) legitCount++;
+    if(GD_LEGITIMATE_ABSENCE.has(v) || (treatLongAbsentAsLegit && v==='장기공석')) legitCount++;
     if(GD_ATTEND_PENALTY.has(v)) penaltyCount++;
     if(v==='장기공석') longAbsentCount++;
   }
@@ -6407,14 +6412,12 @@ function gdExtractAttendSeq(memberRow){
 }
 
 // 퇴사 / 장기공석 판정
-// 장기공석은 GD_INCLUDE_ABSENT_KEY='1'이면 풀에 포함(정당사유로 취급) → 여기서 제외 안 함
 function gdDetectExclusion(memberRow){
   const seq=gdExtractAttendSeq(memberRow);
   if(seq.length===0) return null;
   const latest=seq[seq.length-1];
   if(latest==='퇴사') return {reason:'퇴사', days:0};
   if(latest==='장기공석'){
-    if(localStorage.getItem(GD_INCLUDE_ABSENT_KEY)==='1') return null;
     let count=0;
     for(let i=seq.length-1;i>=0;i--){
       if(seq[i]==='장기공석') count++;
@@ -6428,25 +6431,38 @@ function gdDetectExclusion(memberRow){
 function gdGetMembers(data){
   const members=[]; gdMemberHireDates={}; gdMemberCenters={}; const cmsGroups={};
   const excluded=[];
+  const longAbsentList=[];  // 모든 장기공석 인원(포함/제외 무관) — 수정 모드 UI용
+  const includeSet=gdGetLongAbsentIncludeSet();
   for(const r of data){
     const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
     if(dept!=='뇌새김영어') continue;
     // 차등 대상: CMS 그룹 W/E/A/B/H 5종 모두 (W=A, E=B, A=C, B=D, H=H 매핑)
     if(!['W그룹','E그룹','A그룹','B그룹','H그룹'].includes(grp)) continue;
     if(!name) continue;
+    const cmsGroup=grp.replace('그룹','');
     const ex=gdDetectExclusion(r);
     if(ex){
-      excluded.push({name, cmsGroup:grp.replace('그룹',''), ...ex});
-      continue;  // 등급 산정 풀에서 제외
+      if(ex.reason==='장기공석'){
+        const included=includeSet.has(name);
+        longAbsentList.push({name, cmsGroup, days:ex.days, included});
+        if(!included){
+          excluded.push({name, cmsGroup, ...ex});
+          continue;  // 풀에서 제외
+        }
+        // included → fall through하여 풀에 포함
+      } else {
+        excluded.push({name, cmsGroup, ...ex});
+        continue;  // 퇴사 등은 무조건 제외
+      }
     }
     members.push(name);
-    cmsGroups[name]=grp.replace('그룹','');
+    cmsGroups[name]=cmsGroup;
     const hd=r['입사일'];
     if(hd) gdMemberHireDates[name]=parseDate(hd)||parseDate(str(hd));
     const ct=str(r['센터']);
     if(ct) gdMemberCenters[name]=ct;
   }
-  return {members, cmsGroups, excluded};
+  return {members, cmsGroups, excluded, longAbsentList};
 }
 
 function gdCountDb(data, members, uploadTime){
@@ -6942,7 +6958,7 @@ async function gdGenerate(dbFileId){
     if(!attendFile||!cancelFile||!dbFile||!contFile){
       alert('4종 파일이 모두 필요합니다 (DB수, 계약수, 취소수, 명단)');return;
     }
-    const {members, cmsGroups, excluded}=gdGetMembers(attendFile.data);
+    const {members, cmsGroups, excluded, longAbsentList}=gdGetMembers(attendFile.data);
     gdMemberCmsGroups=cmsGroups;
     if(members.length===0) throw new Error('뇌새김영어 W/E/A/B/H 그룹 멤버를 찾을 수 없습니다.');
 
@@ -7048,10 +7064,11 @@ async function gdGenerate(dbFileId){
       memberRowByName[name]=r;
     }
     if(minDistDate && maxDistDate){
+      const _longAbsentIncludeSet=gdGetLongAbsentIncludeSet();
       for(const name of members){
         const r=memberRowByName[name];
-        if(!r){ periodAttend[name]={workCount:0,legitCount:0,penaltyCount:0,totalDays:0}; continue; }
-        const a=gdAnalyzePeriodAttend(r, minDistDate, maxDistDate);
+        if(!r){ periodAttend[name]={workCount:0,legitCount:0,penaltyCount:0,totalDays:0,longAbsentCount:0}; continue; }
+        const a=gdAnalyzePeriodAttend(r, minDistDate, maxDistDate, _longAbsentIncludeSet.has(name));
         periodAttend[name]=a;
         // 정당사유 회차 = 회차 내 모든 일자가 정당사유로 처리된 경우만 (직전 회차 등급 유지)
         // - 출근이 1일이라도 있으면 정상 평가 (정당사유 X)
@@ -7259,7 +7276,7 @@ async function gdGenerate(dbFileId){
     };
 
     gdResult={members, stats, groups, streaks, cutlines:finalCutlines,
-      protectedMembers, excluded,
+      protectedMembers, excluded, longAbsentList,
       minDistDate, maxDistDate,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
@@ -7309,8 +7326,8 @@ function gdOnPeriodChange(){
 
 function gdRenderDashboard(){
   gdRenderPeriodRange(); gdRenderExcludedBanner(); gdRenderKPI(); gdRenderGroupSummary(); gdRenderTable(); gdRenderHistory();
+  gdRenderLongAbsentEditPanel();
   gdSyncPromoBtnLabel();
-  gdSyncIncludeAbsentBtnLabel();
 }
 
 function gdRenderExcludedBanner(){
@@ -7515,36 +7532,6 @@ function gdTogglePromotion(){
   }
 }
 
-function gdSyncIncludeAbsentBtnLabel(){
-  const btn=document.getElementById('gdBtnIncludeAbsent');
-  if(!btn) return;
-  const on=localStorage.getItem(GD_INCLUDE_ABSENT_KEY)==='1';
-  const dot=on?'<span style="color:#22c55e;font-size:14px;line-height:1;text-shadow:0 0 4px rgba(34,197,94,.6);margin-right:6px">●</span>':'<span style="color:#94a3b8;font-size:14px;line-height:1;margin-right:6px">○</span>';
-  btn.innerHTML=dot+'장기공석 '+(on?'포함':'제외');
-  if(on){
-    btn.style.background='#fef3c7';
-    btn.style.color='#92400e';
-    btn.style.borderColor='#fcd34d';
-    btn.style.fontWeight='700';
-  } else {
-    btn.style.background='#f1f5f9';
-    btn.style.color='#94a3b8';
-    btn.style.borderColor='#cbd5e1';
-    btn.style.fontWeight='';
-  }
-}
-
-function gdToggleIncludeAbsent(){
-  const cur=localStorage.getItem(GD_INCLUDE_ABSENT_KEY)==='1';
-  const next=!cur;
-  localStorage.setItem(GD_INCLUDE_ABSENT_KEY, next?'1':'0');
-  gdSyncIncludeAbsentBtnLabel();
-  wmSyncMarkDirty();
-  if(gdResult && gdResult.dbFileId){
-    gdGenerate(gdResult.dbFileId);
-  }
-}
-
 function gdToggleGroupEdit(){
   if(!gdResult) return;
   gdGroupEditMode=!gdGroupEditMode;
@@ -7552,6 +7539,7 @@ function gdToggleGroupEdit(){
   btn.textContent=gdGroupEditMode?'수정 중...':'수정';
   btn.style.color=gdGroupEditMode?'var(--danger)':'';
   gdRenderTable();
+  gdRenderLongAbsentEditPanel();
 }
 async function gdApplyGroupEdit(){
   const sels=document.querySelectorAll('#gdMainBody .group-select');
@@ -7560,9 +7548,32 @@ async function gdApplyGroupEdit(){
     const name=s.dataset.name;
     if(gdResult.groups[name]!==s.value){changes[name]=s.value;gdResult.groups[name]=s.value;}
   });
+  // 장기공석 체크박스 변경 수집
+  const longAbsentCbs=document.querySelectorAll('#gdLongAbsentEditPanel input[type="checkbox"][data-long-absent]');
+  const _laInclude=gdGetLongAbsentIncludeSet();
+  let _laChanged=false;
+  longAbsentCbs.forEach(cb=>{
+    const name=cb.dataset.name;
+    const want=cb.checked;
+    if(want!==_laInclude.has(name)){
+      if(want) _laInclude.add(name); else _laInclude.delete(name);
+      _laChanged=true;
+    }
+  });
+  if(_laChanged) gdSetLongAbsentIncludeSet(_laInclude);
   gdGroupEditMode=false;
   document.getElementById('gdBtnEditGroup').textContent='수정';
   document.getElementById('gdBtnEditGroup').style.color='';
+  if(Object.keys(changes).length===0 && _laChanged){
+    // 장기공석 변경만 있는 경우 — 그룹 변경 저장 스킵하고 전체 재계산만
+    wmSyncMarkDirty();
+    if(gdResult.dbFileId){
+      await gdGenerate(gdResult.dbFileId);
+      return;
+    }
+    gdRenderDashboard();
+    return;
+  }
   if(Object.keys(changes).length>0){
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
     // 수동 변경된 인원은 보호 해제 (사용자가 명시적으로 등급 정함)
@@ -7611,6 +7622,37 @@ function gdCancelGroupEdit(){
   document.getElementById('gdBtnEditGroup').textContent='수정';
   document.getElementById('gdBtnEditGroup').style.color='';
   gdRenderTable();
+  gdRenderLongAbsentEditPanel();
+}
+
+function gdRenderLongAbsentEditPanel(){
+  const el=document.getElementById('gdLongAbsentEditPanel');
+  if(!el) return;
+  const list=gdResult?.longAbsentList||[];
+  if(!gdGroupEditMode || list.length===0){
+    el.style.display='none';
+    el.innerHTML='';
+    return;
+  }
+  const includeSet=gdGetLongAbsentIncludeSet();
+  const sorted=[...list].sort((a,b)=>b.days-a.days);
+  const items=sorted.map(p=>{
+    const checked=includeSet.has(p.name);
+    const danger=p.days>=30;
+    const safeName=p.name.replace(/"/g,'&quot;');
+    return `<label style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${checked?'#fcd34d':'#e2e8f0'};border-radius:6px;padding:8px 12px;cursor:pointer;font-size:13px">
+      <input type="checkbox" data-long-absent data-name="${safeName}" ${checked?'checked':''} style="cursor:pointer;width:16px;height:16px">
+      <span style="font-weight:600">${p.name}</span>
+      <span style="color:#94a3b8;font-size:11px">(${p.cmsGroup})</span>
+      <span style="color:${danger?'#dc2626':'#64748b'};font-weight:${danger?'700':'500'}">${p.days}일째${danger?' ⚠':''}</span>
+    </label>`;
+  }).join('');
+  el.style.display='block';
+  el.innerHTML=`<div style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:8px;padding:14px 18px;margin-bottom:16px">
+    <div style="font-weight:700;color:#92400e;margin-bottom:6px;font-size:14px">🛌 장기공석 인원 ${list.length}명 — 풀에 포함할 사람 선택</div>
+    <div style="font-size:12px;color:#92400e;margin-bottom:10px;line-height:1.5">체크 시 풀에 포함, 정당사유로 취급하여 직전 회차 등급 유지. 체크 안 하면 등급 산정에서 제외(현재와 동일)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${items}</div>
+  </div>`;
 }
 
 async function gdClearManual(name){
