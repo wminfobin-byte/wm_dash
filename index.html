@@ -179,8 +179,9 @@ tr.row-h td{background:var(--gh-light)}
 #page-grade-dash .gcard.gc{background:linear-gradient(135deg,#F0920E,#FFB84D)}
 #page-grade-dash .gcard.gd{background:linear-gradient(135deg,#4472C4,#6286D0)}
 #page-grade-dash .gcard.gh{background:linear-gradient(135deg,#4B5563,#6B7280)}
+#page-grade-dash .gcard.gla{background:linear-gradient(135deg,#B45309,#D97706)}
 /* 차등성과: 5개 등급(A/B/C/D/H) 한 행에 들어가도록 압축 */
-#page-grade-dash .group-summary{grid-template-columns:repeat(5,1fr);gap:10px}
+#page-grade-dash .group-summary{grid-template-columns:repeat(6,1fr);gap:10px}
 #page-grade-dash .gcard{padding:14px 12px;border-radius:12px}
 #page-grade-dash .gcard::after{width:56px;height:56px;top:-14px;right:-14px}
 #page-grade-dash .gcard .gt{font-size:13px;margin-bottom:6px}
@@ -7388,11 +7389,16 @@ function gdRenderGroupSummary(){
     {key:'D',cls:'gd',label:'D등급',cut:'취소반영 계약수 ≤ 0'},
     {key:'H',cls:'gh',label:'H등급',cut:'D 4회 누적'},
   ];
-  document.getElementById('gdGroupSummary').innerHTML=cards.map(c=>{
+  const laList=gdResult.longAbsentList||[];
+  const laInc=laList.filter(p=>p.included).length;
+  const laExc=laList.length-laInc;
+  const gradeCards=cards.map(c=>{
     const m=gc[c.key]||[];
     const avg=m.length>0?m.reduce((a,n)=>a+(gdResult.stats[n]?.refAdjRate||0),0)/m.length:0;
     return `<div class="gcard ${c.cls}"><div class="gt">${c.label}</div><div class="gn">${m.length.toLocaleString()}명</div><div class="gs">평균 ${pct(avg)}</div>${c.cut?`<div class="gc-cut">${c.cut}</div>`:''}</div>`;
   }).join('');
+  const laCard=`<div class="gcard gla"><div class="gt">장기공석</div><div class="gn">${laList.length.toLocaleString()}명</div><div class="gs">${laList.length>0?`포함 ${laInc} · 제외 ${laExc}`:'없음'}</div><div class="gc-cut">최신 근태=장기공석</div></div>`;
+  document.getElementById('gdGroupSummary').innerHTML=gradeCards+laCard;
 }
 
 function gdRenderTable(){
