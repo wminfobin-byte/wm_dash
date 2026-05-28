@@ -1571,6 +1571,7 @@ tr.row-h td{background:var(--gh-light)}
       <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">수정</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
+      <button class="btn btn-outline btn-sm" onclick="gdDownloadChangesExcel()" title="이번 회차와 직전 회차 간 등급이 변동된 코디만 추출">변동 Excel 다운로드</button>
     </div>
     <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
@@ -6367,6 +6368,13 @@ const GD_ATTEND_PENALTY = new Set([
   '지각','지각 10분','지각 20분','지각 20분 초과'
 ]);
 
+// 출근으로 인정 (어쨌든 출근은 한 케이스 — 지각/조퇴/반차/오전·오후결근 포함)
+const GD_ATTEND_WORK = new Set([
+  '출근',
+  '지각','지각 10분','지각 20분','지각 20분 초과',
+  '조퇴','오전 반차','오후 반차','오전 결근','오후 결근'
+]);
+
 // 컬럼 키를 날짜로 파싱 (YYYY-MM-DD / M/D / D / Date 객체 / D일 등)
 function gdParseColKeyAsDate(key, periodHint){
   if(key instanceof Date && !isNaN(key)) return key;
@@ -6394,7 +6402,7 @@ function gdAnalyzePeriodAttend(memberRow, periodStart, periodEnd, treatLongAbsen
     const d=gdParseColKeyAsDate(k, periodStart);
     if(!d || d<ps || d>pe) continue;
     totalDays++;
-    if(v==='출근') workCount++;
+    if(GD_ATTEND_WORK.has(v)) workCount++;
     if(GD_LEGITIMATE_ABSENCE.has(v) || (treatLongAbsentAsLegit && v==='장기공석')) legitCount++;
     if(GD_ATTEND_PENALTY.has(v)) penaltyCount++;
     if(v==='장기공석') longAbsentCount++;
@@ -7936,6 +7944,100 @@ async function gdDownloadExcel(){
   if(gdResult&&gdResult.maxDistDate){
     const d=gdResult.maxDistDate;
     excelName=`(공유) 차등 성과_${String(d.getFullYear()).slice(2)}년 ${d.getMonth()+1}월.xlsx`;
+  }
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){
+      if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+        const xml=await zip.file(path).async('string');
+        zip.file(path,xml.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));
+      }
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=excelName; a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    console.warn('눈금선 제거 실패, 기본 방식으로 저장',e);
+    XLSX.writeFile(wb,excelName,{bookSST:true});
+  }
+}
+
+// ── 차등 변동 엑셀 다운로드: 이번 회차 vs 직전 회차 등급 변동자만 ──
+async function gdDownloadChangesExcel(){
+  if(!gdResult){alert('먼저 대시보드를 생성해주세요.');return;}
+  const all=await gdGetAllResults(); // sheetName desc
+  if(!all||all.length<2){alert('비교할 직전 회차가 없습니다.');return;}
+  const cur=all[0], prev=all[1];
+  const curMap={}; (cur.rows||[]).forEach(r=>{curMap[r.name]=r.group;});
+  const prevMap={}; (prev.rows||[]).forEach(r=>{prevMap[r.name]=r.group;});
+  const names=new Set([...Object.keys(curMap), ...Object.keys(prevMap)]);
+  const changes=[];
+  for(const name of names){
+    const c=curMap[name]||'-', p=prevMap[name]||'-';
+    if(c===p) continue;
+    changes.push({center:gdMemberCenters[name]||'', name, cur:c, prev:p});
+  }
+  if(changes.length===0){alert('이번 회차에 등급 변동이 없습니다.');return;}
+  changes.sort((a,b)=>{
+    const dc=(a.center||'').localeCompare(b.center||'','ko');
+    if(dc!==0) return dc;
+    return a.name.localeCompare(b.name,'ko');
+  });
+
+  const gColors={
+    'A':{fill:'F5B400',font:'FFFFFF'},
+    'B':{fill:'4CAF7E',font:'FFFFFF'},
+    'C':{fill:'F0920E',font:'FFFFFF'},
+    'D':{fill:'4472C4',font:'FFFFFF'},
+    'H':{fill:'4B5563',font:'FFFFFF'},
+    '-':{fill:'E5E7EB',font:'6B7280'},
+  };
+  const bdr={top:{style:'thin',color:{rgb:'DDDDDD'}},bottom:{style:'thin',color:{rgb:'DDDDDD'}},left:{style:'thin',color:{rgb:'DDDDDD'}},right:{style:'thin',color:{rgb:'DDDDDD'}}};
+  const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:11,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
+  const cellS={font:{sz:11,name:'맑은 고딕',color:{rgb:'333333'}},alignment:{horizontal:'center',vertical:'center'},border:bdr};
+
+  const curLabel=`이번회차(${cur.sheetName||''})`;
+  const prevLabel=`직전회차(${prev.sheetName||''})`;
+  const aoa=[
+    Array(6).fill(''),
+    ['','','WM 차등 등급 변동','','',''],
+    Array(6).fill(''),
+    ['','센터','코디명',curLabel,prevLabel,''],
+    ...changes.map(c=>['',c.center,c.name,c.cur,c.prev,'']),
+    Array(6).fill('')
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:1},{wch:16},{wch:16},{wch:18},{wch:18},{wch:1}];
+  if(!ws['!merges']) ws['!merges']=[];
+  ws['!merges'].push({s:{r:1,c:1},e:{r:1,c:4}});
+  if(!ws['!rows']) ws['!rows']=[];
+  ws['!rows'][1]={hpt:28};
+  ws['!rows'][3]={hpt:28};
+  // 타이틀
+  const titleCell=XLSX.utils.encode_cell({r:1,c:1});
+  if(ws[titleCell]) ws[titleCell].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
+  // 헤더
+  for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
+  // 데이터
+  changes.forEach((r,i)=>{
+    const ri=4+i;
+    // 센터, 코디명
+    for(const c of [1,2]){const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].s=cellS;}
+    // 이번회차 (강조)
+    {const a=XLSX.utils.encode_cell({r:ri,c:3});if(ws[a]){const gc=gColors[r.cur]||gColors['-'];ws[a].s={font:{bold:true,sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
+    // 직전회차
+    {const a=XLSX.utils.encode_cell({r:ri,c:4});if(ws[a]){const gc=gColors[r.prev]||gColors['-'];ws[a].s={font:{sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
+  });
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,`변동_${cur.sheetName||''}`);
+
+  let excelName='(공유) 차등 변동.xlsx';
+  if(gdResult&&gdResult.maxDistDate){
+    const d=gdResult.maxDistDate;
+    excelName=`(공유) 차등 변동_${String(d.getFullYear()).slice(2)}년 ${d.getMonth()+1}월.xlsx`;
   }
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
   try{
