@@ -8000,39 +8000,42 @@ async function gdDownloadChangesExcel(){
 
   const curLabel=`이번회차(${cur.sheetName||''})`;
   const prevLabel=`직전회차(${prev.sheetName||''})`;
-  const aoa=[
-    Array(6).fill(''),
-    ['','','WM 차등 등급 변동','','',''],
-    Array(6).fill(''),
-    ['','센터','코디명',curLabel,prevLabel,''],
-    ...changes.map(c=>['',c.center,c.name,c.cur,c.prev,'']),
-    Array(6).fill('')
-  ];
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:1},{wch:16},{wch:16},{wch:18},{wch:18},{wch:1}];
-  if(!ws['!merges']) ws['!merges']=[];
-  ws['!merges'].push({s:{r:1,c:1},e:{r:1,c:4}});
-  if(!ws['!rows']) ws['!rows']=[];
-  ws['!rows'][1]={hpt:28};
-  ws['!rows'][3]={hpt:28};
-  // 타이틀
-  const titleCell=XLSX.utils.encode_cell({r:1,c:1});
-  if(ws[titleCell]) ws[titleCell].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
-  // 헤더
-  for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
-  // 데이터
-  changes.forEach((r,i)=>{
-    const ri=4+i;
-    // 센터, 코디명
-    for(const c of [1,2]){const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].s=cellS;}
-    // 이번회차 (강조)
-    {const a=XLSX.utils.encode_cell({r:ri,c:3});if(ws[a]){const gc=gColors[r.cur]||gColors['-'];ws[a].s={font:{bold:true,sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
-    // 직전회차
-    {const a=XLSX.utils.encode_cell({r:ri,c:4});if(ws[a]){const gc=gColors[r.prev]||gColors['-'];ws[a].s={font:{sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
-  });
+
+  // CMS 그룹 명칭 매핑 (A→W, B→E, C→A, D→B, H→H)
+  const CMS_LABEL={'A':'W','B':'E','C':'A','D':'B','H':'H'};
+
+  function buildChangesSheet(title, labelOf){
+    const aoa=[
+      Array(6).fill(''),
+      ['','',title,'','',''],
+      Array(6).fill(''),
+      ['','센터','코디명',curLabel,prevLabel,''],
+      ...changes.map(c=>['',c.center,c.name,labelOf(c.cur),labelOf(c.prev),'']),
+      Array(6).fill('')
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:1},{wch:16},{wch:16},{wch:18},{wch:18},{wch:1}];
+    if(!ws['!merges']) ws['!merges']=[];
+    ws['!merges'].push({s:{r:1,c:1},e:{r:1,c:4}});
+    if(!ws['!rows']) ws['!rows']=[];
+    ws['!rows'][1]={hpt:28};
+    ws['!rows'][3]={hpt:28};
+    const titleCell=XLSX.utils.encode_cell({r:1,c:1});
+    if(ws[titleCell]) ws[titleCell].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
+    for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
+    changes.forEach((r,i)=>{
+      const ri=4+i;
+      for(const c of [1,2]){const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].s=cellS;}
+      // 색상은 원본 등급(r.cur/r.prev) 기준 — CMS 명칭 시트도 동일 색상 유지
+      {const a=XLSX.utils.encode_cell({r:ri,c:3});if(ws[a]){const gc=gColors[r.cur]||gColors['-'];ws[a].s={font:{bold:true,sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
+      {const a=XLSX.utils.encode_cell({r:ri,c:4});if(ws[a]){const gc=gColors[r.prev]||gColors['-'];ws[a].s={font:{sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
+    });
+    return ws;
+  }
 
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,`변동_${cur.sheetName||''}`);
+  XLSX.utils.book_append_sheet(wb, buildChangesSheet('WM 차등 등급 변동', g=>g), `변동_${cur.sheetName||''}`);
+  XLSX.utils.book_append_sheet(wb, buildChangesSheet('CMS 명칭 (W/E/A/B/H)', g=>CMS_LABEL[g]||g), `CMS_${cur.sheetName||''}`);
 
   let excelName='(공유) 차등 변동.xlsx';
   if(gdResult&&gdResult.maxDistDate){
