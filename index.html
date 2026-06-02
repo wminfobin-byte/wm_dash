@@ -7300,17 +7300,19 @@ async function gdGenerate(dbFileId){
         }
         return true;
       });
-      // 수동으로 이 targetGrp에 명시적으로 옮겨진 멤버 = 1등 후보 우선순위
-      // (사용자 의도 반영: "이 사람을 이 그룹에 두고 싶다 = 이 그룹 1등 후보로 봐달라")
-      const manualInGrp=pool.filter(n=>manualSet.has(n) && manualGroups[n]===targetGrp);
-      const candidates=manualInGrp.length>0 ? manualInGrp : pool;
+      // 프로모션 1등 = 항상 그룹 전체(pool)에서 실계약수 1등 (동률 시 취소반영계약률)
+      // 2026-06-02: "수동 인원이 있으면 후보를 수동 인원으로만 제한"하던 룰 제거.
+      //   재산정(수동 조정·로직 변경 포함) 때마다 프로모션 1등이 실제 성적대로 다시 정해지도록 함.
+      //   (이전엔 옛 수동 고정 인원이 후보를 독점해 ★가 고정되는 문제가 있었음)
+      const manualInGrp=pool.filter(n=>manualSet.has(n) && manualGroups[n]===targetGrp); // 로그용
+      const candidates=pool;
       candidates.sort((a,b)=>{
         const dc=(stats[b].contract||0)-(stats[a].contract||0);
         if(dc!==0) return dc;
         return (stats[b].refAdjRate||0)-(stats[a].refAdjRate||0);
       });
       const pickFrom=candidates;
-      console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 / 풀 ${pool.length}명${manualInGrp.length>0?` / 수동 우선 ${manualInGrp.length}명`:''}:`);
+      console.log(`[프로모션 ${targetGrp}→${newGrp}] ${targetGrp}그룹 전체 ${allOfGrp.length}명 / 풀 ${pool.length}명${manualInGrp.length>0?` / (수동 ${manualInGrp.length}명, 우선권 없음)`:''}:`);
       console.log('  ',pickFrom.map(n=>`${n}(실계약${stats[n].contract}건/${(stats[n].refAdjRate*100).toFixed(1)}%)`).join(' / ')||'(빈 풀)');
       if(Object.keys(excluded).length>0){
         for(const [reason,names] of Object.entries(excluded)){
