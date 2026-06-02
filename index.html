@@ -6580,7 +6580,7 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
   }
 
   const seen=new Set();
-  let cutoffDrop=0, unmatched=0, counted=0;
+  let cutoffDrop=0, unmatched=0, counted=0, holidaySkip=0;
   for(let i=1;i<prevCancelData.length;i++){
     const row=prevCancelData[i];
     if(!row) continue;
@@ -6593,6 +6593,8 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
     // cutoff drop 가드
     const distDate=parseDate(row[GD_CANCEL_COL.distributeDate]);
     if(cutoffStart && distDate && distDate<cutoffStart){ cutoffDrop++; continue; }
+    // 분배일 주말·공휴일 제외 (gdCountCancels와 동일 룰 — 휴일 판정은 항상 분배일 기준)
+    if(distDate && isHoliday(distDate)){ holidaySkip++; continue; }
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
@@ -6601,7 +6603,7 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
     if(memberSet.has(stripped)){ counts[stripped]++; counted++; }
     else unmatched++;
   }
-  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / cutoff drop ${cutoffDrop}건 제외 / 담당자 미매칭 ${unmatched}건`);
+  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / cutoff drop ${cutoffDrop}건 제외 / 분배일 주말·공휴일 ${holidaySkip}건 제외 / 담당자 미매칭 ${unmatched}건`);
   return counts;
 }
 
