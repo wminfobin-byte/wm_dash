@@ -7526,8 +7526,10 @@ function gdRenderTable(){
     const sc=r.streak>=3?'s3':r.streak>=2?'s2':r.streak>=1?'s1':'s0';
     let groupCell;
     if(gdGroupEditMode){
-      const opts=['A','B','C','D','H'].map(g=>`<option value="${g}"${g===r.group?' selected':''}>${g}등급</option>`).join('');
-      groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}">${opts}</select>`;
+      // '자동' = 수동 고정 해제(자동 산정). 수동 인원만 현재 등급이 selected, 비수동은 '자동'이 selected.
+      const opts=`<option value="__auto__"${r.manualGroup?'':' selected'}>자동${r.manualGroup?'':`(${r.group})`}</option>`
+        +['A','B','C','D','H'].map(g=>`<option value="${g}"${(r.manualGroup&&g===r.group)?' selected':''}>${g}등급</option>`).join('');
+      groupCell=`<select class="group-select" data-name="${r.name.replace(/"/g,'&quot;')}"${r.manualGroup?' style="border-color:#6d28d9"':''}>${opts}</select>`;
     } else {
       // 근태/정당사유/B상한 사유는 모두 비고 컬럼에 텍스트로 표기 (등급 셀에는 등급 라벨만)
       groupCell=`<span class="group-label ${gc}">${gc}등급</span>`;
@@ -7632,10 +7634,20 @@ function gdToggleGroupEdit(){
 }
 async function gdApplyGroupEdit(){
   const sels=document.querySelectorAll('#gdMainBody .group-select');
+  const wasManualMap={};
+  if(gdResult.savedRows){ for(const r of gdResult.savedRows) wasManualMap[r.name]=!!r.manualGroup; }
   const changes={};
+  const clears=[];
   sels.forEach(s=>{
     const name=s.dataset.name;
-    if(gdResult.groups[name]!==s.value){changes[name]=s.value;gdResult.groups[name]=s.value;}
+    const v=s.value;
+    if(v==='__auto__'){
+      // 자동 선택 = 수동 고정 해제 (수동이었던 경우만)
+      if(wasManualMap[name]) clears.push(name);
+    } else if(gdResult.groups[name]!==v || !wasManualMap[name]){
+      // 등급 명시 선택 = 수동 지정
+      changes[name]=v; gdResult.groups[name]=v;
+    }
   });
   // 장기공석 체크박스 변경 수집
   const longAbsentCbs=document.querySelectorAll('#gdLongAbsentEditPanel input[type="checkbox"][data-long-absent]');
@@ -7653,7 +7665,7 @@ async function gdApplyGroupEdit(){
   gdGroupEditMode=false;
   document.getElementById('gdBtnEditGroup').textContent='수정';
   document.getElementById('gdBtnEditGroup').style.color='';
-  if(Object.keys(changes).length===0 && _laChanged){
+  if(Object.keys(changes).length===0 && clears.length===0 && _laChanged){
     // 장기공석 변경만 있는 경우 — 그룹 변경 저장 스킵하고 전체 재계산만
     wmSyncMarkDirty();
     if(gdResult.dbFileId){
@@ -7663,7 +7675,7 @@ async function gdApplyGroupEdit(){
     gdRenderDashboard();
     return;
   }
-  if(Object.keys(changes).length>0){
+  if(Object.keys(changes).length>0 || clears.length>0){
     const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):fmtDateShort(new Date());
     // 수동 변경된 인원은 보호 해제 (사용자가 명시적으로 등급 정함)
     if(gdResult.protectedMembers){
@@ -7675,7 +7687,7 @@ async function gdApplyGroupEdit(){
       for(const r of gdResult.savedRows) prevSavedMeta[r.name]={isLegitimate:!!r.isLegitimate,attendIssues:r.attendIssues||0,workCount:r.workCount||0,totalDays:r.totalDays||0,isLongAbsent:!!r.isLongAbsent,promoted:!!r.promoted,manualBaseGroup:r.manualBaseGroup||null,wasManual:!!r.manualGroup};
     }
     const allRows=Object.entries(gdResult.stats).map(([name,s])=>{
-      const isManual=!!changes[name] || (prevSavedMeta[name]?.wasManual);
+      const isManual = clears.includes(name) ? false : (!!changes[name] || (prevSavedMeta[name]?.wasManual));
       // 새로 변경된 그룹은 그것이 baseline이 됨, 기존 manualBaseGroup이 있으면 그것 유지
       const baseGroup=changes[name] || prevSavedMeta[name]?.manualBaseGroup || (prevSavedMeta[name]?.wasManual ? gdResult.groups[name] : null);
       return {
