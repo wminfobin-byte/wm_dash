@@ -6901,6 +6901,48 @@ window.gdDebugByMember=function(names){
   return grouped;
 };
 
+// 디버그: 사후 배송전 취소(gdCountVanishedCancels)로 잡히는 건 추적
+// 콘솔에서: gdDebugVanished()  또는  gdDebugVanished('고객키')  → 해당 고객의 담당자 기준으로 사라진 키 나열
+window.gdDebugVanished=function(refKey){
+  refKey=refKey||'1780103054547Hkci6hv';
+  const near=(t,u)=>{const a=gdGetFilesByType(t);let r=null,b=Infinity;a.forEach(c=>{const d=Math.abs(c.uploadTime-u);if(d<b){b=d;r=c;}});return r;};
+  const db=gdGetLatest('db');
+  if(!db){console.warn('db 파일 없음');return;}
+  const cur=near('cancel',db.uploadTime);
+  const dbs=gdGetFilesByType('db');
+  let pdb=null,bb=Infinity;
+  dbs.forEach(d=>{if(d.id===db.id||d.uploadTime>=db.uploadTime)return;const diff=db.uploadTime-d.uploadTime;if(diff<bb){bb=diff;pdb=d;}});
+  const prev=pdb?near('cancel',pdb.uploadTime):null;
+  console.log('현재 cancel:',cur&&cur.fileName,'\n직전 cancel:',prev&&prev.fileName,'\n직전 db:',pdb&&pdb.fileName);
+  if(!prev){console.warn('직전 cancel 파일 없음 → 사후취소 계산 불가(첫 회차)');return;}
+  const C=GD_CANCEL_COL;
+  const curK=new Set();
+  for(let i=1;i<cur.data.length;i++){const k=cur.data[i]&&String(cur.data[i][C.customerKey]).trim();if(k)curK.add(k);}
+  let M='';
+  for(let i=1;i<cur.data.length;i++){if(cur.data[i]&&String(cur.data[i][C.customerKey]).trim()===refKey){M=String(cur.data[i][C.manager]||'');break;}}
+  if(!M){
+    for(let i=1;i<prev.data.length;i++){if(prev.data[i]&&String(prev.data[i][C.customerKey]).trim()===refKey){M=String(prev.data[i][C.manager]||'');break;}}
+  }
+  console.log('담당자(M)=',M||'(refKey로 못 찾음 — 전체 담당자 대상)');
+  const cutoff=cur.uploadTime-90*24*60*60*1000;
+  const seen=new Set();const out=[];
+  for(let i=1;i<prev.data.length;i++){
+    const r=prev.data[i];if(!r)continue;
+    const mgr=String(r[C.manager]||'');
+    if(M && mgr!==M) continue;
+    const k=String(r[C.customerKey]||'').trim();
+    if(!k||curK.has(k)||seen.has(k))continue;
+    seen.add(k);
+    const dist=parseDate(r[C.distributeDate]);
+    const drop=!!(dist&&dist.getTime()<cutoff);
+    out.push({담당자:mgr, 고객키:k, 분배일:r[C.distributeDate], 주말공휴일:dist?isHoliday(dist):'(null)', 반품일:r[C.returnDate], 판정:drop?'❌ cutoff-drop(제외)':'✅ COUNTED(사후취소 +1)'});
+  }
+  console.table(out);
+  const counted=out.filter(o=>o.판정.indexOf('COUNTED')>=0);
+  console.log('→ 사후 배송전 취소 카운트:',counted.length,'건 / 그중 분배일 주말·공휴일:',counted.filter(o=>o.주말공휴일===true).length,'건');
+  return out;
+};
+
 function gdAssignGroups(stats){
   // ① 취소반영 계약수 ≤ 0 → D 등급 (성과 0 이하)
   // ② 나머지를 취소반영 계약률 desc → A/B/C 1/3 분할 + 동점자 보정
