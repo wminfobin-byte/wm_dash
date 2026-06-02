@@ -6945,6 +6945,35 @@ window.gdDebugVanished=function(refKey){
   return out;
 };
 
+// 디버그: 현재 회차 그룹 배정 + 수동 고정 + 프로모션 1등 현황
+// 콘솔에서: gdDebugGroups()  (인자로 'A','B' 등 주면 그 그룹만)
+window.gdDebugGroups=function(onlyGrp){
+  if(!gdResult||!gdResult.savedRows){console.warn('먼저 차등 산정 실행 필요'); return;}
+  const rows=gdResult.savedRows
+    .filter(r=>!onlyGrp || r.group===onlyGrp)
+    .map(r=>({
+      그룹:r.group,
+      코디:r.name,
+      실계약:r.contract,
+      취소수:r.cancelCount,
+      취소반영률:Math.round((r.refAdjRate||0)*1000)/10,
+      수동:r.manualGroup ? ('Y(base '+(r.manualBaseGroup||'?')+')') : '-',
+      프로모션1등:r.promoted ? '★' : '',
+      신입보호:r.isProtected ? 'Y' : '',
+      정당사유:r.isLegitimate ? 'Y' : ''
+    }));
+  // 그룹 → 실계약수 desc 정렬
+  const order={A:0,B:1,C:2,D:3,H:4};
+  rows.sort((a,b)=> (order[a.그룹]-order[b.그룹]) || (b.실계약-a.실계약) || (b.취소반영률-a.취소반영률) );
+  console.table(rows);
+  // 그룹별 프로모션 1등 요약
+  ['A','B','C'].forEach(g=>{
+    const promo=rows.filter(r=>r.그룹===g && r.프로모션1등==='★').map(r=>r.코디);
+    if(promo.length) console.log(`${g}그룹 프로모션 1등(★): ${promo.join(', ')}`);
+  });
+  return rows;
+};
+
 function gdAssignGroups(stats){
   // ① 취소반영 계약수 ≤ 0 → D 등급 (성과 0 이하)
   // ② 나머지를 취소반영 계약률 desc → A/B/C 1/3 분할 + 동점자 보정
