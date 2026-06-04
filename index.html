@@ -1550,6 +1550,17 @@ tr.row-h td{background:var(--gh-light)}
   </div>
 </div>
 
+<!-- 집계 대상 고객키 상세 모달 (수정 모드 이름 클릭) -->
+<div class="modal-overlay" id="gdKeyModalOverlay" onclick="if(event.target===this)gdCloseKeyModal()">
+  <div class="modal" style="width:900px">
+    <button class="modal-close" onclick="gdCloseKeyModal()">&times;</button>
+    <div id="gdKeyModalBody"></div>
+    <div class="modal-footer" style="margin-top:16px">
+      <button class="btn btn-outline" onclick="gdCloseKeyModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div class="container">
   <div id="gdEmptyState" style="text-align:center;padding:80px 20px;color:var(--gray)">
     <div style="font-size:48px;margin-bottom:16px;opacity:.5">🏅</div>
@@ -6497,7 +6508,10 @@ function gdCountDb(data, members, uploadTime){
   return counts;
 }
 
-function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist, prevMaxDist){
+// YYYY-MM-DD 포맷 (키 상세 모달용)
+function gdFmtD(d){ return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:''; }
+
+function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist, prevMaxDist, keyCollect){
   // 실계약 = 계약 + (취소 AND cancel 파일에 D열 매칭됨)
   // 휴일 판정: '분배일' 기준 (평일 분배 + 휴일 오더는 포함)
   // 회차 매칭: '오더일' 기준 — (prevMaxDist, currentMaxDist] 범위가 현재 회차
@@ -6554,9 +6568,11 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
 
     if(status==='계약'){
       counts[obName]++;
+      if(keyCollect) (keyCollect[obName]=keyCollect[obName]||[]).push({key:custKey, type:'계약', order:gdFmtD(orderDate)});
     } else { // 취소
       if(!useCancelMatching || cancelKeySet.has(custKey)){
         counts[obName]++; // 정상 취소(반품 등) 또는 매칭 비활성 모드 → 실계약수 포함
+        if(keyCollect) (keyCollect[obName]=keyCollect[obName]||[]).push({key:custKey, type:'취소(반품 등)', order:gdFmtD(orderDate)});
       }
       // else: 배송전 취소(신규) → 둘 다 제외
     }
@@ -6568,7 +6584,7 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
 // 직전 회차 cancel D열에는 있었는데 이번 cancel D열에는 없는 고객키 = 시스템에서 행 삭제 = 배송전 취소 사후 발생
 // cutoff drop 가드: 직전 cancel 행의 distributeDate가 이번 cancel cutoff 이전이면 자연 만료로 간주 → 무시
 // 같은 고객키 중복 방지(prev cancel에 같은 키가 여러 행이어도 한 번만 카운트)
-function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart){
+function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart, keyCollect){
   const memberSet=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
   if(!prevCancelData||!curCancelData) return counts;
@@ -6598,9 +6614,9 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
-    if(memberSet.has(cancelManager)){ counts[cancelManager]++; counted++; continue; }
+    if(memberSet.has(cancelManager)){ counts[cancelManager]++; counted++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:ck, dist:gdFmtD(distDate)}); continue; }
     const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
-    if(memberSet.has(stripped)){ counts[stripped]++; counted++; }
+    if(memberSet.has(stripped)){ counts[stripped]++; counted++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:ck, dist:gdFmtD(distDate)}); }
     else unmatched++;
   }
   console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / cutoff drop ${cutoffDrop}건 제외 / 분배일 주말·공휴일 ${holidaySkip}건 제외 / 담당자 미매칭 ${unmatched}건`);
@@ -6608,7 +6624,7 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
 }
 
 // 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드 'in' 제외(단 'IN'+Q열 분류 있으면 포함) + 매칭된 계약의 오더일이 달력상 3개월 이내
-function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, uploadTime){
+function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, uploadTime, keyCollect){
   // 룰: cancel 파일에서 반품일이 회차 분배일 min~max 범위 안인 행을 카운트.
   //     담당자는 cancel 파일 N열 그대로 사용 ((R_xxx) 접두 제거하여 멤버 매칭).
   //     계약(cont) 파일과의 고객키 매칭은 하지 않음 — cancel 파일의 오더일 범위가
@@ -6639,9 +6655,10 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     if(cxCode.includes('in') && !(applyIn&&isExactIn&&cxClass)){ inCodeSkip++; continue; }
 
     if(!cancelManager) continue;
-    if(set.has(cancelManager)){ counts[cancelManager]++; continue; }
+    const cxKey=str(row[GD_CANCEL_COL.customerKey]);
+    if(set.has(cancelManager)){ counts[cancelManager]++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:cxKey, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); continue; }
     const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
-    if(set.has(stripped)) counts[stripped]++;
+    if(set.has(stripped)){ counts[stripped]++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:cxKey, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); }
     else unmatched++;
   }
   if(unmatched>0||holidaySkip>0||inCodeSkip>0){
@@ -7062,9 +7079,11 @@ async function gdGenerate(dbFileId){
       prevMaxDist=new Date(yy,mm,dd);
     }
 
+    // 키 상세 수집기 (수정 모드 이름 클릭 시 표시 — 집계 대상 고객키)
+    const _contractKeys={}, _banpumKeys={}, _huPreKeys={};
     const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime);
-    const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist);
-    const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime);
+    const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
+    const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
 
     // 사후 배송전 취소 — 직전 회차 cancel 파일 diff 기반
     // 직전 cancel = 직전 dbFile에 가장 가까운 cancel 파일
@@ -7086,7 +7105,7 @@ async function gdGenerate(dbFileId){
     }
     // 이번 cancel cutoff start ≈ cancel 업로드 시점 - 90일(3개월) — cutoff drop 가드용
     const _cancelCutoffStart=new Date(cancelFile.uploadTime - 90*24*60*60*1000);
-    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart);
+    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys);
     members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(vanishedCounts[name]||0); });
 
     // 회차별 수동 실계약수/취소수 조정 (해당 회차에만 적용 — sheetName 키)
@@ -7359,9 +7378,19 @@ async function gdGenerate(dbFileId){
       bToCVal: bSubset.length>0 ? Math.min(...bSubset) : 0,
     };
 
+    // 키 상세: 멤버별 {contract, banpum, huPre} — 수동 조정값 미반영(원천 집계 대상)
+    const _detailKeys={};
+    members.forEach(name=>{
+      _detailKeys[name]={
+        contract:_contractKeys[name]||[],
+        banpum:_banpumKeys[name]||[],
+        huPre:_huPreKeys[name]||[]
+      };
+    });
+
     gdResult={members, stats, groups, streaks, cutlines:finalCutlines,
       protectedMembers, excluded, longAbsentList,
-      minDistDate, maxDistDate,
+      minDistDate, maxDistDate, detailKeys:_detailKeys,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
 
@@ -7553,7 +7582,7 @@ function gdRenderTable(){
       : `<span class="streak ${sc}">${r.streak}</span>`;
     html+=`<tr class="row-${gc.toLowerCase()}">
       <td>${groupCell}</td>
-      <td class="name-cell ${gc}">${r.name}</td>
+      <td class="name-cell ${gc}">${gdGroupEditMode?`<span style="cursor:pointer;border-bottom:1px dashed currentColor" title="집계 대상 고객키 보기" onclick="gdShowKeyDetail('${safeName}')">${r.name}</span>`:r.name}</td>
       <td>${r.db.toLocaleString()}</td>
       <td>${contractCell}</td>
       <td>${pct(r.contractRate)}</td>
@@ -7634,6 +7663,77 @@ function gdToggleGroupEdit(){
   gdRenderTable();
   gdRenderLongAbsentEditPanel();
 }
+
+// 집계 대상 고객키 상세 — 수정 모드에서 이름 클릭 시 표시
+// 실계약수 / 취소수(=반품+사후) / 반품 / 사후 배송전취소 각 분류의 고객키 목록
+function gdShowKeyDetail(name){
+  if(!gdResult||!gdResult.detailKeys){ alert('상세 데이터가 없습니다. 차등 산정을 다시 실행해 주세요.'); return; }
+  const d=gdResult.detailKeys[name];
+  if(!d){ alert('해당 코디의 상세 데이터가 없습니다.'); return; }
+  const s=gdResult.stats[name]||{};
+  const contract=d.contract||[], banpum=d.banpum||[], huPre=d.huPre||[];
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // 취소수 = 반품 + 사후 (각 행에 출처 표기)
+  const cancelRows=[
+    ...banpum.map(x=>({key:x.key, src:'반품', sub:`반품일 ${x.ret||'-'} · 분배일 ${x.dist||'-'}`})),
+    ...huPre.map(x=>({key:x.key, src:'사후 배송전취소', sub:`분배일 ${x.dist||'-'}`}))
+  ];
+
+  const cnt=(label,n,color)=>`<span style="display:inline-block;background:${color};color:#fff;border-radius:10px;padding:1px 9px;font-size:12px;font-weight:700;margin-left:6px">${n}</span>`;
+  const adjNote=((s.contractAdj||0)!==0||(s.cancelAdj||0)!==0)
+    ? `<div style="font-size:12px;color:#b45309;margin-top:6px">※ 이 코디는 수동 조정값이 있습니다 (실계약 ${s.contractAdj>0?'+':''}${s.contractAdj||0} · 취소 ${s.cancelAdj>0?'+':''}${s.cancelAdj||0}). 아래 목록은 <b>원천 집계 대상</b>으로 수동 조정은 미반영입니다.</div>`
+    : '';
+
+  const keyList=(rows, cols)=>{
+    if(rows.length===0) return `<div style="padding:12px;color:#94a3b8;font-size:13px">해당 없음</div>`;
+    const head=cols.map(c=>`<th style="text-align:left;padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap">${c.h}</th>`).join('');
+    const body=rows.map(r=>`<tr>${cols.map(c=>`<td style="padding:5px 10px;font-size:12px;border-bottom:1px solid #f1f5f9;white-space:nowrap">${esc(c.f(r))}</td>`).join('')}</tr>`).join('');
+    return `<div style="max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px"><table style="width:100%;border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  };
+
+  const section=(title,badge,rows,listHtml)=>`<div style="margin-bottom:18px">
+    <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#1e293b">${title}${badge}</div>
+    ${listHtml}
+  </div>`;
+
+  const html=`
+    <h2 style="margin-bottom:4px">${esc(name)} — 집계 대상 고객키</h2>
+    <div style="font-size:12px;color:#64748b;margin-bottom:14px">회차 ${gdResult.minDistDate?gdFmtD(gdResult.minDistDate):''} ~ ${gdResult.maxDistDate?gdFmtD(gdResult.maxDistDate):''} (분배일 기준)</div>
+    ${adjNote}
+    ${section('실계약수', cnt('실계약', contract.length, '#16a34a'), contract,
+      keyList(contract, [
+        {h:'고객키', f:r=>r.key},
+        {h:'분류', f:r=>r.type},
+        {h:'오더일', f:r=>r.order}
+      ]))}
+    ${section('취소수 (= 반품 + 사후 배송전취소)', cnt('취소', cancelRows.length, '#dc2626'), cancelRows,
+      keyList(cancelRows, [
+        {h:'고객키', f:r=>r.key},
+        {h:'판정', f:r=>r.src},
+        {h:'상세', f:r=>r.sub}
+      ]))}
+    <div style="display:flex;gap:18px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px">${section('└ 반품 (반품일 기재)', cnt('반품', banpum.length, '#ea580c'), banpum,
+        keyList(banpum, [
+          {h:'고객키', f:r=>r.key},
+          {h:'반품일', f:r=>r.ret},
+          {h:'분배일', f:r=>r.dist}
+        ]))}</div>
+      <div style="flex:1;min-width:260px">${section('└ 사후 배송전취소 (cancel diff)', cnt('사후', huPre.length, '#b91c1c'), huPre,
+        keyList(huPre, [
+          {h:'고객키', f:r=>r.key},
+          {h:'분배일', f:r=>r.dist}
+        ]))}</div>
+    </div>`;
+
+  document.getElementById('gdKeyModalBody').innerHTML=html;
+  document.getElementById('gdKeyModalOverlay').classList.add('open');
+}
+function gdCloseKeyModal(){
+  document.getElementById('gdKeyModalOverlay').classList.remove('open');
+}
+
 async function gdApplyGroupEdit(){
   const sels=document.querySelectorAll('#gdMainBody .group-select');
   const wasManualMap={};
