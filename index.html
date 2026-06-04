@@ -615,6 +615,99 @@ tr.row-h td{background:var(--gh-light)}
   .sync-box{padding:18px}
   .period-select{padding:6px 10px;font-size:13px}
 }
+
+/* ═══════════ 계열별성과 (sp) ═══════════ */
+#page-series-perf .container{max-width:100%;padding:24px 36px}
+.sp-control-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border-radius:12px;padding:12px 16px;box-shadow:0 2px 10px rgba(0,0,0,.05);position:sticky;top:0;z-index:30}
+.sp-control-bar label{font-size:12px;font-weight:700;color:var(--gray)}
+.sp-control-bar input[type=date]{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px}
+.sp-seg{display:inline-flex;gap:4px;background:#eef1f6;padding:3px;border-radius:8px}
+.sp-seg button{border:none;background:transparent;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:700;color:var(--gray);cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+.sp-seg button.active{background:#fff;color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.sp-quick button{padding:5px 11px;border:1.5px solid var(--border);border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit;color:var(--dark)}
+.sp-quick button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.sp-divider{width:1px;height:22px;background:#e2e8f0}
+.sp-btn{padding:6px 13px;border:1.5px solid var(--border);border-radius:6px;background:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--dark);transition:.15s}
+.sp-btn:hover{border-color:var(--primary);color:var(--primary)}
+.sp-btn.green{background:#16a34a;color:#fff;border-color:#16a34a}
+.sp-btn.green:hover{filter:brightness(1.05);color:#fff}
+
+.sp-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px}
+.sp-kpi{background:var(--card);border-radius:14px;padding:18px 20px;box-shadow:0 2px 12px rgba(0,0,0,.05);border-left:4px solid var(--primary)}
+.sp-kpi .l{font-size:12.5px;color:var(--gray);font-weight:600;margin-bottom:6px}
+.sp-kpi .v{font-size:27px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.sp-kpi .s{font-size:12px;color:var(--gray);margin-top:5px}
+.sp-kpi .s .up{color:#dc2626;font-weight:700}.sp-kpi .s .down{color:#2563eb;font-weight:700}
+
+.sp-section{background:var(--card);border-radius:14px;padding:20px 22px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-top:18px}
+.sp-section>h3{margin:0 0 14px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sp-section .sub{font-size:12px;color:var(--gray);font-weight:500}
+.sp-chart-wrap{position:relative;height:320px}
+.sp-chart-wrap.tall{height:380px}
+
+/* 계열 색상 (0=최상위 품질 → 5=최하위) */
+.sp-s0{--sc:#4338ca}.sp-s1{--sc:#2563eb}.sp-s2{--sc:#0891b2}.sp-s3{--sc:#ca8a04}.sp-s4{--sc:#ea580c}.sp-s5{--sc:#dc2626}
+.sp-series-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#fff;background:var(--sc,#64748b);padding:2px 9px;border-radius:20px}
+
+/* 판정 뱃지 */
+.sp-judge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.sp-j-excel{background:#d1fae5;color:#059669}
+.sp-j-good{background:#ccfbf1;color:#0d9488}
+.sp-j-min{background:#fef3c7;color:#b45309}
+.sp-j-waste{background:#fee2e2;color:#dc2626}
+.sp-j-none{background:#f1f5f9;color:#94a3b8}
+
+/* 계열 요약 카드 */
+.sp-series-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
+.sp-scard{border-radius:12px;padding:15px 16px;border:1px solid #eef1f6;border-top:4px solid var(--sc,#64748b);background:linear-gradient(180deg,color-mix(in srgb,var(--sc,#64748b) 6%,#fff),#fff)}
+.sp-scard .t{font-size:13px;font-weight:800;color:var(--sc,#334155);display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sp-scard .band{font-size:10.5px;font-weight:600;color:var(--gray);background:#fff;border:1px solid #e2e8f0;padding:1px 6px;border-radius:10px}
+.sp-scard .rate{font-size:25px;font-weight:800;letter-spacing:-.5px}
+.sp-scard .det{font-size:11.5px;color:var(--gray);margin-top:4px}
+.sp-scard .jrow{margin-top:9px}
+
+/* 매트릭스 테이블 */
+.sp-matrix-wrap{overflow-x:auto;border:1px solid #eef1f6;border-radius:10px}
+table.sp-matrix{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+table.sp-matrix th,table.sp-matrix td{padding:7px 9px;text-align:center;white-space:nowrap;border-bottom:1px solid #eef1f6}
+table.sp-matrix thead th{position:sticky;top:0;background:#1e293b;color:#fff;font-size:11px;font-weight:700;z-index:2}
+table.sp-matrix thead tr.sp-grp th{background:#0f172a;border-bottom:2px solid #334155}
+table.sp-matrix .sp-namecol{position:sticky;left:0;background:#fff;text-align:left;z-index:1;font-weight:700;box-shadow:1px 0 0 #e2e8f0}
+table.sp-matrix thead .sp-namecol{background:#1e293b;z-index:3}
+table.sp-matrix tbody tr:hover td{background:#f8fafc}
+table.sp-matrix tbody tr:hover .sp-namecol{background:#f1f5f9}
+table.sp-matrix .sp-meta{color:var(--gray);font-weight:500;font-size:11px}
+table.sp-matrix td.sp-cell-rate{font-weight:800}
+table.sp-matrix .sp-grp-sep{border-left:2px solid #e2e8f0}
+table.sp-matrix tr.sp-total-row td{background:#f8fafc;font-weight:800;border-top:2px solid #cbd5e1}
+table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
+.sp-clickable{cursor:pointer;color:var(--primary);text-decoration:underline dotted;text-underline-offset:2px}
+.sp-team-tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:5px}
+.sp-team-eng{background:#e0ecff;color:#1d4ed8}.sp-team-l2{background:#f3e8ff;color:#7c3aed}
+
+/* 세그먼트 히트맵 */
+.sp-heat{border-collapse:separate;border-spacing:2px;font-size:11px}
+.sp-heat th{padding:5px 7px;font-size:10.5px;color:var(--gray);font-weight:700;text-align:center}
+.sp-heat td{padding:6px 8px;text-align:center;border-radius:5px;min-width:54px;font-weight:700;color:#1e293b}
+.sp-heat td.empty{background:#f8fafc;color:#cbd5e1;font-weight:400}
+.sp-heat .axis{background:#f1f5f9;color:#475569;font-weight:800;text-align:center}
+.sp-heat-legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--gray);margin-top:8px;flex-wrap:wrap}
+
+/* 랭킹 */
+.sp-rank-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.sp-rank-col h4{margin:0 0 10px;font-size:13px;display:flex;align-items:center;gap:7px}
+.sp-rank-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;background:#f8fafc;margin-bottom:6px;font-size:12.5px}
+.sp-rank-item .nm{font-weight:700;flex:1}
+.sp-rank-item .rk{font-size:11px;color:var(--gray);width:18px;text-align:center;font-weight:800}
+.sp-rank-item .vl{font-weight:800}
+
+/* 드릴다운 모달 */
+.sp-drill-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-start;justify-content:center;z-index:200;overflow-y:auto;padding:40px 16px}
+.sp-drill-overlay.open{display:flex}
+.sp-drill{background:#fff;border-radius:16px;padding:26px 28px;max-width:1000px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.sp-drill h3{margin:0 0 4px;font-size:19px}
+.sp-drill .close{float:right;font-size:26px;line-height:1;background:none;border:none;cursor:pointer;color:#94a3b8}
+.sp-empty{text-align:center;padding:80px 20px;color:var(--gray)}
 </style>
 </head>
 <body>
@@ -696,6 +789,20 @@ tr.row-h td{background:var(--gh-light)}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn5">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-series-perf" style="display:none">
+    <div class="status-dots" id="spStatusDots" title="파일 상태: DB수 / 실계약(일마감) / 취소반영(월간누적) / 명단">
+      <div class="status-dot" id="sp-dot-db"></div>
+      <div class="status-dot" id="sp-dot-contDaily"></div>
+      <div class="status-dot" id="sp-dot-contCum"></div>
+      <div class="status-dot" id="sp-dot-attend"></div>
+    </div>
+    <span id="spLastUpdate" style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap"></span>
+    <button class="btn-header" onclick="spOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="spOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn7">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
   <div class="header-right" id="headerRight-missed-call" style="display:none">
     <div class="status-dots" id="mcStatusDots" title="파일 상태: IN call / 콜백 / DB(위버) / DB(W케어) / 계약(위버) / 계약(W케어) / 매핑">
       <div class="status-dot" id="mc-dot-incall"></div>
@@ -718,6 +825,7 @@ tr.row-h td{background:var(--gh-light)}
 <div class="tab-nav">
   <div class="tab-item active" data-page="grade-dash" onclick="switchPage('grade-dash')">차등성과</div>
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
+  <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
@@ -1267,6 +1375,186 @@ tr.row-h td{background:var(--gh-light)}
   </div>
 </div><!-- /page-daily-perf -->
 
+<!-- ═══ Page: 계열별성과 ═══ -->
+<div class="page" id="page-series-perf">
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="spModalOverlay" onclick="if(event.target===this)spCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="spCloseModal()">&times;</button>
+      <div id="spModalUpload">
+        <h2>파일 업로드 — 계열별성과</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB수·계약(일마감/월간누적)은 <b>누적 저장</b>되며, 명단은 최신 1건만 사용합니다. 각 박스에 <b>여러 파일을 한 번에 드래그앤드롭</b>할 수 있고, 동일 파일 재업로드 시 자동으로 건너뜁니다.</p>
+        <div class="upload-grid">
+          <div class="upload-box" id="box-sp-db">
+            <input type="file" accept=".xlsx,.xls" data-sptype="db" multiple>
+            <div class="icon">🗂️</div>
+            <div class="label">DB수 (고객관리)</div>
+            <div class="desc">WM_고객관리_yyyy-mm-dd<br>계열 C · 고객키 G · OB명 H · 분배일 I · 연령 L · 체류 Y</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-sp-db"></div>
+            <div class="progress-bar hidden" id="prog-sp-db"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-sp-contDaily">
+            <input type="file" accept=".xlsx,.xls" data-sptype="contDaily" multiple>
+            <div class="icon">📝</div>
+            <div class="label">실계약 — 일마감 (신청자관리)</div>
+            <div class="desc">신청자관리_yyyymmdd (하루 스냅샷)<br>고객키 D · 담당자 N · 신청일 P · 분류 Q</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-sp-contDaily"></div>
+            <div class="progress-bar hidden" id="prog-sp-contDaily"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-sp-contCum">
+            <input type="file" accept=".xlsx,.xls" data-sptype="contCum" multiple>
+            <div class="icon">📒</div>
+            <div class="label">취소반영 — 월간누적 (신청자관리)</div>
+            <div class="desc">신청자관리_yyyymm (월간 누적·갱신)<br>반품일 AQ 빈 행 = 순계약 · 월별 최신본 사용</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-sp-contCum"></div>
+            <div class="progress-bar hidden" id="prog-sp-contCum"><div class="progress-fill"></div></div>
+          </div>
+          <div class="upload-box" id="box-sp-attend">
+            <input type="file" accept=".xlsx,.xls" data-sptype="attend" multiple>
+            <div class="icon">👥</div>
+            <div class="label">명단 (그룹표기)</div>
+            <div class="desc">WM_근태보고_그룹 — 담당/그룹/센터/이름<br>뇌새김영어·제2외국어 담당자 추출</div>
+            <span class="upload-badge overwrite">최신 1건</span>
+            <div class="filename" id="fname-sp-attend"></div>
+            <div class="progress-bar hidden" id="prog-sp-attend"><div class="progress-fill"></div></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="spCloseModal()">닫기</button>
+          <button class="btn btn-primary" id="spBtnGenerate" onclick="spCloseModal();spGenerate(true);">분석 실행</button>
+        </div>
+      </div>
+      <div id="spModalManage" class="hidden">
+        <h2>파일 관리 — 계열별성과</h2>
+        <div class="file-history" id="spFileHistory"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" style="color:var(--danger);border-color:#fecaca" onclick="spResetAll()">전체 초기화</button>
+          <button class="btn btn-outline" onclick="spCloseModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="spEmpty" class="sp-empty">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">📊</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">파일을 업로드하세요</div>
+      <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → DB수 + 실계약(일마감) + 취소반영(월간누적) + 명단 → 분석 실행</div>
+      <div id="spEmptyHint" style="font-size:13px;margin-top:10px;color:var(--warning)"></div>
+    </div>
+
+    <div class="hidden" id="spDashboard">
+      <!-- 컨트롤 바 -->
+      <div class="sp-control-bar">
+        <label>기간</label>
+        <input type="date" id="spDateStart" onchange="spRender()">
+        <span style="color:var(--gray)">~</span>
+        <input type="date" id="spDateEnd" onchange="spRender()">
+        <div class="sp-quick" style="display:inline-flex;gap:5px">
+          <button onclick="spQuickRange('7d')">최근7일</button>
+          <button onclick="spQuickRange('30d')">최근30일</button>
+          <button onclick="spQuickRange('thisMonth')">이번달</button>
+          <button onclick="spQuickRange('lastMonth')">지난달</button>
+          <button class="active" onclick="spQuickRange('all')">전체</button>
+        </div>
+        <div class="sp-divider"></div>
+        <label>담당</label>
+        <div class="sp-seg" id="spTeamSeg">
+          <button class="active" data-team="all" onclick="spSetTeam('all')">전체</button>
+          <button data-team="뇌새김영어" onclick="spSetTeam('뇌새김영어')">뇌새김영어</button>
+          <button data-team="제2외국어" onclick="spSetTeam('제2외국어')">제2외국어</button>
+        </div>
+        <label>센터</label>
+        <select id="spCenterSel" onchange="spRender()" style="padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer">
+          <option value="all">전체</option>
+        </select>
+        <div class="sp-divider"></div>
+        <label>집계</label>
+        <div class="sp-seg" id="spUnitSeg">
+          <button class="active" data-unit="day" onclick="spSetUnit('day')">일자별</button>
+          <button data-unit="week" onclick="spSetUnit('week')">주차별</button>
+          <button data-unit="month" onclick="spSetUnit('month')">월별</button>
+        </div>
+        <div class="sp-divider"></div>
+        <label>판정기준</label>
+        <div class="sp-seg" id="spBasisSeg">
+          <button class="active" data-basis="net" onclick="spSetBasis('net')">취소반영</button>
+          <button data-basis="gross" onclick="spSetBasis('gross')">실계약</button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="sp-btn green" onclick="spDownloadExcel()">📥 엑셀</button>
+        <button class="sp-btn" onclick="spGenerate(true)">🔄 재분석</button>
+      </div>
+
+      <div id="spWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:14px;font-size:13px"></div>
+
+      <!-- KPI -->
+      <div class="sp-kpi-grid" id="spKpiGrid"></div>
+
+      <!-- 계열 요약 -->
+      <div class="sp-section">
+        <h3>계열별 종합 <span class="sub">선택 기간·필터 기준 · 0계열=최상위 품질 → 5계열=최하위</span></h3>
+        <div class="sp-series-cards" id="spSeriesCards" style="margin-bottom:18px"></div>
+        <div class="sp-chart-wrap"><canvas id="spSeriesChart"></canvas></div>
+      </div>
+
+      <!-- 개인별 × 계열 매트릭스 -->
+      <div class="sp-section">
+        <h3>
+          개인별 × 계열 매트릭스
+          <span class="sub">셀 = 계약수/DB수 (계약률) · 색상 = 기대구간 판정 · 이름 클릭 시 연령대×체류시간 상세</span>
+          <span style="flex:1"></span>
+          <select id="spMatrixSort" onchange="spRenderMatrix()" style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;cursor:pointer">
+            <option value="total_rate">정렬: 종합 계약률↓</option>
+            <option value="total_db">정렬: 총 DB수↓</option>
+            <option value="total_cont">정렬: 총 계약수↓</option>
+            <option value="achieve">정렬: 기대달성 계열수↓</option>
+            <option value="name">정렬: 이름순</option>
+          </select>
+        </h3>
+        <div class="sp-matrix-wrap"><table class="sp-matrix" id="spMatrixTable"></table></div>
+      </div>
+
+      <!-- 기대 달성 랭킹 -->
+      <div class="sp-section">
+        <h3>계열별 활용 랭킹 <span class="sub">계열별 DB를 잘 살리는 / 낭비하는 코디 (최소 DB 5건 이상)</span></h3>
+        <div id="spRankBody"></div>
+      </div>
+
+      <!-- 비교 차트 -->
+      <div class="sp-section">
+        <h3>비교 분석 <span class="sub">담당·센터별 계열 계약률 비교</span>
+          <span style="flex:1"></span>
+          <div class="sp-seg" id="spCompareSeg">
+            <button class="active" data-cmp="team" onclick="spSetCompare('team')">담당별</button>
+            <button data-cmp="center" onclick="spSetCompare('center')">센터별</button>
+          </div>
+        </h3>
+        <div class="sp-chart-wrap tall"><canvas id="spCompareChart"></canvas></div>
+      </div>
+
+      <!-- 기간 추이 -->
+      <div class="sp-section">
+        <h3>기간 추이 <span class="sub" id="spTrendSub">계열별 계약률 추이</span></h3>
+        <div class="sp-chart-wrap tall"><canvas id="spTrendChart"></canvas></div>
+        <div style="overflow-x:auto;margin-top:14px"><table class="sp-matrix" id="spTrendTable"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 드릴다운 모달 -->
+  <div class="sp-drill-overlay" id="spDrillOverlay" onclick="if(event.target===this)spCloseDrill()">
+    <div class="sp-drill">
+      <button class="close" onclick="spCloseDrill()">&times;</button>
+      <div id="spDrillBody"></div>
+    </div>
+  </div>
+</div><!-- /page-series-perf -->
+
 <!-- ═══ Page: 부재인입 ═══ -->
 <div class="page" id="page-missed-call">
 
@@ -1617,7 +1905,7 @@ tr.row-h td{background:var(--gh-light)}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','inflow','daily-perf','ngroup','missed-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -1644,6 +1932,7 @@ function applyAuth(){
   (async ()=>{
     if(authUser.tabs.includes('inflow')) await iaLoad();
     if(authUser.tabs.includes('missed-call') && typeof mcLoadFiles==='function') await mcLoadFiles();
+    if(authUser.tabs.includes('series-perf') && typeof spLoadFiles==='function') await spLoadFiles();
     autoSyncDownload();
   })();
 }
@@ -1654,6 +1943,7 @@ async function autoSyncDownload(){
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
   const dpAccess=authUser&&authUser.tabs.includes('daily-perf');
   const mcAccess=authUser&&authUser.tabs.includes('missed-call');
+  const spAccess=authUser&&authUser.tabs.includes('series-perf');
 
   // 원격 동기화 타임스탬프 비교 — 원격이 더 새로우면 항상 갱신
   const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
@@ -1671,7 +1961,9 @@ async function autoSyncDownload(){
     const gdHasLocal=gdAllFiles&&gdAllFiles.length>0;
     const mcHasLocal=mcFiles&&mcFiles.length>0;
     const mcOk=!mcAccess||mcHasLocal||!payload.mc;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk)return;
+    const spHasLocal=typeof spFiles!=='undefined'&&spFiles&&spFiles.length>0;
+    const spOk=!spAccess||spHasLocal||!payload.sp;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -1740,6 +2032,10 @@ async function autoSyncDownload(){
     // 부재인입 복원 (없거나 원격이 더 새로운 경우)
     if(payload.mc&&mcAccess&&(!mcHasLocal||remoteNewer)&&typeof mcRestoreSync==='function'){
       await mcRestoreSync(payload.mc);
+    }
+    // 계열별성과 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.sp&&spAccess&&(!spHasLocal||remoteNewer)&&typeof spRestoreSync==='function'){
+      await spRestoreSync(payload.sp);
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -1873,7 +2169,7 @@ function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.in
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -1934,7 +2230,15 @@ async function doSyncUpload(token){
         mcSync=mcCollectSync();
       }
     }catch(e){console.warn('mc sync collect 실패',e);}
-    const payload=JSON.stringify({v:7,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,ls:lsData});
+    // 계열별성과 데이터 (spFiles 미로드 시 IDB에서 직접 읽어 누락 방지)
+    let spSync=[];
+    try{
+      if(typeof spCollectSync==='function'){
+        if((!spFiles||!spFiles.length)&&typeof spLoadFiles==='function'){ if(!spLoaded) await spLoadFiles(); }
+        spSync=spCollectSync();
+      }
+    }catch(e){console.warn('sp sync collect 실패',e);}
+    const payload=JSON.stringify({v:8,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -2069,6 +2373,10 @@ async function doSyncDownloadManual(){
     // 부재인입 복원 (강제 다운로드 — 항상 덮어쓰기)
     if(payload.mc&&authUser&&authUser.tabs.includes('missed-call')&&typeof mcRestoreSync==='function'){
       await mcRestoreSync(payload.mc);
+    }
+    // 계열별성과 복원 (강제 다운로드 — 항상 덮어쓰기)
+    if(payload.sp&&authUser&&authUser.tabs.includes('series-perf')&&typeof spRestoreSync==='function'){
+      await spRestoreSync(payload.sp);
     }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
@@ -2206,8 +2514,11 @@ function switchPage(pageId){
   if(hrGd) hrGd.style.display = pageId==='grade-dash' ? 'flex' : 'none';
   const hrMc=document.getElementById('headerRight-missed-call');
   if(hrMc) hrMc.style.display = pageId==='missed-call' ? 'flex' : 'none';
+  const hrSp=document.getElementById('headerRight-series-perf');
+  if(hrSp) hrSp.style.display = pageId==='series-perf' ? 'flex' : 'none';
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
   if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
+  if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
 }
 
 // ═══════════════════════════════════════════
@@ -10175,6 +10486,753 @@ async function mcOnShow(){
   mcUpdateEmptyHint();
   if(mcReady()){ if(!mcJudged) mcGenerate(false); else { document.getElementById('mcEmpty').classList.add('hidden'); document.getElementById('mcDashboard').classList.remove('hidden'); } }
   else { document.getElementById('mcDashboard').classList.add('hidden'); document.getElementById('mcEmpty').classList.remove('hidden'); }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   계열별성과 (series-perf) — sp 네임스페이스
+   설계: 성과_데이터_추출_기준.md
+   · DB수(모수) = IN·재콜·callback/tv_b 제외, 고객키 중복 제거, 뇌새김영어/제2외국어 담당자
+   · 실계약 = 일마감, 취소반영 = 월간누적(반품일 빈 행)
+   · 계열(0~5)·연령대·체류시간 = DB수 파일에서 고객키 조인으로 확보
+   · 계약 귀속 = 계약파일 담당자(N열), 기간 = DB 분배일 / 계약 신청일
+   ════════════════════════════════════════════════════════════════ */
+const SP_DB_NAME='seriesPerfDashboard', SP_DB_VER=1;
+let spIdb=null, spFiles=[], spLoaded=false, spModel=null, spCharts={};
+let spTeam='all', spCenter='all', spUnit='day', spBasis='net', spCompare='team';
+const SP_TARGET_TEAMS=new Set(['뇌새김영어','제2외국어']);
+const SP_BANDS=[
+  {s:0,lo:0.15,hi:Infinity,label:'15%+'},
+  {s:1,lo:0.10,hi:0.15,label:'10~15%'},
+  {s:2,lo:0.06,hi:0.10,label:'6~10%'},
+  {s:3,lo:0.04,hi:0.06,label:'4~6%'},
+  {s:4,lo:0.02,hi:0.04,label:'2~4%'},
+  {s:5,lo:0.00,hi:0.02,label:'0~2%'},
+];
+const SP_AGES=['00','10','20','30','40','50','60'];
+const SP_AGE_LABEL={'00':'미상','10':'10대','20':'20대','30':'30대','40':'40대','50':'50대','60':'60대+'};
+const SP_STAYS=['R','S','A','B','C','O']; // 긴 체류 → 짧은 체류
+const SP_TYPES=['db','contDaily','contCum','attend'];
+const SP_TYPE_LABEL={db:'DB수',contDaily:'실계약(일마감)',contCum:'취소반영(월간누적)',attend:'명단'};
+
+// ── IndexedDB ──
+function spOpenIDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(SP_DB_NAME,SP_DB_VER);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};
+    req.onsuccess=()=>{spIdb=req.result;res();};
+    req.onerror=()=>rej(req.error);
+  });
+}
+function spMarkDirty(){if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}
+function spIdbAdd(rec){return new Promise((res,rej)=>{const tx=spIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{spMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
+function spIdbGetAll(){return new Promise((res,rej)=>{const tx=spIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function spIdbDel(id){return new Promise((res,rej)=>{const tx=spIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{spMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
+async function spIdbClear(){const all=await spIdbGetAll();for(const r of all)await spIdbDel(r.id);}
+
+// ── 날짜 헬퍼 ──
+function spNormDay(v){
+  if(v==null||v==='')return '';
+  if(v instanceof Date){if(isNaN(v))return '';return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;}
+  if(typeof v==='number'){const ms=Math.round((v-25569)*86400000);const d=new Date(ms);if(isNaN(d))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  const s=String(v).trim();const m=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m)return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  return '';
+}
+function spDateObj(day){const m=day&&day.match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+function spWeekKey(day){const d=spDateObj(day);if(!d)return '';const off=(d.getDay()+6)%7;const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-off);return spNormDay(mon);}
+function spWeekLabel(monDay){const d=spDateObj(monDay);if(!d)return monDay;const e=new Date(d.getTime()+6*86400000);const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())}~${p(e.getMonth()+1)}/${p(e.getDate())}`;}
+function spMonthKey(day){return day?day.slice(0,7):'';}
+function spBucketKey(day,unit){return unit==='month'?spMonthKey(day):unit==='week'?spWeekKey(day):day;}
+function spBucketLabel(key,unit){return unit==='week'?spWeekLabel(key):key;}
+function spPct(r){return (r*100).toFixed(1)+'%';}
+function spNum(n){return (n||0).toLocaleString();}
+
+function spJudge(db,cont,s){
+  if(!db)return {k:'none',t:'-'};
+  const r=cont/db, b=SP_BANDS[s];
+  if(r<b.lo)return {k:'waste',t:'낭비'};
+  if(b.hi===Infinity)return {k:'excel',t:'잘 살림'};
+  if(r>=b.hi)return {k:'excel',t:'잘 살림'};
+  if(r<=b.lo+0.005)return {k:'min',t:'최소수준'};
+  return {k:'good',t:'나름 잘함'};
+}
+
+// ── 파서 (업로드 시 슬림 행으로 변환) ──
+function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
+function spParseDb(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){
+    const r=aoa[i];if(!r)continue;
+    const k=String(r[6]==null?'':r[6]).trim();if(!k)continue;
+    const media=String(r[19]==null?'':r[19]).trim();
+    const dbinfo=String(r[15]==null?'':r[15]);
+    const ser=parseInt(String(r[2]==null?'':r[2]).trim(),10);
+    rows.push({
+      k, ob:String(r[7]==null?'':r[7]).trim(),
+      se:(ser>=0&&ser<=5)?ser:-1,
+      ag:String(r[11]==null?'':r[11]).trim()||'00',
+      st:String(r[24]==null?'':r[24]).trim()||'',
+      d:spNormDay(r[8]),
+      rc:dbinfo.includes('재콜')?1:0,
+      in:media===''?1:0,
+      mx:(media.includes('callback')||media.includes('tv_b'))?1:0
+    });
+  }
+  return rows;
+}
+function spParseCont(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){
+    const r=aoa[i];if(!r)continue;
+    const mgr=String(r[13]==null?'':r[13]).trim();if(!mgr)continue;
+    const k=String(r[3]==null?'':r[3]).trim();
+    const cat=String(r[16]==null?'':r[16]).trim();
+    rows.push({k, mgr, d:spNormDay(r[15]), in:cat===''?1:0, rt:spNormDay(r[42])});
+  }
+  return rows;
+}
+function spParseAttend(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){
+    const r=aoa[i];if(!r)continue;
+    const nm=String(r[4]==null?'':r[4]).trim();if(!nm)continue;
+    rows.push({team:String(r[0]==null?'':r[0]).trim(),grp:String(r[1]==null?'':r[1]).trim(),ctr:String(r[2]==null?'':r[2]).trim(),nm,join:spNormDay(r[5])});
+  }
+  return rows;
+}
+function spParseYm(fileName){const m=String(fileName||'').match(/(20\d{2})[._-]?(\d{2})(\d{2})?/);return m?m[1]+m[2]:'';}
+
+// ── 업로드 / 모달 / 상태 ──
+function spFilesByType(type){return spFiles.filter(f=>f.type===type);}
+function spOpenModal(view){
+  document.getElementById('spModalOverlay').classList.add('open');
+  document.getElementById('spModalUpload').classList.toggle('hidden',view==='manage');
+  document.getElementById('spModalManage').classList.toggle('hidden',view!=='manage');
+  spBindUploadBoxes();spUpdateUploadStatus();spRenderFileHistory();
+}
+function spCloseModal(){document.getElementById('spModalOverlay').classList.remove('open');}
+function spUpdateStatusDots(){SP_TYPES.forEach(k=>{const el=document.getElementById('sp-dot-'+k);if(el)el.classList.toggle('ok',spFilesByType(k).length>0);});}
+function spUpdateUploadStatus(){
+  SP_TYPES.forEach(k=>{
+    const box=document.getElementById('box-sp-'+k);const fn=document.getElementById('fname-sp-'+k);
+    const list=spFilesByType(k);
+    if(box)box.classList.toggle('loaded',list.length>0);
+    if(fn){if(!list.length)fn.textContent='';else if(list.length===1)fn.textContent=list[0].fileName;else fn.textContent=`${list.length}개 파일 누적`;}
+  });
+  spUpdateStatusDots();
+  const btn=document.getElementById('spBtnGenerate');if(btn)btn.disabled=!spReady();
+  const lu=document.getElementById('spLastUpdate');
+  if(lu){const t=spFiles.reduce((m,f)=>Math.max(m,f.uploadTime||0),0);lu.textContent=t?('갱신 '+new Date(t).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})):'';}
+}
+function spReady(){return spFilesByType('db').length>0&&spFilesByType('attend').length>0&&(spFilesByType('contDaily').length>0||spFilesByType('contCum').length>0);}
+function spRenderFileHistory(){
+  const el=document.getElementById('spFileHistory');if(!el)return;
+  if(!spFiles.length){el.innerHTML='<div class="fh-empty" style="padding:20px;text-align:center">업로드된 파일이 없습니다.</div>';return;}
+  const tcls={db:'db',contDaily:'cont',contCum:'gc',attend:'attend'};
+  el.innerHTML=SP_TYPES.map(t=>{
+    const list=spFilesByType(t).slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0));
+    if(!list.length)return '';
+    const items=list.map(f=>`<div class="fh-item"><span class="fh-name">${f.fileName}</span><span class="fh-date">${(f.rowsCount||(f.rows?f.rows.length:0)).toLocaleString()}행 · ${new Date(f.uploadTime).toLocaleDateString('ko-KR')}</span><button class="btn-del" onclick="spDeleteFile(${f.id})">×</button></div>`).join('');
+    return `<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${tcls[t]}">${SP_TYPE_LABEL[t]}</span> ${list.length}개</div>${items}</div>`;
+  }).join('');
+}
+async function spDeleteFile(id){await spIdbDel(id);spFiles=spFiles.filter(f=>f.id!==id);spModel=null;spUpdateUploadStatus();spRenderFileHistory();}
+async function spResetAll(){if(!confirm('계열별성과의 모든 업로드 파일을 삭제합니다. 계속할까요?'))return;await spIdbClear();spFiles=[];spModel=null;spUpdateUploadStatus();spRenderFileHistory();document.getElementById('spDashboard').classList.add('hidden');document.getElementById('spEmpty').classList.remove('hidden');spCloseModal();}
+
+function spBindUploadBoxes(){
+  document.querySelectorAll('#spModalUpload input[type=file]').forEach(input=>{
+    if(input.dataset.bound)return;input.dataset.bound='1';
+    const type=input.dataset.sptype;
+    const box=document.getElementById('box-sp-'+type);
+    const prog=document.getElementById('prog-sp-'+type);
+    const fnameEl=document.getElementById('fname-sp-'+type);
+    const handleOne=async file=>{
+      const fileHash=`${file.name}|${file.size}`;
+      if(type!=='attend'&&spFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup',name:file.name};
+      const buf=await file.arrayBuffer();
+      const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+      let rows;
+      if(type==='db')rows=spParseDb(wb);
+      else if(type==='contDaily'||type==='contCum')rows=spParseCont(wb);
+      else rows=spParseAttend(wb);
+      if(type==='attend'){for(const f of spFilesByType('attend')){await spIdbDel(f.id);}spFiles=spFiles.filter(f=>f.type!=='attend');}
+      const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
+      if(type==='contCum')rec.ym=spParseYm(file.name);
+      const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
+      return {status:'ok',name:file.name};
+    };
+    const handleMany=async files=>{
+      const arr=Array.from(files||[]).filter(Boolean);if(!arr.length)return;
+      const list=(type==='attend'&&arr.length>1)?[arr[arr.length-1]]:arr;
+      prog.classList.remove('hidden','done');prog.classList.add('loading');
+      let okCnt=0,dupCnt=0,errs=[];
+      for(let i=0;i<list.length;i++){
+        const f=list[i];fnameEl.textContent=list.length>1?`${f.name} (${i+1}/${list.length})`:f.name;
+        try{const r=await handleOne(f);if(r.status==='ok')okCnt++;else if(r.status==='dup')dupCnt++;}
+        catch(err){errs.push(`${f.name}: ${err.message}`);console.error(err);}
+      }
+      spModel=null;prog.classList.remove('loading');
+      if(okCnt>0){prog.classList.add('done');box.classList.add('loaded');}
+      spUpdateUploadStatus();
+      if(list.length>1)fnameEl.textContent=okCnt>0?`${okCnt}개 업로드${dupCnt?` · ${dupCnt} 중복`:''}`:(dupCnt?`${dupCnt}개 중복 스킵`:'');
+      const msgs=[];
+      if(dupCnt)msgs.push(dupCnt===1&&list.length===1?'이미 업로드된 파일입니다.':`${dupCnt}개 파일은 이미 업로드되어 건너뛰었습니다.`);
+      if(errs.length)msgs.push('파일 처리 오류:\n- '+errs.join('\n- '));
+      if(msgs.length)alert(msgs.join('\n\n'));
+    };
+    input.addEventListener('change',e=>{handleMany(e.target.files);input.value='';});
+    box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('dragover');});
+    box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
+    box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length)handleMany(e.dataTransfer.files);});
+  });
+}
+
+// ── 로드 / 클라우드 싱크 ──
+async function spLoadFiles(){try{await spOpenIDB();spFiles=await spIdbGetAll();spLoaded=true;spUpdateUploadStatus();}catch(e){console.error('계열별성과 IDB 로드:',e);}}
+function spCollectSync(){return (spFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,ym:f.ym}));}
+async function spRestoreSync(arr){
+  if(!Array.isArray(arr))return;
+  if(!spIdb)await spOpenIDB();
+  await spIdbClear();spFiles=[];
+  for(const f of arr){
+    const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};
+    if(f.ym)rec.ym=f.ym;
+    const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
+  }
+  spLoaded=true;spModel=null;spUpdateUploadStatus();
+  if(typeof currentPage!=='undefined'&&currentPage==='series-perf')spOnShow();
+}
+
+// ════════════ 집계 엔진 ════════════
+// 명단 → 담당자 마스터(센터·담당·그룹). 풀네임("(R_대전)정경자")과 베어네임("정경자") 둘 다 매칭.
+function spBuildRoster(){
+  const att=spFilesByType('attend');
+  const src=att.length?att[att.length-1].rows:[];
+  const full=new Map(), bare=new Map();
+  for(const p of src){
+    const nm=p.nm; if(!nm)continue;
+    const b=nm.replace(/^\(.*?\)/,'').trim();
+    const ent={nm,bare:b,team:p.team,ctr:p.ctr,grp:p.grp};
+    full.set(nm,ent);
+    if(bare.has(b)){if(bare.get(b)!=='AMBIG'&&bare.get(b).nm!==nm)bare.set(b,'AMBIG');}
+    else bare.set(b,ent);
+  }
+  return {full,bare};
+}
+function spCanon(roster,raw){
+  if(!raw)return null;
+  let t=String(raw).replace(/\(종료\)/g,'').trim();
+  if(roster.full.has(t))return roster.full.get(t);
+  const b=t.replace(/^\(.*?\)/,'').trim();
+  const hit=roster.bare.get(b);
+  if(hit&&hit!=='AMBIG')return hit;
+  return null;
+}
+
+function spCompute(){
+  const roster=spBuildRoster();
+  const dbFiles=spFilesByType('db').slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:(a.uploadTime||0)-(b.uploadTime||0)));
+  // keyMeta: 모든 DB 행 → 고객키별 계열/연령/체류 (계약 조인용, IN·재콜 포함 전부 유지)
+  const keyMeta=new Map();
+  for(const f of dbFiles)for(const r of f.rows){if(!keyMeta.has(r.k))keyMeta.set(r.k,{se:r.se,ag:r.ag,st:r.st});}
+  // DB 모수(population): 신규키 dedup → 대상담당·아웃바운드·비재콜·매체정상·계열0~5
+  const dbRecs=[]; const seen=new Set(); let excludedNoRoster=0;
+  for(const f of dbFiles)for(const r of f.rows){
+    if(!r.k||seen.has(r.k))continue; seen.add(r.k);
+    if(r.rc||r.in||r.mx)continue;        // 재콜·IN·callback/tv_b 제외
+    if(!r.d||r.se<0||r.se>5)continue;
+    const ent=spCanon(roster,r.ob);
+    if(!ent||!SP_TARGET_TEAMS.has(ent.team)){excludedNoRoster++;continue;}
+    dbRecs.push({name:ent.nm,team:ent.team,ctr:ent.ctr,day:r.d,se:r.se,ag:r.ag,st:r.st});
+  }
+  // 실계약(gross): 일마감 누적 → 고객키 dedup, IN제외, 담당자(N) 귀속, 계열은 조인
+  const grossRecs=[]; let unmatchedG=0;
+  const seenG=new Set();
+  const dailyFiles=spFilesByType('contDaily').slice().sort((a,b)=>(a.fileName>b.fileName?1:-1));
+  for(const f of dailyFiles)for(const r of f.rows){
+    if(!r.k||seenG.has(r.k))continue; seenG.add(r.k);
+    if(r.in)continue;
+    const ent=spCanon(roster,r.mgr); if(!ent||!SP_TARGET_TEAMS.has(ent.team))continue;
+    const meta=keyMeta.get(r.k); const matched=!!meta&&meta.se>=0&&meta.se<=5;
+    if(!matched)unmatchedG++;
+    grossRecs.push({name:ent.nm,team:ent.team,ctr:ent.ctr,day:r.d,se:matched?meta.se:-1,ag:matched?meta.ag:'',st:matched?meta.st:''});
+  }
+  // 취소반영(net): 월간누적 — 월(ym)별 최신본만, 반품일 빈 행, IN제외
+  const cumFiles=spFilesByType('contCum');
+  const latestByYm=new Map();
+  for(const f of cumFiles){const ym=f.ym||spParseYm(f.fileName)||('?'+f.id);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
+  const netRecs=[]; let returnCnt=0; const seenN=new Set();
+  for(const f of latestByYm.values())for(const r of f.rows){
+    if(r.rt){returnCnt++;continue;}            // 반품일 있음 = 취소 → net 제외
+    if(!r.k||seenN.has(r.k))continue; seenN.add(r.k);
+    if(r.in)continue;
+    const ent=spCanon(roster,r.mgr); if(!ent||!SP_TARGET_TEAMS.has(ent.team))continue;
+    const meta=keyMeta.get(r.k); const matched=!!meta&&meta.se>=0&&meta.se<=5;
+    netRecs.push({name:ent.nm,team:ent.team,ctr:ent.ctr,day:r.d,se:matched?meta.se:-1,ag:matched?meta.ag:'',st:matched?meta.st:''});
+  }
+  // 메타: 날짜 범위, 센터 목록, 사람 목록
+  const allDays=[];const centers=new Set();const people=new Map();
+  function note(rec){if(rec.day)allDays.push(rec.day);if(rec.ctr)centers.add(rec.ctr);if(!people.has(rec.name))people.set(rec.name,{name:rec.name,team:rec.team,ctr:rec.ctr});}
+  dbRecs.forEach(note);grossRecs.forEach(r=>{if(r.day)allDays.push(r.day);});netRecs.forEach(r=>{if(r.day)allDays.push(r.day);});
+  allDays.sort();
+  const warnings=[];
+  if(!dbRecs.length)warnings.push('대상(뇌새김영어·제2외국어) DB 모수가 0건입니다. 명단의 담당 컬럼과 DB OB명이 매칭되는지 확인하세요.');
+  if(unmatchedG)warnings.push(`실계약 ${unmatchedG.toLocaleString()}건이 DB 파일과 고객키 매칭이 안 돼 계열 판정에서 제외됐습니다. DB수 파일을 더 넓은 기간으로 업로드하면 매칭률이 올라갑니다.`);
+  if(!spFilesByType('contDaily').length)warnings.push('일마감(실계약) 파일이 없어 실계약 지표가 비어 있습니다.');
+  if(!spFilesByType('contCum').length)warnings.push('월간누적(취소반영) 파일이 없어 취소반영 지표가 비어 있습니다.');
+  spModel={roster,keyMeta,dbRecs,grossRecs,netRecs,
+    minDay:allDays[0]||'',maxDay:allDays[allDays.length-1]||'',
+    centers:Array.from(centers).sort(),people:Array.from(people.values()),
+    unmatchedG,returnCnt,warnings};
+  return spModel;
+}
+
+// 필터 적용 (기간·담당·센터) → 레코드 배열
+function spInRange(day){const s=document.getElementById('spDateStart').value,e=document.getElementById('spDateEnd').value;if(s&&day<s)return false;if(e&&day>e)return false;return true;}
+function spPassFilter(rec){if(spTeam!=='all'&&rec.team!==spTeam)return false;if(spCenter!=='all'&&rec.ctr!==spCenter)return false;return spInRange(rec.day);}
+function spFiltered(){
+  return {
+    db:spModel.dbRecs.filter(spPassFilter),
+    gross:spModel.grossRecs.filter(spPassFilter),
+    net:spModel.netRecs.filter(spPassFilter)
+  };
+}
+// 계열별 집계: {db:[6], gross:[6], net:[6], unmatchedG, unmatchedN}
+function spAggBySeries(recs){
+  const db=[0,0,0,0,0,0],gross=[0,0,0,0,0,0],net=[0,0,0,0,0,0];let ug=0,un=0;
+  recs.db.forEach(r=>{db[r.se]++;});
+  recs.gross.forEach(r=>{if(r.se>=0)gross[r.se]++;else ug++;});
+  recs.net.forEach(r=>{if(r.se>=0)net[r.se]++;else un++;});
+  return {db,gross,net,unmatchedG:ug,unmatchedN:un};
+}
+function spContArr(agg){return spBasis==='gross'?agg.gross:agg.net;}
+
+// ════════════ 렌더링 ════════════
+const SP_SCOLOR=['#4338ca','#2563eb','#0891b2','#ca8a04','#ea580c','#dc2626'];
+const SP_TEAM_TAG={'뇌새김영어':'<span class="sp-team-tag sp-team-eng">영어</span>','제2외국어':'<span class="sp-team-tag sp-team-l2">제2</span>'};
+
+async function spOnShow(){
+  if(!spLoaded)await spLoadFiles();
+  if(spReady()){
+    if(!spModel){spGenerate(false);return;}
+    document.getElementById('spEmpty').classList.add('hidden');
+    document.getElementById('spDashboard').classList.remove('hidden');
+  }else{
+    document.getElementById('spDashboard').classList.add('hidden');
+    document.getElementById('spEmpty').classList.remove('hidden');
+    spUpdateEmptyHint();
+  }
+}
+function spUpdateEmptyHint(){
+  const el=document.getElementById('spEmptyHint');if(!el)return;
+  const miss=[];
+  if(!spFilesByType('db').length)miss.push('DB수');
+  if(!spFilesByType('attend').length)miss.push('명단');
+  if(!spFilesByType('contDaily').length&&!spFilesByType('contCum').length)miss.push('계약(일마감 또는 월간누적)');
+  el.textContent=miss.length?('필요 파일: '+miss.join(' · ')):'';
+}
+function spGenerate(force){
+  if(!spReady()){spOnShow();return;}
+  if(force||!spModel)spCompute();
+  document.getElementById('spEmpty').classList.add('hidden');
+  document.getElementById('spDashboard').classList.remove('hidden');
+  spRenderCenterOptions();
+  spInitDateRange(force);
+  spRender();
+}
+function spInitDateRange(reset){
+  const s=document.getElementById('spDateStart'),e=document.getElementById('spDateEnd');
+  if(spModel.minDay){s.min=spModel.minDay;e.min=spModel.minDay;}
+  if(spModel.maxDay){s.max=spModel.maxDay;e.max=spModel.maxDay;}
+  if(reset||!s.value)s.value=spModel.minDay||'';
+  if(reset||!e.value)e.value=spModel.maxDay||'';
+}
+function spRenderCenterOptions(){
+  const sel=document.getElementById('spCenterSel');if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="all">전체</option>'+spModel.centers.map(c=>`<option value="${c}">${c}</option>`).join('');
+  sel.value=spModel.centers.includes(cur)?cur:'all';spCenter=sel.value;
+}
+function spQuickRange(kind){
+  const max=spModel.maxDay?spDateObj(spModel.maxDay):new Date();
+  const min=spModel.minDay?spDateObj(spModel.minDay):max;
+  let s,e=new Date(max);
+  if(kind==='7d'){s=new Date(max.getTime()-6*86400000);}
+  else if(kind==='30d'){s=new Date(max.getTime()-29*86400000);}
+  else if(kind==='thisMonth'){s=new Date(max.getFullYear(),max.getMonth(),1);}
+  else if(kind==='lastMonth'){s=new Date(max.getFullYear(),max.getMonth()-1,1);e=new Date(max.getFullYear(),max.getMonth(),0);}
+  else {s=new Date(min);e=new Date(max);}
+  if(s<min)s=new Date(min);
+  document.getElementById('spDateStart').value=spNormDay(s);
+  document.getElementById('spDateEnd').value=spNormDay(e);
+  document.querySelectorAll('.sp-quick button').forEach(b=>b.classList.toggle('active',b.getAttribute('onclick').includes(`'${kind}'`)));
+  spRender();
+}
+function spSetTeam(t){spTeam=t;document.querySelectorAll('#spTeamSeg button').forEach(b=>b.classList.toggle('active',b.dataset.team===t));spRender();}
+function spSetUnit(u){spUnit=u;document.querySelectorAll('#spUnitSeg button').forEach(b=>b.classList.toggle('active',b.dataset.unit===u));spRenderTrend();}
+function spSetBasis(b){spBasis=b;document.querySelectorAll('#spBasisSeg button').forEach(x=>x.classList.toggle('active',x.dataset.basis===b));spRender();}
+function spSetCompare(c){spCompare=c;document.querySelectorAll('#spCompareSeg button').forEach(b=>b.classList.toggle('active',b.dataset.cmp===c));spRenderCompare();}
+
+// 명시 범위 레코드 (delta용)
+function spRecsFor(s,e){
+  const f=r=>{if(spTeam!=='all'&&r.team!==spTeam)return false;if(spCenter!=='all'&&r.ctr!==spCenter)return false;if(s&&r.day<s)return false;if(e&&r.day>e)return false;return true;};
+  return {db:spModel.dbRecs.filter(f),gross:spModel.grossRecs.filter(f),net:spModel.netRecs.filter(f)};
+}
+
+function spRender(){
+  if(!spModel)return;
+  spCenter=document.getElementById('spCenterSel').value;
+  // 경고바
+  const wb=document.getElementById('spWarnBar');
+  if(spModel.warnings.length){wb.classList.remove('hidden');wb.innerHTML='⚠ '+spModel.warnings.join('<br>⚠ ');}
+  else wb.classList.add('hidden');
+  spRenderKpi();
+  spRenderSeries();
+  spRenderMatrix();
+  spRenderRanking();
+  spRenderCompare();
+  spRenderTrend();
+}
+
+function spRenderKpi(){
+  const recs=spFiltered();const agg=spAggBySeries(recs);
+  const tDb=agg.db.reduce((a,b)=>a+b,0);
+  const tGross=agg.gross.reduce((a,b)=>a+b,0);
+  const tNet=agg.net.reduce((a,b)=>a+b,0);
+  const cancel=Math.max(0,tGross-tNet);
+  const contArr=spContArr(agg);const tCont=contArr.reduce((a,b)=>a+b,0);
+  const rate=tDb?tCont/tDb:0;
+  // 직전 동일길이 기간 대비
+  const s=document.getElementById('spDateStart').value,e=document.getElementById('spDateEnd').value;
+  let deltaHtml='';
+  if(s&&e){
+    const sd=spDateObj(s),ed=spDateObj(e);const len=Math.round((ed-sd)/86400000)+1;
+    const pe=new Date(sd.getTime()-86400000),ps=new Date(sd.getTime()-len*86400000);
+    const pr=spRecsFor(spNormDay(ps),spNormDay(pe));const pa=spAggBySeries(pr);
+    const pDb=pa.db.reduce((a,b)=>a+b,0);const pCont=spContArr(pa).reduce((a,b)=>a+b,0);
+    const pRate=pDb?pCont/pDb:0;
+    if(pDb>0){const d=(rate-pRate)*100;const cls=d>=0?'up':'down';const arw=d>=0?'▲':'▼';deltaHtml=`<span class="${cls}">${arw}${Math.abs(d).toFixed(1)}%p</span> <span style="color:#cbd5e1">vs 직전 ${len}일</span>`;}
+  }
+  // 기대 충족: db>0 계열 중 낭비 아닌(rate>=lo) 계열 수
+  let filled=0,active=0,waste=0;
+  for(let s2=0;s2<6;s2++){if(agg.db[s2]>0){active++;const r=contArr[s2]/agg.db[s2];if(r>=SP_BANDS[s2].lo)filled++;else waste++;}}
+  const basisLabel=spBasis==='gross'?'실계약':'취소반영';
+  const grid=document.getElementById('spKpiGrid');
+  grid.innerHTML=`
+    <div class="sp-kpi"><div class="l">대상 DB수 (모수)</div><div class="v">${spNum(tDb)}</div><div class="s">IN·재콜 제외 · 뇌새김영어+제2외국어</div></div>
+    <div class="sp-kpi" style="border-left-color:#2563eb"><div class="l">실계약 (일마감)</div><div class="v">${spNum(tGross)}</div><div class="s">계약률 ${tDb?spPct(tGross/tDb):'-'}</div></div>
+    <div class="sp-kpi" style="border-left-color:#0d9488"><div class="l">취소반영 계약 (순계약)</div><div class="v">${spNum(tNet)}</div><div class="s">계약률 ${tDb?spPct(tNet/tDb):'-'}</div></div>
+    <div class="sp-kpi" style="border-left-color:#dc2626"><div class="l">취소수 (실계약−취소반영)</div><div class="v">${spNum(cancel)}</div><div class="s">취소율 ${tGross?spPct(cancel/tGross):'-'}</div></div>
+    <div class="sp-kpi" style="border-left-color:#16a34a"><div class="l">종합 계약률 <span style="font-weight:600;color:#94a3b8">(${basisLabel})</span></div><div class="v">${tDb?spPct(rate):'-'}</div><div class="s">${deltaHtml||('기대충족 '+filled+'/'+active+'계열 · 낭비 '+waste)}</div></div>`;
+}
+
+function spRenderSeries(){
+  const recs=spFiltered();const agg=spAggBySeries(recs);const contArr=spContArr(agg);
+  const cards=document.getElementById('spSeriesCards');
+  cards.innerHTML=SP_BANDS.map(b=>{
+    const db=agg.db[b.s],cont=contArr[b.s];const j=spJudge(db,cont,b.s);
+    const rate=db?cont/db:0;
+    return `<div class="sp-scard sp-s${b.s}">
+      <div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div>
+      <div class="rate" style="color:${db?SP_SCOLOR[b.s]:'#cbd5e1'}">${db?spPct(rate):'-'}</div>
+      <div class="det">계약 ${spNum(cont)} / DB ${spNum(db)}</div>
+      <div class="jrow"><span class="sp-judge sp-j-${j.k}">${j.t}</span></div>
+    </div>`;
+  }).join('');
+  // 차트: DB수(bar) + 계약률(line) + 기대하한(line)
+  const ctx=document.getElementById('spSeriesChart');if(!ctx)return;
+  if(spCharts.series)spCharts.series.destroy();
+  const labels=SP_BANDS.map(b=>`${b.s}계열`);
+  const rates=SP_BANDS.map(b=>agg.db[b.s]?+(contArr[b.s]/agg.db[b.s]*100).toFixed(2):null);
+  const lows=SP_BANDS.map(b=>+(b.lo*100).toFixed(1));
+  spCharts.series=new Chart(ctx,{
+    data:{labels,datasets:[
+      {type:'bar',label:'DB수',data:SP_BANDS.map(b=>agg.db[b.s]),backgroundColor:SP_BANDS.map(b=>SP_SCOLOR[b.s]+'cc'),yAxisID:'y',order:3,borderRadius:5},
+      {type:'line',label:'계약률(%)',data:rates,borderColor:'#0f172a',backgroundColor:'#0f172a',yAxisID:'y1',tension:.3,order:1,spanGaps:true,pointRadius:4,pointBackgroundColor:'#0f172a'},
+      {type:'line',label:'기대 하한(%)',data:lows,borderColor:'#f59e0b',borderDash:[6,4],backgroundColor:'transparent',yAxisID:'y1',order:2,pointRadius:0,borderWidth:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top'},datalabels:{display:false},
+        tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?`${c.dataset.label}: ${c.parsed.y==null?'-':c.parsed.y+'%'}`:`${c.dataset.label}: ${spNum(c.parsed.y)}건`}}},
+      scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'DB수'}},
+        y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률 %'},ticks:{callback:v=>v+'%'}}}}
+  });
+}
+
+function spPerPerson(recs){
+  const m=new Map();
+  const ent=(name,team,ctr)=>{if(!m.has(name))m.set(name,{name,team,ctr,se:Array.from({length:6},()=>({db:0,gross:0,net:0})),tDb:0,tGross:0,tNet:0});return m.get(name);};
+  recs.db.forEach(r=>{const e=ent(r.name,r.team,r.ctr);e.se[r.se].db++;e.tDb++;});
+  recs.gross.forEach(r=>{const e=ent(r.name,r.team,r.ctr);if(r.se>=0){e.se[r.se].gross++;e.tGross++;}});
+  recs.net.forEach(r=>{const e=ent(r.name,r.team,r.ctr);if(r.se>=0){e.se[r.se].net++;e.tNet++;}});
+  return Array.from(m.values());
+}
+function spCellCont(cell){return spBasis==='gross'?cell.gross:cell.net;}
+function spPersonTotalCont(p){return spBasis==='gross'?p.tGross:p.tNet;}
+
+function spRenderMatrix(){
+  const recs=spFiltered();let people=spPerPerson(recs).filter(p=>p.tDb>0);
+  const sortBy=document.getElementById('spMatrixSort').value;
+  const rateOf=p=>p.tDb?spPersonTotalCont(p)/p.tDb:0;
+  const achieveOf=p=>{let c=0;for(let s=0;s<6;s++){const cell=p.se[s];if(cell.db>0&&spCellCont(cell)/cell.db>=SP_BANDS[s].lo)c++;}return c;};
+  people.sort((a,b)=>{
+    if(sortBy==='name')return a.name.localeCompare(b.name,'ko');
+    if(sortBy==='total_db')return b.tDb-a.tDb;
+    if(sortBy==='total_cont')return spPersonTotalCont(b)-spPersonTotalCont(a);
+    if(sortBy==='achieve')return achieveOf(b)-achieveOf(a)||rateOf(b)-rateOf(a);
+    return rateOf(b)-rateOf(a);
+  });
+  const head1=`<thead><tr><th class="sp-namecol">코디</th>${SP_BANDS.map(b=>`<th class="sp-grp-sep">${b.s}계열<div style="font-weight:500;opacity:.7;font-size:9px">${b.label}</div></th>`).join('')}<th class="sp-grp-sep">종합</th></tr></thead>`;
+  const cellHtml=(cell,s)=>{
+    if(cell.db===0)return `<td class="sp-grp-sep sp-j-none" style="color:#cbd5e1">-</td>`;
+    const cont=spCellCont(cell);const r=cont/cell.db;const j=spJudge(cell.db,cont,s);
+    return `<td class="sp-grp-sep sp-j-${j.k}"><div class="sp-cell-rate">${spPct(r)}</div><div class="sp-meta">${cont}/${cell.db}</div></td>`;
+  };
+  const totCellHtml=(db,cont)=>db?`<td class="sp-grp-sep" style="background:#f8fafc"><div class="sp-cell-rate">${spPct(cont/db)}</div><div class="sp-meta">${cont}/${db}</div></td>`:`<td class="sp-grp-sep" style="color:#cbd5e1">-</td>`;
+  const body=people.map(p=>{
+    const tc=spPersonTotalCont(p);
+    return `<tr><td class="sp-namecol"><span class="sp-clickable" onclick="spDrill('${encodeURIComponent(p.name)}')">${p.name.replace(/^\(.*?\)/,'')}</span>${SP_TEAM_TAG[p.team]||''}<div class="sp-meta">${p.ctr||''}</div></td>${SP_BANDS.map(b=>cellHtml(p.se[b.s],b.s)).join('')}${totCellHtml(p.tDb,tc)}</tr>`;
+  }).join('');
+  // 합계 행
+  const agg=spAggBySeries(recs);const contArr=spContArr(agg);
+  const totalRow=`<tr class="sp-total-row"><td class="sp-namecol">합계 <span class="sp-meta">${people.length}명</span></td>${SP_BANDS.map(b=>{
+    const db=agg.db[b.s],cont=contArr[b.s];if(!db)return '<td class="sp-grp-sep">-</td>';
+    return `<td class="sp-grp-sep"><div class="sp-cell-rate">${spPct(cont/db)}</div><div class="sp-meta">${cont}/${db}</div></td>`;
+  }).join('')}${(()=>{const db=agg.db.reduce((a,b)=>a+b,0),cont=contArr.reduce((a,b)=>a+b,0);return `<td class="sp-grp-sep"><div class="sp-cell-rate">${db?spPct(cont/db):'-'}</div><div class="sp-meta">${cont}/${db}</div></td>`;})()}</tr>`;
+  document.getElementById('spMatrixTable').innerHTML=head1+'<tbody>'+totalRow+body+'</tbody>';
+}
+
+// ── 랭킹 ──
+function spRenderRanking(){
+  const recs=spFiltered();const people=spPerPerson(recs);
+  const MINDB=5;
+  const html=SP_BANDS.map(b=>{
+    const list=people.map(p=>{const cell=p.se[b.s];const cont=spCellCont(cell);return {name:p.name,team:p.team,db:cell.db,cont,rate:cell.db?cont/cell.db:0,j:spJudge(cell.db,cont,b.s)};})
+      .filter(x=>x.db>=MINDB);
+    const good=list.filter(x=>x.j.k==='excel'||x.j.k==='good').sort((a,b2)=>b2.rate-a.rate).slice(0,5);
+    const bad=list.filter(x=>x.j.k==='waste').sort((a,b2)=>a.rate-b2.rate).slice(0,5);
+    const item=(x,i,cls)=>`<div class="sp-rank-item"><span class="rk">${i+1}</span><span class="nm">${x.name.replace(/^\(.*?\)/,'')}${SP_TEAM_TAG[x.team]||''}</span><span class="vl" style="color:${cls}">${spPct(x.rate)}</span><span class="sp-meta">${x.cont}/${x.db}</span></div>`;
+    return `<div class="sp-rank-col" style="border:1px solid #eef1f6;border-radius:10px;padding:12px 13px;border-top:4px solid ${SP_SCOLOR[b.s]}">
+      <h4><span class="sp-series-chip sp-s${b.s}">${b.s}계열</span> <span class="sp-meta">${b.label} · 모수 ${MINDB}건↑</span></h4>
+      <div style="font-size:11px;font-weight:800;color:#059669;margin:8px 0 4px">✅ 잘 살림</div>
+      ${good.length?good.map((x,i)=>item(x,i,'#059669')).join(''):'<div class="sp-meta" style="padding:4px">해당 없음</div>'}
+      <div style="font-size:11px;font-weight:800;color:#dc2626;margin:10px 0 4px">⚠ DB 낭비</div>
+      ${bad.length?bad.map((x,i)=>item(x,i,'#dc2626')).join(''):'<div class="sp-meta" style="padding:4px">해당 없음</div>'}
+    </div>`;
+  }).join('');
+  document.getElementById('spRankBody').innerHTML='<div class="sp-rank-grid">'+html+'</div>';
+}
+
+// ── 비교 차트 (담당/센터별) ──
+function spGroupAgg(recs,keyFn){
+  const m=new Map();
+  const ent=g=>{if(!m.has(g))m.set(g,{db:[0,0,0,0,0,0],gross:[0,0,0,0,0,0],net:[0,0,0,0,0,0]});return m.get(g);};
+  recs.db.forEach(r=>{ent(keyFn(r)).db[r.se]++;});
+  recs.gross.forEach(r=>{if(r.se>=0)ent(keyFn(r)).gross[r.se]++;});
+  recs.net.forEach(r=>{if(r.se>=0)ent(keyFn(r)).net[r.se]++;});
+  return m;
+}
+function spRenderCompare(){
+  const s=document.getElementById('spDateStart').value,e=document.getElementById('spDateEnd').value;
+  const inR=r=>(!s||r.day>=s)&&(!e||r.day<=e);
+  let recs,keyFn,groups;
+  if(spCompare==='team'){
+    const f=r=>inR(r)&&(spCenter==='all'||r.ctr===spCenter);
+    recs={db:spModel.dbRecs.filter(f),gross:spModel.grossRecs.filter(f),net:spModel.netRecs.filter(f)};
+    keyFn=r=>r.team;groups=['뇌새김영어','제2외국어'];
+  }else{
+    const f=r=>inR(r)&&(spTeam==='all'||r.team===spTeam);
+    recs={db:spModel.dbRecs.filter(f),gross:spModel.grossRecs.filter(f),net:spModel.netRecs.filter(f)};
+    keyFn=r=>r.ctr;groups=spModel.centers.slice();
+  }
+  const agg=spGroupAgg(recs,keyFn);
+  groups=groups.filter(g=>agg.has(g));
+  const palette=['#2563eb','#7c3aed','#0891b2','#ea580c','#16a34a','#db2777','#ca8a04'];
+  const datasets=groups.map((g,i)=>{
+    const a=agg.get(g);const arr=spBasis==='gross'?a.gross:a.net;
+    return {label:g,data:SP_BANDS.map(b=>a.db[b.s]?+(arr[b.s]/a.db[b.s]*100).toFixed(2):null),backgroundColor:palette[i%palette.length],borderRadius:4};
+  });
+  datasets.push({type:'line',label:'기대 하한',data:SP_BANDS.map(b=>+(b.lo*100).toFixed(1)),borderColor:'#f59e0b',borderDash:[6,4],backgroundColor:'transparent',pointRadius:0,borderWidth:2});
+  const ctx=document.getElementById('spCompareChart');if(spCharts.compare)spCharts.compare.destroy();
+  spCharts.compare=new Chart(ctx,{type:'bar',data:{labels:SP_BANDS.map(b=>`${b.s}계열`),datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top'},datalabels:{display:false},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'-':c.parsed.y+'%'}`}}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:'계약률 %'},ticks:{callback:v=>v+'%'}}}}});
+}
+
+// ── 기간 추이 ──
+function spRenderTrend(){
+  if(!spModel)return;
+  const recs=spFiltered();
+  document.getElementById('spTrendSub').textContent=(spUnit==='month'?'월별':spUnit==='week'?'주차별':'일자별')+' DB수(계열별 누적)·종합 계약률 추이';
+  const buckets=new Map();
+  const ent=k=>{if(!buckets.has(k))buckets.set(k,{db:[0,0,0,0,0,0],gross:[0,0,0,0,0,0],net:[0,0,0,0,0,0]});return buckets.get(k);};
+  recs.db.forEach(r=>{ent(spBucketKey(r.day,spUnit)).db[r.se]++;});
+  recs.gross.forEach(r=>{if(r.se>=0)ent(spBucketKey(r.day,spUnit)).gross[r.se]++;});
+  recs.net.forEach(r=>{if(r.se>=0)ent(spBucketKey(r.day,spUnit)).net[r.se]++;});
+  const keys=Array.from(buckets.keys()).sort();
+  const labels=keys.map(k=>spBucketLabel(k,spUnit));
+  const cont=k=>{const b=buckets.get(k);return spBasis==='gross'?b.gross:b.net;};
+  const ctx=document.getElementById('spTrendChart');if(spCharts.trend)spCharts.trend.destroy();
+  const dsBars=SP_BANDS.map(b=>({type:'bar',label:`${b.s}계열`,data:keys.map(k=>buckets.get(k).db[b.s]),backgroundColor:SP_SCOLOR[b.s],stack:'db',yAxisID:'y',order:3}));
+  const rateLine={type:'line',label:'종합 계약률(%)',data:keys.map(k=>{const b=buckets.get(k);const tDb=b.db.reduce((a,c)=>a+c,0);const tC=cont(k).reduce((a,c)=>a+c,0);return tDb?+(tC/tDb*100).toFixed(2):null;}),borderColor:'#0f172a',backgroundColor:'#0f172a',yAxisID:'y1',tension:.3,order:1,pointRadius:3,spanGaps:true,borderWidth:2.5};
+  spCharts.trend=new Chart(ctx,{data:{labels,datasets:[...dsBars,rateLine]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top'},datalabels:{display:false},
+        tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='y1'?`${c.dataset.label}: ${c.parsed.y==null?'-':c.parsed.y+'%'}`:`${c.dataset.label}: ${spNum(c.parsed.y)}건`}}},
+      scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,position:'left',title:{display:true,text:'DB수'}},
+        y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률 %'},ticks:{callback:v=>v+'%'}}}}});
+  // 테이블
+  const th=`<thead><tr><th class="sp-namecol">${spUnit==='month'?'월':spUnit==='week'?'주차':'일자'}</th><th>DB수</th><th>실계약</th><th>취소반영</th><th>취소수</th><th>계약률</th>${SP_BANDS.map(b=>`<th class="sp-grp-sep">${b.s}계열률</th>`).join('')}</tr></thead>`;
+  const rows=keys.map(k=>{
+    const b=buckets.get(k);const tDb=b.db.reduce((a,c)=>a+c,0);const tG=b.gross.reduce((a,c)=>a+c,0);const tN=b.net.reduce((a,c)=>a+c,0);
+    const cArr=spBasis==='gross'?b.gross:b.net;const tC=cArr.reduce((a,c)=>a+c,0);
+    return `<tr><td class="sp-namecol">${spBucketLabel(k,spUnit)}</td><td>${spNum(tDb)}</td><td>${spNum(tG)}</td><td>${spNum(tN)}</td><td>${spNum(Math.max(0,tG-tN))}</td><td class="sp-cell-rate">${tDb?spPct(tC/tDb):'-'}</td>${SP_BANDS.map(bd=>{const d=b.db[bd.s],c=cArr[bd.s];const j=spJudge(d,c,bd.s);return `<td class="sp-grp-sep sp-j-${d?j.k:'none'}">${d?spPct(c/d):'-'}</td>`;}).join('')}</tr>`;
+  }).join('');
+  document.getElementById('spTrendTable').innerHTML=th+'<tbody>'+rows+'</tbody>';
+}
+
+// ── 드릴다운 (연령대 × 체류시간) ──
+function spDrill(encName){
+  const name=decodeURIComponent(encName);
+  const recs=spFiltered();
+  const db=recs.db.filter(r=>r.name===name),gross=recs.gross.filter(r=>r.name===name),net=recs.net.filter(r=>r.name===name);
+  const person=spModel.people.find(p=>p.name===name)||{name,team:'',ctr:''};
+  // age×stay grid
+  const grid={};SP_AGES.forEach(a=>{grid[a]={};SP_STAYS.forEach(s=>{grid[a][s]={db:0,gross:0,net:0};});});
+  db.forEach(r=>{if(grid[r.ag]&&grid[r.ag][r.st])grid[r.ag][r.st].db++;});
+  gross.forEach(r=>{if(r.se>=0&&grid[r.ag]&&grid[r.ag][r.st])grid[r.ag][r.st].gross++;});
+  net.forEach(r=>{if(r.se>=0&&grid[r.ag]&&grid[r.ag][r.st])grid[r.ag][r.st].net++;});
+  const contOf=c=>spBasis==='gross'?c.gross:c.net;
+  // 최대 계약률 (색상 스케일용)
+  let maxRate=0;SP_AGES.forEach(a=>SP_STAYS.forEach(s=>{const c=grid[a][s];if(c.db>0)maxRate=Math.max(maxRate,contOf(c)/c.db);}));
+  if(maxRate<=0)maxRate=0.15;
+  const heatColor=(c)=>{if(c.db===0)return '';const r=contOf(c)/c.db;const t=Math.min(1,r/maxRate);const g=Math.round(220-120*t),rr=Math.round(220-30*t),bb=Math.round(220-180*t);return `background:rgb(${rr},${g+20},${bb});color:${t>0.55?'#fff':'#1e293b'}`;};
+  // 강점 세그먼트 (db>=3, 계약률 desc)
+  const segs=[];SP_AGES.forEach(a=>SP_STAYS.forEach(s=>{const c=grid[a][s];if(c.db>=3){segs.push({a,s,db:c.db,cont:contOf(c),rate:contOf(c)/c.db});}}));
+  segs.sort((x,y)=>y.rate-x.rate);
+  const strong=segs.slice(0,5);
+  // 세그먼트 테이블
+  const headStay=`<tr><th class="axis">연령\\체류</th>${SP_STAYS.map(s=>`<th>${s}</th>`).join('')}<th>계</th></tr>`;
+  const bodyRows=SP_AGES.map(a=>{
+    let rowDb=0,rowC=0;
+    const tds=SP_STAYS.map(s=>{const c=grid[a][s];if(c.db===0)return '<td class="empty">·</td>';rowDb+=c.db;rowC+=contOf(c);return `<td style="${heatColor(c)}" title="계약 ${contOf(c)} / DB ${c.db}">${spPct(contOf(c)/c.db)}<div style="font-size:9px;opacity:.85;font-weight:500">${contOf(c)}/${c.db}</div></td>`;}).join('');
+    return `<tr><td class="axis">${SP_AGE_LABEL[a]}</td>${tds}<td class="axis">${rowDb?spPct(rowC/rowDb):'-'}<div style="font-size:9px;opacity:.7">${rowC}/${rowDb}</div></td></tr>`;
+  }).join('');
+  // 계열 breakdown
+  const aggDb=[0,0,0,0,0,0],aggG=[0,0,0,0,0,0],aggN=[0,0,0,0,0,0];
+  db.forEach(r=>aggDb[r.se]++);gross.forEach(r=>{if(r.se>=0)aggG[r.se]++;});net.forEach(r=>{if(r.se>=0)aggN[r.se]++;});
+  const cArr=spBasis==='gross'?aggG:aggN;
+  const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}">${j.t}</span></div></div>`;}).join('');
+  const tDb=aggDb.reduce((a,b)=>a+b,0),tC=cArr.reduce((a,b)=>a+b,0);
+  document.getElementById('spDrillBody').innerHTML=`
+    <button class="close" onclick="spCloseDrill()">&times;</button>
+    <h3>${name.replace(/^\(.*?\)/,'')} <span style="font-size:13px;color:var(--gray)">${SP_TEAM_TAG[person.team]||''} ${person.ctr||''}</span></h3>
+    <div style="font-size:12px;color:var(--gray);margin-bottom:14px">기간 ${document.getElementById('spDateStart').value}~${document.getElementById('spDateEnd').value} · 판정기준 ${spBasis==='gross'?'실계약':'취소반영'} · 종합 ${tDb?spPct(tC/tDb):'-'} (계약 ${tC}/DB ${tDb})</div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">계열별 성과</div>
+    <div class="sp-series-cards" style="margin-bottom:18px">${serCards}</div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px">연령대 × 체류시간 계약률 히트맵 <span class="sp-meta">(R 긴체류 → O 짧은체류 · 색 진할수록 고계약률)</span></div>
+    <div style="overflow-x:auto"><table class="sp-heat">${headStay}${bodyRows}</table></div>
+    <div class="sp-heat-legend">★ 강점 세그먼트 (DB 3건↑):
+      ${strong.length?strong.map(x=>`<span class="sp-series-chip" style="background:#0f172a">${SP_AGE_LABEL[x.a]}·${x.s} ${spPct(x.rate)} <span style="opacity:.8;font-weight:500">(${x.cont}/${x.db})</span></span>`).join(' '):'<span class="sp-meta">DB 3건 이상 세그먼트 없음</span>'}
+    </div>`;
+  document.getElementById('spDrillOverlay').classList.add('open');
+}
+function spCloseDrill(){document.getElementById('spDrillOverlay').classList.remove('open');}
+
+// ── 엑셀 다운로드 ──
+async function spDownloadExcel(){
+  if(!spModel){alert('먼저 분석을 실행하세요.');return;}
+  const recs=spFiltered();const agg=spAggBySeries(recs);const contArr=spContArr(agg);
+  const s=document.getElementById('spDateStart').value,e=document.getElementById('spDateEnd').value;
+  const basisLabel=spBasis==='gross'?'실계약':'취소반영';
+  const JCOLOR={excel:'D1FAE5',good:'CCFBF1',min:'FEF3C7',waste:'FEE2E2',none:'F1F5F9'};
+  const JFONT={excel:'059669',good:'0D9488',min:'B45309',waste:'DC2626',none:'94A3B8'};
+  const bd={top:{style:'thin',color:{rgb:'E2E8F0'}},bottom:{style:'thin',color:{rgb:'E2E8F0'}},left:{style:'thin',color:{rgb:'E2E8F0'}},right:{style:'thin',color:{rgb:'E2E8F0'}}};
+  const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'1E293B'}},alignment:{horizontal:'center',vertical:'center'},border:bd};
+  const titleS={font:{bold:true,color:{rgb:'FFFFFF'},sz:16,name:'맑은 고딕'},fill:{fgColor:{rgb:'4361EE'}},alignment:{horizontal:'center',vertical:'center'}};
+  const lblS={font:{bold:true,sz:10,name:'맑은 고딕'},alignment:{horizontal:'right',vertical:'center'}};
+  const cell=(v,s2)=>({v:v==null?'':v,t:typeof v==='number'?'n':'s',s:s2});
+  const wb=XLSX.utils.book_new();
+
+  // 시트1: 계열별 종합
+  const teamTxt=spTeam==='all'?'전체':spTeam, ctrTxt=spCenter==='all'?'전체':spCenter;
+  const aoa1=[['WM 계열별 성과 — 종합','','','','','','','',''],
+    ['집계기간',`${s} ~ ${e}`,'담당',teamTxt,'센터',ctrTxt,'판정기준',basisLabel,''],
+    [],
+    ['계열','기대구간','DB수','실계약','실계약률','취소반영','취소반영률','취소수','판정('+basisLabel+')']];
+  const judgeRows=[];
+  SP_BANDS.forEach(b=>{
+    const db=agg.db[b.s],g=agg.gross[b.s],n=agg.net[b.s],c=spBasis==='gross'?g:n;const j=spJudge(db,c,b.s);
+    judgeRows.push(j.k);
+    aoa1.push([`${b.s}계열`,b.label,db,g,db?g/db:'',n,db?n/db:'',Math.max(0,g-n),db?j.t:'-']);
+  });
+  const tDb=agg.db.reduce((a,b)=>a+b,0),tG=agg.gross.reduce((a,b)=>a+b,0),tN=agg.net.reduce((a,b)=>a+b,0);
+  aoa1.push(['합계','',tDb,tG,tDb?tG/tDb:'',tN,tDb?tN/tDb:'',Math.max(0,tG-tN),'']);
+  const ws1=XLSX.utils.aoa_to_sheet(aoa1);
+  ws1['!cols']=[{wch:9},{wch:11},{wch:9},{wch:9},{wch:10},{wch:9},{wch:10},{wch:9},{wch:14}];
+  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:8}}];
+  ws1['!rows']=[{hpt:26},{hpt:18},{},{hpt:20}];
+  // 스타일
+  for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws1[a])ws1[a].s=titleS;}
+  [0,2,4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r:1,c});if(ws1[a])ws1[a].s=lblS;});
+  for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws1[a])ws1[a].s=hdrS;}
+  SP_BANDS.forEach((b,i)=>{
+    const r=4+i;const jk=judgeRows[i];
+    for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws1[a])continue;
+      ws1[a].s={alignment:{horizontal:c===0||c===1?'center':'center',vertical:'center'},border:bd,font:{sz:10,name:'맑은 고딕',bold:c===0}};
+      if(c===0)ws1[a].s.fill={fgColor:{rgb:SP_SCOLOR[b.s].replace('#','')}},ws1[a].s.font={sz:10,bold:true,color:{rgb:'FFFFFF'},name:'맑은 고딕'};
+      if(c===8){ws1[a].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws1[a].s.font={sz:10,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}
+    }
+    [4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r,c});if(ws1[a])ws1[a].z='0.0%';});
+  });
+  const tr=4+SP_BANDS.length;for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:tr,c});if(ws1[a])ws1[a].s={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},border:bd,alignment:{horizontal:'center',vertical:'center'}};}
+  [4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r:tr,c});if(ws1[a])ws1[a].z='0.0%';});
+  XLSX.utils.book_append_sheet(wb,ws1,'계열별 종합');
+
+  // 시트2: 개인별 × 계열
+  const people=spPerPerson(recs).filter(p=>p.tDb>0).sort((a,b)=>(b.tDb?spPersonTotalCont(b)/b.tDb:0)-(a.tDb?spPersonTotalCont(a)/a.tDb:0));
+  const h1=['코디','담당','센터'];const h2=['','',''];
+  SP_BANDS.forEach(b=>{h1.push(`${b.s}계열`,'','');h2.push('DB','계약','률');});
+  h1.push('종합','','');h2.push('DB','계약','률');
+  const aoa2=[h1,h2];
+  const judgeMap2=[];
+  people.forEach(p=>{
+    const row=[p.name.replace(/^\(.*?\)/,''),p.team,p.ctr||''];const jrow=[];
+    SP_BANDS.forEach(b=>{const cell=p.se[b.s];const c=spCellCont(cell);row.push(cell.db,cell.db?c:0,cell.db?c/cell.db:'');jrow.push(cell.db?spJudge(cell.db,c,b.s).k:'none');});
+    const tc=spPersonTotalCont(p);row.push(p.tDb,tc,p.tDb?tc/p.tDb:'');
+    aoa2.push(row);judgeMap2.push(jrow);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(aoa2);
+  const cols2=[{wch:12},{wch:10},{wch:8}];for(let i=0;i<7;i++)cols2.push({wch:6},{wch:6},{wch:8});ws2['!cols']=cols2;
+  const merges2=[];for(let g=0;g<7;g++){merges2.push({s:{r:0,c:3+g*3},e:{r:0,c:3+g*3+2}});}
+  ['코디','담당','센터'].forEach((_,c)=>merges2.push({s:{r:0,c},e:{r:1,c}}));
+  ws2['!merges']=merges2;ws2['!rows']=[{hpt:18},{hpt:16}];
+  for(let c=0;c<h1.length;c++){[0,1].forEach(r=>{const a=XLSX.utils.encode_cell({r,c});if(ws2[a])ws2[a].s=hdrS;});}
+  people.forEach((p,i)=>{
+    const r=2+i;const jrow=judgeMap2[i];
+    for(let c=0;c<h1.length;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws2[a])continue;
+      ws2[a].s={font:{sz:9,name:'맑은 고딕',bold:c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};}
+    SP_BANDS.forEach((b,gi)=>{const rateCol=3+gi*3+2;const a=XLSX.utils.encode_cell({r,c:rateCol});if(ws2[a]){ws2[a].z='0.0%';const jk=jrow[gi];ws2[a].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws2[a].s.font={sz:9,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}});
+    const totA=XLSX.utils.encode_cell({r,c:3+6*3+2});if(ws2[totA]){ws2[totA].z='0.0%';ws2[totA].s.font={sz:9,bold:true,name:'맑은 고딕'};}
+  });
+  XLSX.utils.book_append_sheet(wb,ws2,'개인별×계열');
+
+  // 눈금선 제거 + 다운로드
+  const fname=`WM_계열별성과_${(s||'').replace(/-/g,'')}_${(e||'').replace(/-/g,'')}.xlsx`;
+  try{
+    const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){
+      if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+        const xml=await zip.file(path).async('string');
+        zip.file(path,xml.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));
+      }
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+  }catch(err){console.warn('눈금선 제거 실패, 기본 저장',err);XLSX.writeFile(wb,fname,{bookSST:true});}
 }
 
 </script>
