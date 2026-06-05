@@ -10665,7 +10665,15 @@ function spUpdateUploadStatus(){
   spUpdateStatusDots();
   const btn=document.getElementById('spBtnGenerate');if(btn)btn.disabled=!spReady();
   const lu=document.getElementById('spLastUpdate');
-  if(lu){const t=spFiles.reduce((m,f)=>Math.max(m,f.uploadTime||0),0);lu.textContent=t?('갱신 '+new Date(t).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})):'';}
+  if(lu){
+    const _dw=['일','월','화','수','목','금','토'];
+    let maxDay='';
+    const scan=arr=>{for(const f of arr)for(const r of (f.rows||[])){if(r.d&&r.d>maxDay)maxDay=r.d;}};
+    scan(spFilesByType('contDaily'));            // 일마감 신청일 우선
+    if(!maxDay)scan(spFilesByType('db'));         // 없으면 DB 분배일
+    const dt=maxDay?spDateObj(maxDay):null;
+    lu.textContent=dt?`최종업데이트일자 : ${maxDay}(${_dw[dt.getDay()]})`:'';
+  }
 }
 function spReady(){return spFilesByType('db').length>0&&spFilesByType('attend').length>0&&(spFilesByType('contDaily').length>0||spFilesByType('contCum').length>0);}
 function spRenderFileHistory(){
