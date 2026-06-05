@@ -1587,7 +1587,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <div class="sp-drill" style="max-width:560px">
       <button class="close" onclick="spCloseSkip()">&times;</button>
       <h3>미인식 파일 <span id="spSkipCount" style="font-size:13px;color:var(--gray)"></span></h3>
-      <div style="font-size:12px;color:var(--gray);margin:6px 0 12px">폴더·파일명으로 종류를 판별하지 못해 <b>가져오지 않은</b> 파일입니다. (올바른 하위폴더 <b>DB수·실계약·명단</b>에 표준 이름으로 넣어주세요. 월간누적은 의도적으로 자동 스캔에서 제외됩니다.)</div>
+      <div style="font-size:12px;color:var(--gray);margin:6px 0 12px">폴더·파일명으로 종류를 판별하지 못해 <b>가져오지 않은</b> 파일입니다. (올바른 하위폴더 <b>DB수·실계약·취소반영·명단</b>에 표준 이름으로 넣어주세요.)</div>
       <div id="spSkipBody"></div>
     </div>
   </div>
@@ -10800,12 +10800,11 @@ async function spScanFolder(opts={}){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
         const type=spDetectType(folderName,entry.name);
-        if(type==='contCum')continue;        // 월간누적은 자동 스캔 제외 (수동 업로드만)
         if(type)tasks.push({type,entry});else skipped.push({name:entry.name,folder:folderName||'(루트)'});
       }else if(entry.kind==='directory'&&depth<2){
-        // 알려진 타입 폴더만 진입 (월간누적·일일성과 등 무관 폴더는 스캔 안 함)
+        // 알려진 타입 폴더만 진입 (일일성과 등 무관 폴더는 스캔 안 함)
         const ftype=spDetectType(entry.name,'');
-        if(ftype&&ftype!=='contCum'){try{await walk(entry,entry.name,depth+1);}catch(e){}}
+        if(ftype){try{await walk(entry,entry.name,depth+1);}catch(e){}}
       }
     }
   }
