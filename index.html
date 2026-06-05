@@ -1458,6 +1458,10 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   </div>
 
   <div class="container">
+    <div id="spDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="spDirBannerMsg" style="font-size:13px;font-weight:600;color:#92400e">📁 공용폴더 접근 허용이 필요합니다</span>
+      <button class="btn btn-primary btn-sm" id="spDirBannerBtn" onclick="spScanFolder({request:true})">📁 공용폴더 새로고침</button>
+    </div>
     <div id="spEmpty" class="sp-empty">
       <div style="font-size:48px;margin-bottom:16px;opacity:.5">📊</div>
       <div style="font-size:18px;font-weight:700;margin-bottom:8px">파일을 업로드하세요</div>
@@ -10726,6 +10730,27 @@ function spUpdateDirStatus(state,info){
   else{el.textContent='연결 안 됨 — [공용폴더 연결]로 네트워크 공유드라이브 폴더를 지정하세요';el.style.color='var(--gray)';}
 }
 let spDirName='';
+// 탭 화면 상단 배너 — 권한 필요 시 원클릭 새로고침, 스캔 결과 피드백
+function spSetBanner(mode,info){
+  const b=document.getElementById('spDirBanner');if(!b)return;
+  const msg=document.getElementById('spDirBannerMsg');const btn=document.getElementById('spDirBannerBtn');
+  if(mode==='need-perm'){
+    b.classList.remove('hidden');b.style.background='#fffbeb';b.style.borderColor='#fde68a';
+    msg.style.color='#92400e';msg.innerHTML='📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요';
+    if(btn){btn.textContent='📁 공용폴더 새로고침';btn.disabled=false;}return;
+  }
+  if(mode==='busy'){
+    b.classList.remove('hidden');b.style.background='#f8fafc';b.style.borderColor='#e2e8f0';
+    msg.style.color='var(--gray)';msg.textContent='⏳ 공용폴더 스캔 중…';
+    if(btn)btn.disabled=true;return;
+  }
+  if(mode==='ok'){
+    b.classList.remove('hidden');b.style.background='#f0fdf4';b.style.borderColor='#bbf7d0';
+    msg.style.color='#166534';msg.textContent=`✓ 공용폴더 동기화 완료 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}${info.skipped?` · 미인식 ${info.skipped}`:''}`;
+    if(btn){btn.textContent='📁 다시 스캔';btn.disabled=false;}return;
+  }
+  b.classList.add('hidden');
+}
 async function spRefreshDirHandle(){try{if(!spIdb)await spOpenIDB();spDirHandle=await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';}catch(e){spDirHandle=null;spDirName='';}spUpdateDirStatus();}
 async function spConnectFolder(){
   if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.');return;}
@@ -10740,7 +10765,7 @@ async function spConnectFolder(){
 async function spDisconnectFolder(){
   if(!confirm('공용폴더 연결을 해제할까요? (이미 가져온 데이터는 유지됩니다)'))return;
   try{if(!spIdb)await spOpenIDB();await spIdbDelHandle();}catch(e){}
-  spDirHandle=null;spDirName='';spUpdateDirStatus();
+  spDirHandle=null;spDirName='';spUpdateDirStatus();spSetBanner('hide');
 }
 // 폴더(루트+하위 2단계) 스캔 → 신규 .xlsx 인제스트
 async function spScanFolder(opts={}){
@@ -10750,8 +10775,8 @@ async function spScanFolder(opts={}){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){if(opts.announce)alert('먼저 공용폴더를 연결하세요.');return;}
   spDirHandle=h;spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');return;}
-  spScanBusy=true;spUpdateDirStatus('busy');
+  if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');spSetBanner('need-perm');return;}
+  spScanBusy=true;spUpdateDirStatus('busy');if(!opts.fromShow)spSetBanner('busy');
   const tasks=[],skipped=[];
   async function walk(dir,folderName,depth){
     for await(const entry of dir.values()){
@@ -10778,6 +10803,9 @@ async function spScanFolder(opts={}){
   if(okCnt>0)spModel=null;
   spUpdateUploadStatus();spRenderFileHistory();
   spUpdateDirStatus('ok',{okCnt,dupCnt,skipped:skipped.length});
+  // 배너: 사용자가 직접 누른 경우(항상) 또는 자동 스캔이라도 신규가 있으면 결과 표시, 그 외엔 숨김
+  if(!opts.fromShow||okCnt>0)spSetBanner('ok',{okCnt,dupCnt,skipped:skipped.length});
+  else spSetBanner('hide');
   if(okCnt>0&&!opts.fromShow&&typeof currentPage!=='undefined'&&currentPage==='series-perf')spOnShow();
   if(opts.announce){
     const msgs=[`공용폴더 스캔 완료\n신규 ${okCnt}개${dupCnt?` · 중복 ${dupCnt}개`:''}${skipped.length?` · 미인식 ${skipped.length}개`:''}`];
@@ -10788,13 +10816,13 @@ async function spScanFolder(opts={}){
 }
 // 탭 열 때 자동 스캔 (권한이 이미 granted면 무인 스캔, 아니면 안내만)
 async function spAutoScanOnShow(){
-  if(!window.showDirectoryPicker)return;
+  if(!window.showDirectoryPicker){spSetBanner('hide');return;}
   try{
     if(!spIdb)await spOpenIDB();
     spDirHandle=await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';
-    if(!spDirHandle){spUpdateDirStatus();return;}
+    if(!spDirHandle){spSetBanner('hide');spUpdateDirStatus();return;}
     if(await spVerifyPerm(spDirHandle,false))await spScanFolder({request:false,announce:false,fromShow:true});
-    else spUpdateDirStatus('need-perm');
+    else {spUpdateDirStatus('need-perm');spSetBanner('need-perm');}
   }catch(e){console.error('자동 스캔',e);}
 }
 
