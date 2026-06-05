@@ -10594,10 +10594,10 @@ function spJudge(db,cont,s){
   if(!db)return {k:'none',t:'-'};
   const r=cont/db, b=SP_BANDS[s];
   if(r<b.lo)return {k:'waste',t:'낭비'};
-  if(b.hi===Infinity)return {k:'excel',t:'잘 살림'};
-  if(r>=b.hi)return {k:'excel',t:'잘 살림'};
+  if(b.hi===Infinity)return {k:'excel',t:'기대 이상'};
+  if(r>=b.hi)return {k:'excel',t:'기대 이상'};
   if(r<=b.lo+0.005)return {k:'min',t:'최소수준'};
-  return {k:'good',t:'나름 잘함'};
+  return {k:'good',t:'기대 충족'};
 }
 
 // ── 파서 (업로드 시 슬림 행으로 변환) ──
@@ -11224,7 +11224,7 @@ function spRenderRanking(){
     const item=(x,i,cls)=>`<div class="sp-rank-item"><span class="rk">${i+1}</span><span class="nm">${x.name.replace(/^\(.*?\)/,'')}${SP_TEAM_TAG[x.team]||''}</span><span class="vl" style="color:${cls}">${spPct(x.rate)}</span><span class="sp-meta">${x.cont}/${x.db}</span></div>`;
     return `<div class="sp-rank-col" style="border:1px solid #eef1f6;border-radius:10px;padding:12px 13px;border-top:4px solid ${SP_SCOLOR[b.s]}">
       <h4><span class="sp-series-chip sp-s${b.s}">${b.s}계열</span> <span class="sp-meta">${b.label} · 모수 ${MINDB}건↑</span></h4>
-      <div style="font-size:11px;font-weight:800;color:#059669;margin:8px 0 4px">✅ 잘 살림</div>
+      <div style="font-size:11px;font-weight:800;color:#059669;margin:8px 0 4px">✅ 기대 이상</div>
       ${good.length?good.map((x,i)=>item(x,i,'#059669')).join(''):'<div class="sp-meta" style="padding:4px">해당 없음</div>'}
       <div style="font-size:11px;font-weight:800;color:#dc2626;margin:10px 0 4px">⚠ DB 낭비</div>
       ${bad.length?bad.map((x,i)=>item(x,i,'#dc2626')).join(''):'<div class="sp-meta" style="padding:4px">해당 없음</div>'}
