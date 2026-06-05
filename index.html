@@ -651,11 +651,17 @@ tr.row-h td{background:var(--gh-light)}
 
 /* 판정 뱃지 */
 .sp-judge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap}
-.sp-j-excel{background:#d1fae5;color:#059669}
-.sp-j-good{background:#ccfbf1;color:#0d9488}
-.sp-j-min{background:#fef3c7;color:#b45309}
-.sp-j-waste{background:#fee2e2;color:#dc2626}
+.sp-j-excel{background:#86efac;color:#15803d}
+.sp-j-good{background:#bfdbfe;color:#1d4ed8}
+.sp-j-min{background:#fde68a;color:#92400e}
+.sp-j-waste{background:#fecaca;color:#b91c1c}
 .sp-j-none{background:#f1f5f9;color:#94a3b8}
+/* 매트릭스 셀 판정색 강조 (뱃지보다 진하게) */
+table.sp-matrix td.sp-j-excel{background:#86efac}
+table.sp-matrix td.sp-j-good{background:#bfdbfe}
+table.sp-matrix td.sp-j-min{background:#fde68a}
+table.sp-matrix td.sp-j-waste{background:#fecaca}
+table.sp-matrix td.sp-j-excel .sp-meta,table.sp-matrix td.sp-j-good .sp-meta,table.sp-matrix td.sp-j-min .sp-meta,table.sp-matrix td.sp-j-waste .sp-meta{color:#334155}
 
 /* 계열 요약 카드 */
 .sp-series-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
@@ -704,7 +710,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 /* 드릴다운 모달 */
 .sp-drill-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-start;justify-content:center;z-index:200;overflow-y:auto;padding:40px 16px}
 .sp-drill-overlay.open{display:flex}
-.sp-drill{background:#fff;border-radius:16px;padding:26px 28px;max-width:1000px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.sp-drill{background:#fff;border-radius:16px;padding:26px 28px;max-width:1160px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .sp-drill h3{margin:0 0 4px;font-size:19px}
 .sp-drill .close{float:right;font-size:26px;line-height:1;background:none;border:none;cursor:pointer;color:#94a3b8}
 .sp-empty{text-align:center;padding:80px 20px;color:var(--gray)}
@@ -1504,8 +1510,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         <div class="sp-divider"></div>
         <label>판정기준</label>
         <div class="sp-seg" id="spBasisSeg">
-          <button class="active" data-basis="net" onclick="spSetBasis('net')">취소반영</button>
-          <button data-basis="gross" onclick="spSetBasis('gross')">실계약</button>
+          <button data-basis="net" onclick="spSetBasis('net')">취소반영</button>
+          <button class="active" data-basis="gross" onclick="spSetBasis('gross')">실계약</button>
         </div>
         <div style="flex:1"></div>
         <button class="sp-btn green" onclick="spDownloadExcel()">📥 엑셀</button>
@@ -1573,6 +1579,16 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <div class="sp-drill">
       <button class="close" onclick="spCloseDrill()">&times;</button>
       <div id="spDrillBody"></div>
+    </div>
+  </div>
+
+  <!-- 미인식 파일 모달 -->
+  <div class="sp-drill-overlay" id="spSkipOverlay" onclick="if(event.target===this)spCloseSkip()">
+    <div class="sp-drill" style="max-width:560px">
+      <button class="close" onclick="spCloseSkip()">&times;</button>
+      <h3>미인식 파일 <span id="spSkipCount" style="font-size:13px;color:var(--gray)"></span></h3>
+      <div style="font-size:12px;color:var(--gray);margin:6px 0 12px">폴더·파일명으로 종류를 판별하지 못해 <b>가져오지 않은</b> 파일입니다. (올바른 하위폴더 <b>DB수·실계약·명단</b>에 표준 이름으로 넣어주세요. 월간누적은 의도적으로 자동 스캔에서 제외됩니다.)</div>
+      <div id="spSkipBody"></div>
     </div>
   </div>
 </div><!-- /page-series-perf -->
@@ -10521,7 +10537,7 @@ async function mcOnShow(){
 const SP_DB_NAME='seriesPerfDashboard', SP_DB_VER=2;
 let spIdb=null, spFiles=[], spLoaded=false, spModel=null, spCharts={};
 let spDirHandle=null, spScanBusy=false;
-let spTeam='all', spCenter='all', spUnit='day', spBasis='net', spCompare='team';
+let spTeam='all', spCenter='all', spUnit='day', spBasis='gross', spCompare='team';
 const SP_TARGET_TEAMS=new Set(['뇌새김영어','제2외국어']);
 const SP_BANDS=[
   {s:0,lo:0.15,hi:Infinity,label:'15%+'},
@@ -10529,7 +10545,7 @@ const SP_BANDS=[
   {s:2,lo:0.06,hi:0.10,label:'6~10%'},
   {s:3,lo:0.04,hi:0.06,label:'4~6%'},
   {s:4,lo:0.02,hi:0.04,label:'2~4%'},
-  {s:5,lo:0.00,hi:0.02,label:'0~2%'},
+  {s:5,lo:0.01,hi:0.02,label:'1~2%'},
 ];
 const SP_AGES=['00','10','20','30','40','50','60'];
 const SP_AGE_LABEL={'00':'미상','10':'10대','20':'20대','30':'30대','40':'40대','50':'50대','60':'60대+'};
@@ -10746,7 +10762,8 @@ function spSetBanner(mode,info){
   }
   if(mode==='ok'){
     b.classList.remove('hidden');b.style.background='#f0fdf4';b.style.borderColor='#bbf7d0';
-    msg.style.color='#166534';msg.textContent=`✓ 공용폴더 동기화 완료 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}${info.skipped?` · 미인식 ${info.skipped}`:''}`;
+    const skipLink=info.skipped?` · <a href="#" onclick="event.preventDefault();spShowSkipModal()" style="color:#1d4ed8;font-weight:700">미인식 ${info.skipped}개 보기 ›</a>`:'';
+    msg.style.color='#166534';msg.innerHTML=`✓ 공용폴더 동기화 완료 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}${skipLink}`;
     if(btn){btn.textContent='📁 다시 스캔';btn.disabled=false;}return;
   }
   b.classList.add('hidden');
@@ -10783,9 +10800,12 @@ async function spScanFolder(opts={}){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
         const type=spDetectType(folderName,entry.name);
-        if(type)tasks.push({type,entry});else skipped.push(entry.name);
+        if(type==='contCum')continue;        // 월간누적은 자동 스캔 제외 (수동 업로드만)
+        if(type)tasks.push({type,entry});else skipped.push({name:entry.name,folder:folderName||'(루트)'});
       }else if(entry.kind==='directory'&&depth<2){
-        try{await walk(entry,entry.name,depth+1);}catch(e){}
+        // 알려진 타입 폴더만 진입 (월간누적·일일성과 등 무관 폴더는 스캔 안 함)
+        const ftype=spDetectType(entry.name,'');
+        if(ftype&&ftype!=='contCum'){try{await walk(entry,entry.name,depth+1);}catch(e){}}
       }
     }
   }
@@ -10801,19 +10821,33 @@ async function spScanFolder(opts={}){
   }
   spScanBusy=false;
   if(okCnt>0)spModel=null;
+  spLastSkipped=skipped;
   spUpdateUploadStatus();spRenderFileHistory();
   spUpdateDirStatus('ok',{okCnt,dupCnt,skipped:skipped.length});
   // 배너: 사용자가 직접 누른 경우(항상) 또는 자동 스캔이라도 신규가 있으면 결과 표시, 그 외엔 숨김
   if(!opts.fromShow||okCnt>0)spSetBanner('ok',{okCnt,dupCnt,skipped:skipped.length});
   else spSetBanner('hide');
   if(okCnt>0&&!opts.fromShow&&typeof currentPage!=='undefined'&&currentPage==='series-perf')spOnShow();
-  if(opts.announce){
-    const msgs=[`공용폴더 스캔 완료\n신규 ${okCnt}개${dupCnt?` · 중복 ${dupCnt}개`:''}${skipped.length?` · 미인식 ${skipped.length}개`:''}`];
-    if(errs.length)msgs.push('처리 오류:\n- '+errs.join('\n- '));
-    alert(msgs.join('\n\n'));
-  }
+  // 사용자가 직접 스캔했고 미인식 파일이 있으면 모달로 목록 표시
+  if(opts.announce&&skipped.length)spShowSkipModal();
+  if(opts.announce&&errs.length)alert('처리 오류:\n- '+errs.join('\n- '));
   return {okCnt,dupCnt,skipped:skipped.length};
 }
+let spLastSkipped=[];
+function spShowSkipModal(){
+  const ov=document.getElementById('spSkipOverlay');if(!ov)return;
+  document.getElementById('spSkipCount').textContent=`${spLastSkipped.length}건`;
+  const body=document.getElementById('spSkipBody');
+  if(!spLastSkipped.length){body.innerHTML='<div class="sp-meta" style="padding:14px;text-align:center">미인식 파일이 없습니다.</div>';}
+  else{
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    body.innerHTML='<div style="max-height:50vh;overflow-y:auto;border:1px solid #eef1f6;border-radius:8px">'+
+      spLastSkipped.map(f=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:12.5px"><span style="word-break:break-all">${esc(f.name)}</span><span class="sp-meta" style="white-space:nowrap">📁 ${esc(f.folder)}</span></div>`).join('')+
+      '</div>';
+  }
+  ov.classList.add('open');
+}
+function spCloseSkip(){const ov=document.getElementById('spSkipOverlay');if(ov)ov.classList.remove('open');}
 // 탭 열 때 자동 스캔 (권한이 이미 granted면 무인 스캔, 아니면 안내만)
 async function spAutoScanOnShow(){
   if(!window.showDirectoryPicker){spSetBanner('hide');return;}
@@ -11301,11 +11335,10 @@ function spDrill(encName){
   const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}">${j.t}</span></div></div>`;}).join('');
   const tDb=aggDb.reduce((a,b)=>a+b,0),tC=cArr.reduce((a,b)=>a+b,0);
   document.getElementById('spDrillBody').innerHTML=`
-    <button class="close" onclick="spCloseDrill()">&times;</button>
     <h3>${name.replace(/^\(.*?\)/,'')} <span style="font-size:13px;color:var(--gray)">${SP_TEAM_TAG[person.team]||''} ${person.ctr||''}</span></h3>
     <div style="font-size:12px;color:var(--gray);margin-bottom:14px">기간 ${document.getElementById('spDateStart').value}~${document.getElementById('spDateEnd').value} · 판정기준 ${spBasis==='gross'?'실계약':'취소반영'} · 종합 ${tDb?spPct(tC/tDb):'-'} (계약 ${tC}/DB ${tDb})</div>
     <div style="font-weight:700;font-size:13px;margin-bottom:8px">계열별 성과</div>
-    <div class="sp-series-cards" style="margin-bottom:18px">${serCards}</div>
+    <div class="sp-series-cards" style="margin-bottom:18px;grid-template-columns:repeat(6,minmax(0,1fr))">${serCards}</div>
     <div style="font-weight:700;font-size:13px;margin-bottom:4px">연령대 × 체류시간 계약률 히트맵 <span class="sp-meta">(R 긴체류 → O 짧은체류 · 색 진할수록 고계약률)</span></div>
     <div style="overflow-x:auto"><table class="sp-heat">${headStay}${bodyRows}</table></div>
     <div class="sp-heat-legend">★ 강점 세그먼트 (DB 3건↑):
@@ -11314,6 +11347,12 @@ function spDrill(encName){
   document.getElementById('spDrillOverlay').classList.add('open');
 }
 function spCloseDrill(){document.getElementById('spDrillOverlay').classList.remove('open');}
+// ESC 키로 계열별성과 모달(드릴·미인식) 닫기 — 1회만 바인딩
+if(!window._spEscBound){window._spEscBound=true;document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  const d=document.getElementById('spDrillOverlay');if(d&&d.classList.contains('open')){spCloseDrill();return;}
+  const s=document.getElementById('spSkipOverlay');if(s&&s.classList.contains('open'))spCloseSkip();
+});}
 
 // ── 엑셀 다운로드 ──
 async function spDownloadExcel(){
