@@ -1423,6 +1423,24 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
             <div class="progress-bar hidden" id="prog-sp-attend"><div class="progress-fill"></div></div>
           </div>
         </div>
+        <div style="margin-top:16px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동</div>
+              <div id="spDirStatus" style="font-size:12px;color:var(--gray);margin-top:3px">연결 안 됨</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" id="spConnBtn" onclick="spConnectFolder()">공용폴더 연결</button>
+              <button class="btn btn-outline btn-sm" id="spScanBtn" onclick="spScanFolder({request:true,announce:true})">지금 스캔</button>
+              <button class="btn btn-outline btn-sm" id="spDiscBtn" style="color:var(--danger);border-color:#fecaca;display:none" onclick="spDisconnectFolder()">연결 해제</button>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--gray);margin-top:10px;line-height:1.6">
+            네트워크 공유드라이브 폴더를 한 번 지정하면, <b>계열별성과 탭을 열 때마다 자동으로 스캔</b>해 새 엑셀을 가져옵니다.
+            하위폴더명으로 종류를 구분하세요 — <b>DB수 / 실계약 / 취소반영 / 명단</b>.
+            (브라우저 보안상 새로고침 후 첫 1회는 <b>[지금 스캔]</b> 클릭으로 접근 허용이 필요합니다.)
+          </div>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-outline" onclick="spCloseModal()">닫기</button>
           <button class="btn btn-primary" id="spBtnGenerate" onclick="spCloseModal();spGenerate(true);">분석 실행</button>
@@ -10496,8 +10514,9 @@ async function mcOnShow(){
    · 계열(0~5)·연령대·체류시간 = DB수 파일에서 고객키 조인으로 확보
    · 계약 귀속 = 계약파일 담당자(N열), 기간 = DB 분배일 / 계약 신청일
    ════════════════════════════════════════════════════════════════ */
-const SP_DB_NAME='seriesPerfDashboard', SP_DB_VER=1;
+const SP_DB_NAME='seriesPerfDashboard', SP_DB_VER=2;
 let spIdb=null, spFiles=[], spLoaded=false, spModel=null, spCharts={};
+let spDirHandle=null, spScanBusy=false;
 let spTeam='all', spCenter='all', spUnit='day', spBasis='net', spCompare='team';
 const SP_TARGET_TEAMS=new Set(['뇌새김영어','제2외국어']);
 const SP_BANDS=[
@@ -10518,11 +10537,15 @@ const SP_TYPE_LABEL={db:'DB수',contDaily:'실계약(일마감)',contCum:'취소
 function spOpenIDB(){
   return new Promise((res,rej)=>{
     const req=indexedDB.open(SP_DB_NAME,SP_DB_VER);
-    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});if(!db.objectStoreNames.contains('handles'))db.createObjectStore('handles',{keyPath:'k'});};
     req.onsuccess=()=>{spIdb=req.result;res();};
     req.onerror=()=>rej(req.error);
   });
 }
+// ── 공용폴더 디렉터리 핸들 영구 보관 (File System Access API) ──
+function spIdbPutHandle(h){return new Promise((res,rej)=>{const tx=spIdb.transaction('handles','readwrite');tx.objectStore('handles').put({k:'dir',h});tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function spIdbGetHandle(){return new Promise((res,rej)=>{const tx=spIdb.transaction('handles','readonly');const r=tx.objectStore('handles').get('dir');r.onsuccess=()=>res(r.result?r.result.h:null);r.onerror=()=>rej(r.error);});}
+function spIdbDelHandle(){return new Promise((res,rej)=>{const tx=spIdb.transaction('handles','readwrite');tx.objectStore('handles').delete('dir');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
 function spMarkDirty(){if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}
 function spIdbAdd(rec){return new Promise((res,rej)=>{const tx=spIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{spMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 function spIdbGetAll(){return new Promise((res,rej)=>{const tx=spIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
@@ -10608,7 +10631,7 @@ function spOpenModal(view){
   document.getElementById('spModalOverlay').classList.add('open');
   document.getElementById('spModalUpload').classList.toggle('hidden',view==='manage');
   document.getElementById('spModalManage').classList.toggle('hidden',view!=='manage');
-  spBindUploadBoxes();spUpdateUploadStatus();spRenderFileHistory();
+  spBindUploadBoxes();spUpdateUploadStatus();spRenderFileHistory();spRefreshDirHandle();
 }
 function spCloseModal(){document.getElementById('spModalOverlay').classList.remove('open');}
 function spUpdateStatusDots(){SP_TYPES.forEach(k=>{const el=document.getElementById('sp-dot-'+k);if(el)el.classList.toggle('ok',spFilesByType(k).length>0);});}
@@ -10639,6 +10662,142 @@ function spRenderFileHistory(){
 async function spDeleteFile(id){await spIdbDel(id);spFiles=spFiles.filter(f=>f.id!==id);spModel=null;spUpdateUploadStatus();spRenderFileHistory();}
 async function spResetAll(){if(!confirm('계열별성과의 모든 업로드 파일을 삭제합니다. 계속할까요?'))return;await spIdbClear();spFiles=[];spModel=null;spUpdateUploadStatus();spRenderFileHistory();document.getElementById('spDashboard').classList.add('hidden');document.getElementById('spEmpty').classList.remove('hidden');spCloseModal();}
 
+// ════════════ 파일 인제스트 (수동 업로드·폴더 스캔 공통) ════════════
+async function spIngestFile(type,file){
+  const fileHash=`${file.name}|${file.size}`;
+  if(type!=='attend'&&spFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup',name:file.name};
+  if(type==='attend'){const cur=spFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup',name:file.name};}
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+  let rows;
+  if(type==='db')rows=spParseDb(wb);
+  else if(type==='contDaily'||type==='contCum')rows=spParseCont(wb);
+  else rows=spParseAttend(wb);
+  if(type==='attend'){for(const f of spFilesByType('attend')){await spIdbDel(f.id);}spFiles=spFiles.filter(f=>f.type!=='attend');}
+  const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
+  if(type==='contCum')rec.ym=spParseYm(file.name);
+  const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
+  return {status:'ok',name:file.name};
+}
+
+// ════════════ 공용폴더 자동 연동 (File System Access API) ════════════
+// 하위폴더명 우선 → 파일명 보조로 4종 타입 판별. 미인식은 무시.
+function spDetectType(folderName,fileName){
+  const f=String(folderName||'').toLowerCase(), n=String(fileName||'').toLowerCase();
+  const byKey=s=>{
+    if(/실계약|일마감|daily/.test(s))return 'contDaily';   // '신청자관리'보다 먼저
+    if(/취소반영|월간|누적|cum|month/.test(s))return 'contCum';
+    if(/db수|디비|고객관리|^db$|\bdb\b/.test(s))return 'db';
+    if(/명단|근태|그룹|attend|roster/.test(s))return 'attend';
+    return null;
+  };
+  let t=byKey(f);if(t)return t;
+  // 파일명 보조 판별
+  if(/근태|명단|그룹/.test(n))return 'attend';
+  if(/고객관리/.test(n))return 'db';
+  if(/신청자관리/.test(n)){
+    const m=n.match(/(20\d{2})[._-]?(\d{2})([._-]?(\d{2}))?/);
+    return (m&&m[4])?'contDaily':'contCum';   // 날짜 8자리=일마감, 6자리=월간누적
+  }
+  t=byKey(n);return t;
+}
+async function spVerifyPerm(h,request){
+  try{
+    if(!h||!h.queryPermission)return false;
+    const opt={mode:'read'};
+    if(await h.queryPermission(opt)==='granted')return true;
+    if(request&&await h.requestPermission(opt)==='granted')return true;
+  }catch(e){}
+  return false;
+}
+function spUpdateDirStatus(state,info){
+  const el=document.getElementById('spDirStatus');const scanBtn=document.getElementById('spScanBtn');const connBtn=document.getElementById('spConnBtn');const discBtn=document.getElementById('spDiscBtn');
+  const supported=!!window.showDirectoryPicker;
+  if(connBtn)connBtn.disabled=!supported;
+  if(scanBtn)scanBtn.disabled=!supported||!spDirHandle;
+  if(discBtn)discBtn.style.display=spDirHandle?'':'none';
+  if(!el)return;
+  if(!supported){el.textContent='이 브라우저는 폴더 자동연동 미지원 (Chrome·Edge 권장)';el.style.color='var(--danger)';return;}
+  if(state==='busy'){el.textContent='폴더 스캔 중…';el.style.color='var(--gray)';return;}
+  if(state==='error'){el.textContent='⚠ 스캔 오류 — 콘솔 확인';el.style.color='var(--danger)';return;}
+  if(state==='need-perm'){el.innerHTML='🔒 연결됨 · 권한 필요 — <b>[지금 스캔]</b>을 눌러 접근을 허용하세요';el.style.color='#b45309';return;}
+  if(state==='ok'){el.textContent=`✓ 스캔 완료 · 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}${info.skipped?` · 미인식 ${info.skipped}`:''}`;el.style.color='var(--success,#16a34a)';return;}
+  if(spDirHandle){el.innerHTML=`✓ 연결됨${spDirName?` · <b>${spDirName}</b>`:''} — 탭 열 때 자동 스캔`;el.style.color='var(--success,#16a34a)';}
+  else{el.textContent='연결 안 됨 — [공용폴더 연결]로 네트워크 공유드라이브 폴더를 지정하세요';el.style.color='var(--gray)';}
+}
+let spDirName='';
+async function spRefreshDirHandle(){try{if(!spIdb)await spOpenIDB();spDirHandle=await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';}catch(e){spDirHandle=null;spDirName='';}spUpdateDirStatus();}
+async function spConnectFolder(){
+  if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.');return;}
+  try{
+    const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});
+    if(!spIdb)await spOpenIDB();
+    await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;
+    spUpdateDirStatus();
+    await spScanFolder({request:true,announce:true});
+  }catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
+}
+async function spDisconnectFolder(){
+  if(!confirm('공용폴더 연결을 해제할까요? (이미 가져온 데이터는 유지됩니다)'))return;
+  try{if(!spIdb)await spOpenIDB();await spIdbDelHandle();}catch(e){}
+  spDirHandle=null;spDirName='';spUpdateDirStatus();
+}
+// 폴더(루트+하위 2단계) 스캔 → 신규 .xlsx 인제스트
+async function spScanFolder(opts={}){
+  if(spScanBusy)return;
+  if(!spLoaded)await spLoadFiles();
+  if(!spIdb)await spOpenIDB();
+  const h=spDirHandle||await spIdbGetHandle();
+  if(!h){if(opts.announce)alert('먼저 공용폴더를 연결하세요.');return;}
+  spDirHandle=h;spDirName=h.name;
+  if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');return;}
+  spScanBusy=true;spUpdateDirStatus('busy');
+  const tasks=[],skipped=[];
+  async function walk(dir,folderName,depth){
+    for await(const entry of dir.values()){
+      if(entry.kind==='file'){
+        if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
+        const type=spDetectType(folderName,entry.name);
+        if(type)tasks.push({type,entry});else skipped.push(entry.name);
+      }else if(entry.kind==='directory'&&depth<2){
+        try{await walk(entry,entry.name,depth+1);}catch(e){}
+      }
+    }
+  }
+  try{await walk(h,'',0);}
+  catch(e){console.error('폴더 스캔 오류',e);spScanBusy=false;spUpdateDirStatus('error');if(opts.announce)alert('폴더 스캔 중 오류가 발생했습니다.\n'+(e.message||e));return;}
+  // 명단(attend)은 파일명 최신 1개만 채택
+  const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
+  const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
+  let okCnt=0,dupCnt=0;const errs=[];
+  for(const t of finalTasks){
+    try{const file=await t.entry.getFile();const r=await spIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}
+    catch(err){errs.push(`${t.entry.name}: ${err.message}`);console.error(err);}
+  }
+  spScanBusy=false;
+  if(okCnt>0)spModel=null;
+  spUpdateUploadStatus();spRenderFileHistory();
+  spUpdateDirStatus('ok',{okCnt,dupCnt,skipped:skipped.length});
+  if(okCnt>0&&!opts.fromShow&&typeof currentPage!=='undefined'&&currentPage==='series-perf')spOnShow();
+  if(opts.announce){
+    const msgs=[`공용폴더 스캔 완료\n신규 ${okCnt}개${dupCnt?` · 중복 ${dupCnt}개`:''}${skipped.length?` · 미인식 ${skipped.length}개`:''}`];
+    if(errs.length)msgs.push('처리 오류:\n- '+errs.join('\n- '));
+    alert(msgs.join('\n\n'));
+  }
+  return {okCnt,dupCnt,skipped:skipped.length};
+}
+// 탭 열 때 자동 스캔 (권한이 이미 granted면 무인 스캔, 아니면 안내만)
+async function spAutoScanOnShow(){
+  if(!window.showDirectoryPicker)return;
+  try{
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';
+    if(!spDirHandle){spUpdateDirStatus();return;}
+    if(await spVerifyPerm(spDirHandle,false))await spScanFolder({request:false,announce:false,fromShow:true});
+    else spUpdateDirStatus('need-perm');
+  }catch(e){console.error('자동 스캔',e);}
+}
+
 function spBindUploadBoxes(){
   document.querySelectorAll('#spModalUpload input[type=file]').forEach(input=>{
     if(input.dataset.bound)return;input.dataset.bound='1';
@@ -10646,21 +10805,7 @@ function spBindUploadBoxes(){
     const box=document.getElementById('box-sp-'+type);
     const prog=document.getElementById('prog-sp-'+type);
     const fnameEl=document.getElementById('fname-sp-'+type);
-    const handleOne=async file=>{
-      const fileHash=`${file.name}|${file.size}`;
-      if(type!=='attend'&&spFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup',name:file.name};
-      const buf=await file.arrayBuffer();
-      const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-      let rows;
-      if(type==='db')rows=spParseDb(wb);
-      else if(type==='contDaily'||type==='contCum')rows=spParseCont(wb);
-      else rows=spParseAttend(wb);
-      if(type==='attend'){for(const f of spFilesByType('attend')){await spIdbDel(f.id);}spFiles=spFiles.filter(f=>f.type!=='attend');}
-      const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
-      if(type==='contCum')rec.ym=spParseYm(file.name);
-      const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
-      return {status:'ok',name:file.name};
-    };
+    const handleOne=file=>spIngestFile(type,file);
     const handleMany=async files=>{
       const arr=Array.from(files||[]).filter(Boolean);if(!arr.length)return;
       const list=(type==='attend'&&arr.length>1)?[arr[arr.length-1]]:arr;
@@ -10813,6 +10958,7 @@ const SP_TEAM_TAG={'뇌새김영어':'<span class="sp-team-tag sp-team-eng">영�
 
 async function spOnShow(){
   if(!spLoaded)await spLoadFiles();
+  await spAutoScanOnShow();
   if(spReady()){
     if(!spModel){spGenerate(false);return;}
     document.getElementById('spEmpty').classList.add('hidden');
