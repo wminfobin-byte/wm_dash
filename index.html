@@ -2657,6 +2657,40 @@ function isHoliday(d){
   return HOLIDAYS.has(key);
 }
 
+// ─── 공휴일 자동 갱신 (Nager.Date API + 하드코딩 fallback) ───
+// 위 HOLIDAYS는 오프라인/임시공휴일 대비 baseline. 아래 로직이 매 로드마다 API에서
+// 최신 공휴일(임시공휴일·재지정 포함)을 받아 Set·localStorage 캐시에 병합한다.
+// data.go.kr 천문연구원 API가 가장 정확하나 브라우저 CORS 미허용 → CORS 허용되는 Nager 사용.
+const HOLIDAY_CACHE_KEY='wm_holidays_cache';
+const HOLIDAYS_BASELINE=new Set(HOLIDAYS); // 캐시/API 주입 전 하드코딩 목록 (로그·구분용)
+// 캐시를 동기적으로 Set에 주입 (isHoliday는 동기 호출이므로 로드 시점에 즉시 반영돼야 함)
+(function seedHolidayCache(){
+  try{
+    const c=JSON.parse(localStorage.getItem(HOLIDAY_CACHE_KEY)||'null');
+    if(c&&Array.isArray(c.dates)) c.dates.forEach(d=>HOLIDAYS.add(d));
+  }catch(e){/* 캐시 손상 시 무시, baseline 사용 */}
+})();
+// 비동기 갱신: 올해±1년치 fetch → Set·캐시 병합. 신규 발견 시 true 반환.
+async function refreshHolidaysFromAPI(){
+  try{
+    const c=JSON.parse(localStorage.getItem(HOLIDAY_CACHE_KEY)||'null');
+    if(c&&c.ts&&(Date.now()-c.ts < 12*3600*1000)) return false; // 12h 이내면 스킵
+  }catch(e){}
+  const yr=new Date().getFullYear();
+  let added=false; const collected=[];
+  for(const y of [yr-1,yr,yr+1]){
+    try{
+      const res=await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/KR`);
+      if(!res.ok) continue;
+      const arr=await res.json();
+      for(const h of arr){ if(h&&h.date){ collected.push(h.date); if(!HOLIDAYS.has(h.date)){HOLIDAYS.add(h.date); added=true;} } }
+    }catch(e){ console.warn('[holiday] API 조회 실패',y,e); }
+  }
+  if(collected.length) localStorage.setItem(HOLIDAY_CACHE_KEY, JSON.stringify({ts:Date.now(), dates:collected}));
+  if(added) console.log('[holiday] 신규 공휴일 반영됨:', collected.filter(d=>!HOLIDAYS_BASELINE.has(d)));
+  return added;
+}
+
 // ═══════════════════════════════════════════
 //  고객상태 판별
 // ═══════════════════════════════════════════
@@ -3826,6 +3860,14 @@ document.addEventListener('keydown',(e)=>{
     }
   }
   checkAuth();
+  // 공휴일 최신화 (비차단): 캐시는 위에서 동기 주입됨. API에서 신규 공휴일(임시공휴일·재지정)
+  // 발견 시 현재 탭 재계산. 다른 탭은 전환 시 재계산되므로 추가 처리 불필요.
+  refreshHolidaysFromAPI().then(added=>{
+    if(added && ['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0)){
+      console.log('[holiday] 신규 공휴일 반영 → 재계산');
+      generate();
+    }
+  }).catch(()=>{});
 })();
 
 // ═══════════════════════════════════════════════════════════════
