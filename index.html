@@ -1894,7 +1894,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <div style="font-size:48px;margin-bottom:16px;opacity:.5">🏅</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:8px">차등 성과 대시보드</div>
     <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 4종 파일(DB·계약·취소·명단) 업로드 → 대시보드 생성<br>
-    <span style="font-size:12px;color:#999">CMS 그룹 W·E·A·B·H 멤버 모두 포함 · 초기 등급 파일은 선택 사항</span></div>
+    <span style="font-size:12px;color:#999">차등 대상(A·B·C·D·H그룹) 멤버 모두 포함 · 초기 등급 파일은 선택 사항</span></div>
   </div>
   <div id="gdDashboard" class="hidden">
     <div class="period-bar">
@@ -6753,8 +6753,8 @@ async function gdDeleteInit(){
 }
 
 // ─── KPI 집계 ───────────────────────────────
-// CMS 그룹 → 차등 등급 자동 매핑 (W=A, E=B, A=C, B=D, H=H)
-// CMS 그룹 명칭은 임시 표기로 차등 등급 명칭으로 일원화될 예정
+// (레거시·미사용) 옛 CMS 그룹 → 차등 등급 매핑. CMS 등급명이 A/B/C/D/H로 일원화되어
+// 더 이상 변환 불필요. 호출처 없음 — 과거 참고용으로만 남김.
 function gdInferGradeFromCms(cmsGrp){
   if(cmsGrp==='W') return 'A';
   if(cmsGrp==='E') return 'B';
@@ -6867,11 +6867,21 @@ function gdGetMembers(data){
   const excluded=[];
   const longAbsentList=[];  // 모든 장기공석 인원(포함/제외 무관) — 수정 모드 UI용
   const includeSet=gdGetLongAbsentIncludeSet();
+  // 명단 '그룹' 표기 체계 자동 감지: 옛 표기(W/E/A/B/H그룹) vs 새 표기(A/B/C/D/H그룹).
+  // 'A그룹' 의미가 정반대라(옛=하위, 새=최상위) 체계를 먼저 판별해야 한다.
+  // W/E그룹이 하나라도 보이면 레거시 파일 → 옛 체계, 아니면 새 체계(A/B/C/D/H).
+  let oldScheme=false;
+  for(const r of data){
+    if(str(r['담당'])!=='뇌새김영어') continue;
+    const g=str(r['그룹']);
+    if(g==='W그룹'||g==='E그룹'){ oldScheme=true; break; }
+  }
+  const validGroups = oldScheme ? ['W그룹','E그룹','A그룹','B그룹','H그룹'] : ['A그룹','B그룹','C그룹','D그룹','H그룹'];
   for(const r of data){
     const dept=str(r['담당']),grp=str(r['그룹']),name=str(r['이름']);
     if(dept!=='뇌새김영어') continue;
-    // 차등 대상: CMS 그룹 W/E/A/B/H 5종 모두 (W=A, E=B, A=C, B=D, H=H 매핑)
-    if(!['W그룹','E그룹','A그룹','B그룹','H그룹'].includes(grp)) continue;
+    // 차등 대상 5종 (체계 자동 감지). cmsGroup은 표시용 라벨(참고).
+    if(!validGroups.includes(grp)) continue;
     if(!name) continue;
     const cmsGroup=grp.replace('그룹','');
     const ex=gdDetectExclusion(r);
