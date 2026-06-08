@@ -75,6 +75,15 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 .progress-bar.done .progress-fill{width:100%;background:var(--success);transition:width .3s}
 .upload-box .badge-count{position:absolute;top:8px;right:8px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
 .modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+/* 차등성과 업로드 모달 — 닫기·차등산정 버튼이 스크롤 없이 한 화면에 보이도록 압축 (gd 모달 전용) */
+#gdModalOverlay .modal{padding:22px}
+#gdModalOverlay .modal h2{margin-bottom:12px}
+#gdModalUpload .upload-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+#gdModalUpload .upload-box{padding:10px}
+#gdModalUpload .upload-box .icon{font-size:22px;margin-bottom:2px}
+#gdModalUpload .upload-box .label{font-size:13px;margin-bottom:2px}
+#gdModalUpload .upload-box .desc{font-size:10.5px;line-height:1.35}
+#gdModalUpload .modal-footer{margin-top:12px}
 
 /* File History */
 .file-history{margin-top:8px}
@@ -1812,7 +1821,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <div class="progress-bar hidden" id="prog-gd-attend"><div class="progress-fill"></div></div>
         </div>
       </div>
-      <div style="margin-top:16px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
+      <div style="margin-top:10px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
             <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (DB수·명단)</div>
@@ -1823,27 +1832,20 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
             <button type="button" class="btn btn-outline btn-sm" id="gdScanBtn" onclick="gdScanFolder({request:true,announce:true})">지금 스캔</button>
           </div>
         </div>
-        <div style="font-size:11.5px;color:var(--gray);margin-top:10px;line-height:1.6">
-          계열별성과 탭과 <b>같은 공용폴더</b>를 씁니다 (한 번만 연결). 탭을 열 때마다 <b>DB수(고객관리)·명단</b> 최신본을 자동으로 가져옵니다.
-          계약수·취소수는 직접 업로드하세요.
+        <div style="font-size:11.5px;color:var(--gray);margin-top:8px;line-height:1.55">
+          탭을 열 때마다 <b>DB수(고객관리)·명단</b> 최신본을 자동으로 가져옵니다. 계약수·취소수는 직접 업로드하세요.
         </div>
       </div>
-      <div style="margin-top:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:#fffdf7">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="margin-top:8px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#fffdf7">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="font-weight:700;font-size:14px">📅 집계 기간 (분배일 기준)</div>
-          <button type="button" class="btn btn-outline btn-sm" onclick="gdAutofillPeriod(true)" title="가져온 DB의 최신 분배일과 직전 회차를 기준으로 자동 채움">↻ 자동 채움</button>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <input type="date" id="gd-period-start" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px">
+          <input type="date" id="gd-period-start" style="padding:7px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
           <span style="color:var(--gray);font-weight:700">~</span>
-          <input type="date" id="gd-period-end" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px">
-        </div>
-        <div style="font-size:11.5px;color:var(--gray);margin-top:10px;line-height:1.6">
-          누적 DB 파일에서 <b>이 분배일 범위만</b> 잘라 이번 회차로 집계합니다. 자동수집 시 자동으로 채워지며, 필요하면 직접 조정하세요.
-          (비워두면 종료=DB 최신 분배일, 시작=직전 회차 종료 다음날로 자동 처리)
+          <input type="date" id="gd-period-end" style="padding:7px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+          <button type="button" class="btn btn-outline btn-sm" onclick="gdAutofillPeriod(true)" title="가져온 DB의 최신 분배일과 직전 회차를 기준으로 자동 채움" style="margin-left:auto">↻ 자동 채움</button>
         </div>
       </div>
-      <h3 onclick="gdToggleInitSection()" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
+      <h3 onclick="gdToggleInitSection()" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
         <span id="gd-init-arrow" style="display:inline-block;transition:transform .2s;font-size:11px;color:var(--gray)">▶</span>
         초기 등급 설정 (1회성)
         <span style="font-size:11px;color:var(--gray);font-weight:400;margin-left:auto">클릭하여 펼치기</span>
