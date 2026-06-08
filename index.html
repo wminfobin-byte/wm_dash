@@ -735,6 +735,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   <div class="header-brand">
     <div class="header-logo" onclick="location.reload()" style="cursor:pointer"><img src="위버스마이드_세로형_화이트.png" alt="위버스마인드" style="height:32px"></div>
     <h1>통합 대시보드</h1>
+    <button id="holidayRefreshBtn" onclick="manualRefreshHolidays()" title="공휴일 목록을 즉시 최신화합니다 (임시공휴일 발표 직후 사용)"
+      style="margin-left:10px;padding:4px 9px;font-size:11px;line-height:1;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);cursor:pointer;white-space:nowrap">🗓 공휴일 갱신</button>
   </div>
   <div class="header-right" id="headerRight-ngroup">
     <div class="status-dots" id="statusDots" title="파일 상태: DB수 / 계약수 / 취소율 / 명단">
@@ -2671,11 +2673,14 @@ const HOLIDAYS_BASELINE=new Set(HOLIDAYS); // 캐시/API 주입 전 하드코딩
   }catch(e){/* 캐시 손상 시 무시, baseline 사용 */}
 })();
 // 비동기 갱신: 올해±1년치 fetch → Set·캐시 병합. 신규 발견 시 true 반환.
-async function refreshHolidaysFromAPI(){
-  try{
-    const c=JSON.parse(localStorage.getItem(HOLIDAY_CACHE_KEY)||'null');
-    if(c&&c.ts&&(Date.now()-c.ts < 12*3600*1000)) return false; // 12h 이내면 스킵
-  }catch(e){}
+// force=true면 12h 쓰로틀 무시(수동 새로고침 버튼용).
+async function refreshHolidaysFromAPI(force){
+  if(!force){
+    try{
+      const c=JSON.parse(localStorage.getItem(HOLIDAY_CACHE_KEY)||'null');
+      if(c&&c.ts&&(Date.now()-c.ts < 12*3600*1000)) return false; // 12h 이내면 스킵
+    }catch(e){}
+  }
   const yr=new Date().getFullYear();
   let added=false; const collected=[];
   for(const y of [yr-1,yr,yr+1]){
@@ -2689,6 +2694,22 @@ async function refreshHolidaysFromAPI(){
   if(collected.length) localStorage.setItem(HOLIDAY_CACHE_KEY, JSON.stringify({ts:Date.now(), dates:collected}));
   if(added) console.log('[holiday] 신규 공휴일 반영됨:', collected.filter(d=>!HOLIDAYS_BASELINE.has(d)));
   return added;
+}
+// 수동 새로고침 버튼: 12h 쓰로틀 무시하고 즉시 API 재조회.
+// 신규 공휴일 발견 시 캐시가 갱신되므로 새로고침해 모든 탭에 반영(IDB 영구저장이라 안전).
+async function manualRefreshHolidays(){
+  const btn=document.getElementById('holidayRefreshBtn');
+  if(btn&&btn.disabled) return;
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 조회 중…'; btn.style.opacity='.6'; }
+  let added=false, ok=true;
+  try{ added=await refreshHolidaysFromAPI(true); }
+  catch(e){ ok=false; console.warn('[holiday] 수동 갱신 실패',e); }
+  if(btn){
+    btn.textContent = !ok ? '⚠ 조회 실패' : added ? '✓ 신규 반영' : '✓ 이미 최신';
+    setTimeout(()=>{ btn.disabled=false; btn.textContent=orig; btn.style.opacity=''; }, added?1200:2000);
+  }
+  if(added){ setTimeout(()=>location.reload(), 900); } // 모든 탭 재계산 위해 새로고침
 }
 
 // ═══════════════════════════════════════════
