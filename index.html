@@ -1911,6 +1911,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadChangesExcel()" title="이번 회차와 직전 회차 간 등급이 변동된 코디만 추출">변동 Excel 다운로드</button>
+      <button class="btn btn-success btn-sm" onclick="document.getElementById('gdCmsGradeInput').click()" title="CMS 종합등급 파일을 올리면 대시보드에 있는 상담원만 현재 등급으로 반영해 같은 양식으로 다운로드">CMS 등급 반영</button>
+      <input type="file" id="gdCmsGradeInput" accept=".xlsx,.xls" style="display:none" onchange="gdApplyCmsGrade(this)">
     </div>
     <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
@@ -8619,32 +8621,22 @@ async function gdDownloadChangesExcel(){
   const curLabel=`이번회차(${cur.sheetName||''})`;
   const prevLabel=`직전회차(${prev.sheetName||''})`;
 
-  // CMS 그룹 명칭 매핑 (A→W, B→E, C→A, D→B, H→H)
-  const CMS_LABEL={'A':'W','B':'E','C':'A','D':'B','H':'H'};
-
-  function buildChangesSheet(title, labelOf){
+  function buildChangesSheet(){
+    // 2행 병합 타이틀 제거(요청) — 헤더부터 시작. 등급 명칭은 CMS도 A/B/C/D/H로 일원화됨.
     const aoa=[
       Array(6).fill(''),
-      ['','',title,'','',''],
-      Array(6).fill(''),
       ['','센터','코디명',curLabel,prevLabel,''],
-      ...changes.map(c=>['',c.center,c.name,labelOf(c.cur),labelOf(c.prev),'']),
+      ...changes.map(c=>['',c.center,c.name,c.cur,c.prev,'']),
       Array(6).fill('')
     ];
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols']=[{wch:1},{wch:16},{wch:16},{wch:18},{wch:18},{wch:1}];
-    if(!ws['!merges']) ws['!merges']=[];
-    ws['!merges'].push({s:{r:1,c:1},e:{r:1,c:4}});
     if(!ws['!rows']) ws['!rows']=[];
     ws['!rows'][1]={hpt:28};
-    ws['!rows'][3]={hpt:28};
-    const titleCell=XLSX.utils.encode_cell({r:1,c:1});
-    if(ws[titleCell]) ws[titleCell].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:14,name:'맑은 고딕'},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}}};
-    for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
+    for(let c=1;c<=4;c++){const a=XLSX.utils.encode_cell({r:1,c});if(ws[a])ws[a].s=hdrS;}
     changes.forEach((r,i)=>{
-      const ri=4+i;
+      const ri=2+i;
       for(const c of [1,2]){const a=XLSX.utils.encode_cell({r:ri,c});if(ws[a])ws[a].s=cellS;}
-      // 색상은 원본 등급(r.cur/r.prev) 기준 — CMS 명칭 시트도 동일 색상 유지
       {const a=XLSX.utils.encode_cell({r:ri,c:3});if(ws[a]){const gc=gColors[r.cur]||gColors['-'];ws[a].s={font:{bold:true,sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
       {const a=XLSX.utils.encode_cell({r:ri,c:4});if(ws[a]){const gc=gColors[r.prev]||gColors['-'];ws[a].s={font:{sz:11,name:'맑은 고딕',color:{rgb:gc.font}},fill:{fgColor:{rgb:gc.fill}},alignment:{horizontal:'center',vertical:'center'},border:bdr};}}
     });
@@ -8652,8 +8644,7 @@ async function gdDownloadChangesExcel(){
   }
 
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, buildChangesSheet('WM 차등 등급 변동', g=>g), `변동_${cur.sheetName||''}`);
-  XLSX.utils.book_append_sheet(wb, buildChangesSheet('CMS 명칭 (W/E/A/B/H)', g=>CMS_LABEL[g]||g), `CMS_${cur.sheetName||''}`);
+  XLSX.utils.book_append_sheet(wb, buildChangesSheet(), `변동_${cur.sheetName||''}`);
 
   let excelName='(공유) 차등 변동.xlsx';
   if(gdResult&&gdResult.maxDistDate){
@@ -8676,6 +8667,78 @@ async function gdDownloadChangesExcel(){
   }catch(e){
     console.warn('눈금선 제거 실패, 기본 방식으로 저장',e);
     XLSX.writeFile(wb,excelName,{bookSST:true});
+  }
+}
+
+// ── CMS 종합등급 파일에 차등 결과 반영 후 다운로드 ──
+// CMS가 업로드한 양식(WM_종합등급)을 그대로 받아, "상담원" 이름이 대시보드 멤버와
+// 일치하는 행만 "종합등급" 열을 현재 회차 등급(A/B/C/D/H)으로 덮어쓴다.
+// 대시보드에 없는 상담원은 손대지 않으며, 셀 값만 바꿔 원본 양식·서식을 보존한다.
+// 이름은 명단·CMS 모두 동일한 "(R_센터)이름" 형식이라 전체 이름 정확 매칭으로 안전.
+async function gdApplyCmsGrade(inputEl){
+  const f=inputEl.files&&inputEl.files[0]; inputEl.value='';
+  if(!f) return;
+  if(!gdResult || !gdResult.groups || !Object.keys(gdResult.groups).length){
+    alert('먼저 대시보드를 생성해주세요. (반영할 차등 등급이 없습니다)'); return;
+  }
+  const grades=gdResult.groups; // {전체이름: 'A'|'B'|'C'|'D'|'H'}
+  const memberSet=new Set(Object.keys(grades));
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellStyles:true});
+    const sn=wb.SheetNames[0];
+    const ws=wb.Sheets[sn];
+    if(!ws||!ws['!ref']){ alert('빈 시트입니다.'); return; }
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    const hr=range.s.r; // 헤더 행
+    let nameCol=-1, gradeCol=-1;
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const h=ws[XLSX.utils.encode_cell({r:hr,c})];
+      const v=h?String(h.v||'').trim():'';
+      if(v==='상담원') nameCol=c;
+      if(v==='종합등급') gradeCol=c;
+    }
+    if(nameCol<0||gradeCol<0){
+      alert('CMS 종합등급 양식이 아닙니다.\n("상담원"·"종합등급" 헤더를 찾지 못했습니다)'); return;
+    }
+    const fileNames=new Set();
+    const changed=[]; let matched=0, unchanged=0;
+    for(let r=hr+1;r<=range.e.r;r++){
+      const nc=ws[XLSX.utils.encode_cell({r,c:nameCol})];
+      const nm=nc?String(nc.v||'').trim():'';
+      if(!nm) continue;
+      fileNames.add(nm);
+      if(!memberSet.has(nm)) continue; // 대시보드에 없는 상담원 → 건드리지 않음
+      matched++;
+      const newG=grades[nm];
+      const gAddr=XLSX.utils.encode_cell({r,c:gradeCol});
+      const curCell=ws[gAddr];
+      const cur=curCell?String(curCell.v??'').trim():'';
+      if(cur===newG){ unchanged++; continue; }
+      if(curCell){ curCell.v=newG; curCell.w=newG; curCell.t='s'; delete curCell.f; }
+      else ws[gAddr]={t:'s',v:newG,w:newG};
+      changed.push({name:nm, from:cur||'(빈값)', to:newG});
+    }
+    const notInFile=[...memberSet].filter(n=>!fileNames.has(n)).sort((a,b)=>a.localeCompare(b,'ko'));
+    const base=f.name.replace(/\.xlsx?$/i,'');
+    const outName=`${base}_차등반영.xlsx`;
+    XLSX.writeFile(wb, outName, {cellStyles:true, bookSST:true});
+
+    let msg=`✅ CMS 종합등급 반영 완료 — ${outName}\n\n`+
+      `· 매칭된 상담원: ${matched}명\n`+
+      `· 등급 변경: ${changed.length}건\n`+
+      `· 이미 동일(변경 없음): ${unchanged}명`;
+    if(notInFile.length){
+      msg+=`\n· ⚠ 대시보드엔 있으나 CMS 파일엔 없는 상담원: ${notInFile.length}명\n   ${notInFile.slice(0,15).join(', ')}${notInFile.length>15?` 외 ${notInFile.length-15}명`:''}`;
+    }
+    if(changed.length){
+      const list=changed.slice(0,30).map(c=>`  ${c.name}: ${c.from} → ${c.to}`).join('\n');
+      msg+=`\n\n[변경 내역]\n${list}${changed.length>30?`\n  …외 ${changed.length-30}건`:''}`;
+    }
+    alert(msg);
+  }catch(err){
+    console.error('[gd] CMS 등급 반영 오류',err);
+    alert('CMS 파일 처리 오류: '+(err&&err.message||err));
   }
 }
 
