@@ -1824,7 +1824,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div style="margin-top:10px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
-            <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (DB수·명단)</div>
+            <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (명단)</div>
             <div id="gdDirStatus" style="font-size:12px;color:var(--gray);margin-top:3px">연결 안 됨</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1833,16 +1833,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           </div>
         </div>
         <div style="font-size:11.5px;color:var(--gray);margin-top:8px;line-height:1.55">
-          탭을 열 때마다 <b>DB수(고객관리)·명단</b> 최신본을 자동으로 가져옵니다. 계약수·취소수는 직접 업로드하세요.
-        </div>
-      </div>
-      <div style="margin-top:8px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#fffdf7">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div style="font-weight:700;font-size:14px">📅 집계 기간 (분배일 기준)</div>
-          <input type="date" id="gd-period-start" style="padding:7px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
-          <span style="color:var(--gray);font-weight:700">~</span>
-          <input type="date" id="gd-period-end" style="padding:7px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
-          <button type="button" class="btn btn-outline btn-sm" onclick="gdAutofillPeriod(true)" title="가져온 DB의 최신 분배일과 직전 회차를 기준으로 자동 채움" style="margin-left:auto">↻ 자동 채움</button>
+          탭을 열 때마다 <b>명단</b> 최신본을 자동으로 가져옵니다. DB수·계약수·취소수는 직접 업로드하세요.
         </div>
       </div>
       <h3 onclick="gdToggleInitSection()" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
@@ -1898,7 +1889,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="gdCloseModal()">닫기</button>
-        <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdRunSanteong()">차등 산정</button>
+        <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdGenerate();gdCloseModal()">차등 산정</button>
       </div>
     </div>
     <div id="gdModalManage" class="hidden">
@@ -6385,7 +6376,7 @@ function gdOpenModal(v){
   document.getElementById('gdModalManage').classList.toggle('hidden',v!=='manage');
   document.getElementById('gdModalOverlay').classList.add('open');
   if(v==='manage') gdRenderFileHistory();
-  if(v==='upload'){ gdUpdateUploadStatus(); if(typeof gdRefreshDirHandle==='function')gdRefreshDirHandle(); if(typeof gdAutofillPeriod==='function')gdAutofillPeriod(false); }
+  if(v==='upload'){ gdUpdateUploadStatus(); if(typeof gdRefreshDirHandle==='function')gdRefreshDirHandle(); }
 }
 function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remove('open');}
 
@@ -6428,44 +6419,11 @@ function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remo
   box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;input.dispatchEvent(new Event('change'))}});
 });
 
-// ════════════ 공용폴더 자동 연동 (DB수·명단) + 분배일 기간 ════════════
+// ════════════ 공용폴더 자동 연동 (명단 전용) ════════════
 // 계열별성과(sp) 탭과 동일한 디렉터리 핸들을 공유한다(한 번만 연결). 타입 판별도 sp 룰 재사용.
-// DB수·명단만 가져오고, 각 종류의 최신 파일 1개만 인제스트한다(누적 DB는 최신 1개에 전체 분배가 들어있음).
+// 명단만 자동수집(최신 1개)한다. DB수·계약수·취소수는 직접 업로드.
 let gdScanBusy=false;
 
-function gdISO(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function gdGetPeriodDate(which){
-  const el=document.getElementById(which==='start'?'gd-period-start':'gd-period-end');
-  if(!el||!el.value)return null;
-  const p=el.value.split('-'); if(p.length!==3)return null;
-  const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d)?null:d;
-}
-// 가져온 최신 DB의 분배일 범위 + 직전 회차로 기간칸 자동 채움. force=true면 기존 값 덮어씀.
-async function gdAutofillPeriod(force){
-  const sEl=document.getElementById('gd-period-start'), eEl=document.getElementById('gd-period-end');
-  if(!sEl||!eEl)return;
-  const dbFile=gdGetLatest('db'); if(!dbFile){ if(force)alert('먼저 DB수 파일이 필요합니다.'); return; }
-  let mn=null,mx=null;
-  for(let i=1;i<dbFile.data.length;i++){
-    const d=parseDate(dbFile.data[i][COL.distributeDate]);
-    if(d){if(!mx||d>mx)mx=d;if(!mn||d<mn)mn=d;}
-  }
-  if(!mx)return;
-  if(force||!eEl.value) eEl.value=gdISO(mx);
-  if(force||!sEl.value){
-    let start=mn;
-    try{
-      const all=await gdGetAllResults();
-      const endShort=fmtDateShort(parseDate(eEl.value)||mx);
-      const prev=all.find(r=>r.sheetName<endShort);
-      if(prev && /^\d{6}$/.test(prev.sheetName)){
-        const yy=2000+parseInt(prev.sheetName.slice(0,2),10), mm=parseInt(prev.sheetName.slice(2,4),10)-1, dd=parseInt(prev.sheetName.slice(4,6),10);
-        const nd=new Date(yy,mm,dd); nd.setDate(nd.getDate()+1); start=nd;
-      }
-    }catch(e){}
-    if(start) sEl.value=gdISO(start);
-  }
-}
 async function gdRefreshDirHandle(){ try{ if(!spIdb)await spOpenIDB(); const h=await spIdbGetHandle(); spDirHandle=h; spDirName=h?h.name:''; }catch(e){} gdUpdateDirStatus(); }
 function gdUpdateDirStatus(state,info){
   info=info||{};
@@ -6489,7 +6447,7 @@ function gdSetBanner(mode,info){
   const msg=document.getElementById('gdDirBannerMsg'), btn=document.getElementById('gdDirBannerBtn');
   if(mode==='need-perm'){
     b.classList.remove('hidden'); b.style.background='#fffbeb'; b.style.borderColor='#fde68a';
-    msg.style.color='#92400e'; msg.innerHTML='📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 DB·명단을 불러오세요';
+    msg.style.color='#92400e'; msg.innerHTML='📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 명단을 불러오세요';
     if(btn){btn.textContent='📁 공용폴더 새로고침';btn.disabled=false;} return;
   }
   if(mode==='busy'){
@@ -6501,7 +6459,7 @@ function gdSetBanner(mode,info){
     if(!info.okCnt && !info.announce){ b.classList.add('hidden'); return; }
     b.classList.remove('hidden'); b.style.background='#f0fdf4'; b.style.borderColor='#bbf7d0'; msg.style.color='#166534';
     msg.innerHTML = info.okCnt
-      ? `✓ 공용폴더에서 DB·명단 최신본 가져옴 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}. 계약수·취소수 업로드 후 <b>[차등 산정]</b>`
+      ? `✓ 공용폴더에서 명단 최신본 가져옴 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}. DB수·계약수·취소수 업로드 후 <b>[차등 산정]</b>`
       : '✓ 공용폴더 확인 완료 — 이미 최신 상태입니다 (신규 0개)';
     if(btn){btn.textContent='📁 다시 스캔';btn.disabled=false;} return;
   }
@@ -6517,73 +6475,20 @@ async function gdConnectFolder(){
     await gdScanFolder({request:true,announce:true});
   }catch(e){ if(e&&e.name!=='AbortError')console.error('gd 공용폴더 연결',e); }
 }
-// gd 형식으로 파싱해 IDB 저장(업로드 핸들러와 동일). fileHash로 중복 스킵.
+// 명단(attend)만 파싱해 IDB 저장(업로드 핸들러와 동일). fileHash로 중복 스킵, 최신 1건만 유지.
 async function gdIngestFolderFile(type,file){
   const fileHash=`${file.name}|${file.size}`;
-  const existing=gdAllFiles.filter(f=>f.type===type);
-  if(type==='db' && existing.some(f=>f.fileHash===fileHash)) return {status:'dup'};
-  if(type==='attend' && existing[0] && existing[0].fileHash===fileHash) return {status:'dup'};
+  const existing=gdAllFiles.filter(f=>f.type==='attend');
+  if(existing[0] && existing[0].fileHash===fileHash) return {status:'dup'};
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
   const ws=wb.Sheets[wb.SheetNames[0]];
-  const parsed = (type==='attend')
-    ? XLSX.utils.sheet_to_json(ws,{defval:''})
-    : XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-  if(type==='attend'){ for(const o of existing) await gdIdbDelete(o.id); gdAllFiles=gdAllFiles.filter(g=>g.type!=='attend'); }
-  const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),data:parsed};
+  const parsed=XLSX.utils.sheet_to_json(ws,{defval:''});
+  for(const o of existing) await gdIdbDelete(o.id);
+  gdAllFiles=gdAllFiles.filter(g=>g.type!=='attend');
+  const rec={type:'attend',fileName:file.name,fileHash,uploadTime:Date.now(),data:parsed};
   const id=await gdIdbAdd(rec); rec.id=id; gdAllFiles.push(rec);
   return {status:'ok'};
-}
-// 파일명에서 날짜 추출 (후보 추리기용 — 신뢰하지 않고 ±여유로만 사용. 실제 기준은 파일 내 분배일)
-function gdParseFileDate(name){
-  const m=String(name||'').match(/(20\d{2})[._-]?(\d{2})[._-]?(\d{2})/);
-  if(!m)return null;
-  const d=new Date(+m[1],+m[2]-1,+m[3]); return isNaN(d)?null:d;
-}
-// 파일을 열어 실제 분배일 max 반환 (회차 종료일 자동 판정용)
-async function gdFileMaxDist(file){
-  const buf=await file.arrayBuffer();
-  const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-  let mx=null;
-  for(let i=1;i<data.length;i++){ const d=parseDate(data[i][COL.distributeDate]); if(d&&(!mx||d>mx))mx=d; }
-  return mx;
-}
-// 하루치 일마감 파일들을 회차 기간[pStart,pEnd]으로 병합 → 회차당 DB 레코드 1개 (고객키 dedup)
-// 파일명은 후보 추림(±5일)에만 쓰고, 포함 여부는 파일 내 실제 분배일로 판정.
-async function gdMergeDbForPeriod(dbEntries, pStart, pEnd){
-  const psMs=new Date(pStart.getFullYear(),pStart.getMonth(),pStart.getDate(),0,0,0,0).getTime();
-  const peMs=new Date(pEnd.getFullYear(),pEnd.getMonth(),pEnd.getDate(),23,59,59,999).getTime();
-  const marginMs=5*86400000;
-  const cands=dbEntries.filter(e=>{ const fd=gdParseFileDate(e.name); if(!fd)return true; const t=fd.getTime(); return t>=psMs-marginMs && t<=peMs+marginMs; });
-  let header=null; const seen=new Set(); const rows=[];
-  for(const e of cands){
-    let file; try{ file=await e.getFile(); }catch(err){ continue; }
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-    if(!data.length)continue;
-    if(!header)header=data[0];
-    for(let i=1;i<data.length;i++){
-      const row=data[i]; if(!row)continue;
-      const d=parseDate(row[COL.distributeDate]); if(!d)continue;
-      const t=d.getTime(); if(t<psMs||t>peMs)continue;
-      const ck=str(row[COL.customerKey]);
-      if(ck){ if(seen.has(ck))continue; seen.add(ck); }
-      rows.push(row);
-    }
-  }
-  if(!header||rows.length===0)return null;
-  const startISO=gdISO(pStart), endISO=gdISO(pEnd);
-  // 같은 회차(종료일) 병합 레코드가 있으면 교체
-  const existing=gdAllFiles.filter(f=>f.type==='db'&&f._merged&&f.periodEnd===endISO);
-  for(const o of existing){ await gdIdbDelete(o.id); }
-  gdAllFiles=gdAllFiles.filter(f=>!(f.type==='db'&&f._merged&&f.periodEnd===endISO));
-  const rec={type:'db', fileName:`회차 ${startISO}~${endISO}`, uploadTime:Date.now(), data:[header,...rows], _merged:true, periodStart:startISO, periodEnd:endISO};
-  const id=await gdIdbAdd(rec); rec.id=id; gdAllFiles.push(rec);
-  return rec;
 }
 async function gdScanFolder(opts={}){
   if(gdScanBusy)return;
@@ -6596,16 +6501,14 @@ async function gdScanFolder(opts={}){
   if(!await spVerifyPerm(h,!!opts.request)){ gdUpdateDirStatus('need-perm'); gdSetBanner('need-perm'); return; }
   gdScanBusy=true; gdUpdateDirStatus('busy'); if(!opts.fromShow&&!opts.silent)gdSetBanner('busy');
   try{
-    const dbEntries=[], attEntries=[];
+    const attEntries=[];
     async function walk(dir,folderName,depth){
       for await(const entry of dir.values()){
         if(entry.kind==='file'){
           if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
-          const t=spDetectType(folderName,entry.name);
-          if(t==='db')dbEntries.push(entry); else if(t==='attend')attEntries.push(entry);
+          if(spDetectType(folderName,entry.name)==='attend')attEntries.push(entry);
         }else if(entry.kind==='directory'&&depth<2){
-          const ft=spDetectType(entry.name,'');
-          if(ft==='db'||ft==='attend'){ try{await walk(entry,entry.name,depth+1);}catch(e){} }
+          if(spDetectType(entry.name,'')==='attend'){ try{await walk(entry,entry.name,depth+1);}catch(e){} }
         }
       }
     }
@@ -6616,49 +6519,14 @@ async function gdScanFolder(opts={}){
       const latestAtt=attEntries.slice().sort((a,b)=>a.name>b.name?1:(a.name<b.name?-1:0)).pop();
       try{ const f=await latestAtt.getFile(); const r=await gdIngestFolderFile('attend',f); if(r.status==='ok')okCnt++; else dupCnt++; }catch(err){ console.error('gd 명단 인제스트',err); }
     }
-    // DB: 회차 기간 결정 → 해당 분배일 파일들 병합
-    let pStart=null,pEnd=null;
-    const _inStart=gdGetPeriodDate('start'), _inEnd=gdGetPeriodDate('end');
-    if(!opts.fromShow && _inStart && _inEnd){ pStart=_inStart; pEnd=_inEnd; }   // 사용자가 기간 지정 → 그대로
-    if(!pEnd && dbEntries.length){
-      // 자동 종료일 = 파일명 최신 몇 개의 실제 분배일 max
-      const sorted=dbEntries.slice().sort((a,b)=>{const da=gdParseFileDate(a.name),db2=gdParseFileDate(b.name);return (da?da.getTime():0)-(db2?db2.getTime():0);});
-      for(const e of sorted.slice(-3)){ try{ const f=await e.getFile(); const dd=await gdFileMaxDist(f); if(dd&&(!pEnd||dd>pEnd))pEnd=dd; }catch(err){} }
-    }
-    if(pEnd && !pStart){
-      const endShort=fmtDateShort(pEnd);
-      const all=await gdGetAllResults();
-      const prev=all.find(r=>r.sheetName<endShort);
-      if(prev && /^\d{6}$/.test(prev.sheetName)){
-        const yy=2000+parseInt(prev.sheetName.slice(0,2),10),mm=parseInt(prev.sheetName.slice(2,4),10)-1,dd=parseInt(prev.sheetName.slice(4,6),10);
-        const nd=new Date(yy,mm,dd); nd.setDate(nd.getDate()+1); pStart=nd;
-      } else { pStart=new Date(pEnd.getFullYear(),pEnd.getMonth(),pEnd.getDate()); }
-    }
-    let merged=null;
-    if(pStart && pEnd){
-      merged=await gdMergeDbForPeriod(dbEntries,pStart,pEnd);
-      if(merged){ okCnt++; const sEl=document.getElementById('gd-period-start'),eEl=document.getElementById('gd-period-end'); if(sEl)sEl.value=gdISO(pStart); if(eEl)eEl.value=gdISO(pEnd); }
-    }
     gdScanBusy=false;
     gdUpdateStatusDots(); gdUpdateUploadStatus();
     if(!opts.silent){ gdUpdateDirStatus('ok',{okCnt,dupCnt}); gdSetBanner('ok',{okCnt,dupCnt,announce:!opts.fromShow}); }
-    return {okCnt,dupCnt,merged};
+    return {okCnt,dupCnt};
   }catch(e){
     gdScanBusy=false; console.error('gd 폴더 스캔',e); gdUpdateDirStatus('error'); if(!opts.silent)gdSetBanner('hide');
     if(opts.announce)alert('폴더 스캔 중 오류:\n'+(e.message||e));
   }
-}
-// 차등 산정: 폴더 연결 시 현재 기간 입력으로 재병합 후 산정
-async function gdRunSanteong(){
-  try{
-    if(!spIdb)await spOpenIDB();
-    const h=spDirHandle||await spIdbGetHandle();
-    if(h && window.showDirectoryPicker && await spVerifyPerm(h,false)){
-      await gdScanFolder({request:false,silent:true});
-    }
-  }catch(e){ console.warn('산정 전 병합 실패',e); }
-  await gdGenerate();
-  gdCloseModal();
 }
 // 탭 열 때 자동 스캔: granted면 무인 스캔, 아니면 탭 클릭 제스처로 권한 재요청 시도.
 async function gdAutoScanOnShow(){
@@ -7192,14 +7060,11 @@ function gdGetMembers(data){
   return {members, cmsGroups, excluded, longAbsentList};
 }
 
-function gdCountDb(data, members, uploadTime, periodStart, periodEnd){
+function gdCountDb(data, members, uploadTime){
   // N그룹과 동일 로직 (countDb 참조)
   // DB정보에 'in' 포함 + 매체코드(T) 공란이면 제외 (IN 행은 매체코드가 있어야 산정)
-  // periodStart/periodEnd(분배일 기준): 누적 DB 파일에서 이번 회차 분배일 범위만 잘라냄. 미전달이면 파일 전체(구버전 호환).
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
-  const psMs=periodStart ? new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate(),0,0,0,0).getTime() : null;
-  const peMs=periodEnd ? new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999).getTime() : null;
   for(let i=1;i<data.length;i++){
     const row=data[i];
     const obName=str(row[COL.obName]);
@@ -7207,9 +7072,6 @@ function gdCountDb(data, members, uploadTime, periodStart, periodEnd){
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
     if(!obName||!distDate) continue;
-    const _dMs=distDate.getTime();
-    if(psMs!==null && _dMs<psMs) continue;
-    if(peMs!==null && _dMs>peMs) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(dbInfo.includes('재콜')) continue;
     if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
@@ -7775,19 +7637,11 @@ async function gdGenerate(dbFileId){
     gdMemberCmsGroups=cmsGroups;
     if(members.length===0) throw new Error('뇌새김영어 W/E/A/B/H 그룹 멤버를 찾을 수 없습니다.');
 
-    // 분배일 회차 범위 결정. 누적(일마감) DB 파일은 여러 회차치를 담으므로 사용자가 모달에서 지정한
-    // 분배일 기간으로 이번 회차만 잘라낸다. 미지정 시 종료=파일 최신 분배일, 시작=직전 회차 종료 다음날(구버전 호환).
-    let fileMinDist=null,fileMaxDist=null;
+    let minDistDate=null,maxDistDate=null;
     for(let i=1;i<dbFile.data.length;i++){
       const d=parseDate(dbFile.data[i][COL.distributeDate]);
-      if(d){if(!fileMaxDist||d>fileMaxDist)fileMaxDist=d;if(!fileMinDist||d<fileMinDist)fileMinDist=d;}
+      if(d){if(!maxDistDate||d>maxDistDate)maxDistDate=d;if(!minDistDate||d<minDistDate)minDistDate=d;}
     }
-    // 병합 레코드(공용폴더 자동수집)는 자체 회차 기간을 보유 → 그 기간으로 재생성(과거 회차 조회 포함).
-    // 일반(수동 업로드) DB 파일은 사용자 입력칸 > 파일 전체 범위.
-    const _recStart=dbFile.periodStart?parseDate(dbFile.periodStart):null;
-    const _recEnd=dbFile.periodEnd?parseDate(dbFile.periodEnd):null;
-    const _userStart=_recStart||gdGetPeriodDate('start'), _userEnd=_recEnd||gdGetPeriodDate('end');
-    let maxDistDate=_userEnd||fileMaxDist;
     // 회차 매칭: 오더일 기준. 직전 회차 분배 max(prevMaxDist) 이후 ~ 현재 분배 max(maxDistDate)까지의 오더가 현재 회차.
     // 직전 회차는 IDB results에서 현재 sheetName 직전 시트(YYMMDD desc)로 산출.
     const _currentSheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
@@ -7800,16 +7654,10 @@ async function gdGenerate(dbFileId){
       const dd=parseInt(_prevSheet.sheetName.slice(4,6),10);
       prevMaxDist=new Date(yy,mm,dd);
     }
-    // 시작 분배일: 회차 기간/사용자 지정 > 직전 회차 종료 다음날 > 파일 최소 분배일
-    let minDistDate=_userStart;
-    if(!minDistDate){
-      if(prevMaxDist){ minDistDate=new Date(prevMaxDist.getFullYear(),prevMaxDist.getMonth(),prevMaxDist.getDate()); minDistDate.setDate(minDistDate.getDate()+1); }
-      else minDistDate=fileMinDist;
-    }
 
     // 키 상세 수집기 (수정 모드 이름 클릭 시 표시 — 집계 대상 고객키)
     const _contractKeys={}, _banpumKeys={}, _huPreKeys={};
-    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate);
+    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime);
     const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
     const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
 
@@ -8155,7 +8003,7 @@ function gdBuildPeriodSelector(){
   const sel=document.getElementById('gdPeriodSelect');
   const dbFiles=gdGetFilesByType('db');
   if(dbFiles.length===0){sel.innerHTML='';document.getElementById('gdPeriodInfo').textContent='';return;}
-  sel.innerHTML=dbFiles.map(f=>{const lbl=f._merged?`회차 ${f.periodStart} ~ ${f.periodEnd}`:`${fmtDateTime(new Date(f.uploadTime))} — ${f.fileName}`;return `<option value="${f.id}" ${f.id===gdResult?.dbFileId?'selected':''}>${lbl}</option>`;}).join('');
+  sel.innerHTML=dbFiles.map(f=>`<option value="${f.id}" ${f.id===gdResult?.dbFileId?'selected':''}>${fmtDateTime(new Date(f.uploadTime))} — ${f.fileName}</option>`).join('');
   document.getElementById('gdPeriodInfo').textContent=`DB: ${gdResult?.dbFileName||''} / 계약: ${gdResult?.contFileName||''}`;
 }
 function gdOnPeriodChange(){
