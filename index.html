@@ -1795,9 +1795,9 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div class="upload-grid">
         <div class="upload-box" id="box-gd-db">
           <input type="file" accept=".xlsx,.xls" id="file-gd-db">
-          <div class="gd-src-badge manual">✋ 직접 업로드</div>
+          <div class="gd-src-badge auto">📁 산정 시 자동(기간)</div>
           <div class="icon">📋</div><div class="label">DB수</div>
-          <div class="desc">WM_고객관리<br>누적 저장 (3일 주기)</div>
+          <div class="desc">집계기간 정하고 [차등 산정]<br>그 기간 일마감 DB를 폴더에서 병합<br>(직접 업로드도 가능)</div>
           <div class="filename" id="fname-gd-db"></div>
           <div class="badge-count hidden" id="count-gd-db"></div>
           <div class="progress-bar hidden" id="prog-gd-db"><div class="progress-fill"></div></div>
@@ -1832,7 +1832,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div style="margin-top:10px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
-            <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (명단)</div>
+            <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (명단 · DB수)</div>
             <div id="gdDirStatus" style="font-size:12px;color:var(--gray);margin-top:3px">연결 안 됨</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1841,14 +1841,14 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           </div>
         </div>
         <div style="font-size:11.5px;color:var(--gray);margin-top:8px;line-height:1.55">
-          탭을 열 때마다 <b>명단</b> 최신본을 자동으로 가져옵니다. DB수·계약수·취소수는 직접 업로드하세요.
+          탭을 열 때 <b>명단</b> 최신본을 자동으로 가져옵니다. <b>DB수</b>는 아래 집계기간을 정하고 <b>[차등 산정]</b>을 누르면 그 기간의 일마감 DB를 폴더에서 모아 병합합니다. 계약수·취소수는 직접 업로드.
         </div>
       </div>
       <div id="gdDetectedPeriodBox" style="margin-top:8px;padding:9px 14px;border:1px solid var(--border);border-radius:10px;background:#fffdf7;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-weight:700">📅 집계 기간 (분배일)</span>
-        <input type="date" id="gd-period-start" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        <input type="date" id="gd-period-start" onchange="gdUpdateUploadStatus()" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
         <span style="color:var(--gray);font-weight:700">~</span>
-        <input type="date" id="gd-period-end" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        <input type="date" id="gd-period-end" onchange="gdUpdateUploadStatus()" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
         <button type="button" class="btn btn-outline btn-sm" onclick="gdAutofillPeriod(true)" title="업로드한 DB수 파일의 분배일 min~max로 다시 채움">↻ 파일 기준</button>
         <span style="margin-left:auto;font-size:11px;color:var(--gray)">DB 파일 기준 자동 입력 · 수정 가능 · [차등 산정] 눌러야 집계</span>
       </div>
@@ -1905,7 +1905,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="gdCloseModal()">닫기</button>
-        <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdGenerate();gdCloseModal()">차등 산정</button>
+        <button class="btn btn-primary" id="gdBtnGenerate" disabled onclick="gdRunSanteong()">차등 산정</button>
       </div>
     </div>
     <div id="gdModalManage" class="hidden">
@@ -6441,7 +6441,7 @@ function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remo
 // 명단만 자동수집(최신 1개)한다. DB수·계약수·취소수는 직접 업로드.
 let gdScanBusy=false;
 
-async function gdRefreshDirHandle(){ try{ if(!spIdb)await spOpenIDB(); const h=await spIdbGetHandle(); spDirHandle=h; spDirName=h?h.name:''; }catch(e){} gdUpdateDirStatus(); }
+async function gdRefreshDirHandle(){ try{ if(!spIdb)await spOpenIDB(); const h=await spIdbGetHandle(); spDirHandle=h; spDirName=h?h.name:''; }catch(e){} gdUpdateDirStatus(); gdUpdateUploadStatus(); /* 핸들 확정 후 버튼 활성 재평가 */ }
 function gdUpdateDirStatus(state,info){
   info=info||{};
   const el=document.getElementById('gdDirStatus');
@@ -6556,6 +6556,89 @@ async function gdAutoScanOnShow(){
     if(await spVerifyPerm(h,true)) await gdScanFolder({request:false,fromShow:true});
     else { gdUpdateDirStatus('need-perm'); gdSetBanner('need-perm'); }
   }catch(e){console.error('gd 자동 스캔',e);}
+}
+
+// ════════════ DB수 공용폴더 병합 (집계기간 기준) — [차등 산정] 버튼에서만 호출 ════════════
+function gdISO(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function gdParseFileDate(name){
+  const m=String(name||'').match(/(20\d{2})[._-]?(\d{2})[._-]?(\d{2})/);
+  if(!m)return null;
+  const d=new Date(+m[1],+m[2]-1,+m[3]); return isNaN(d)?null:d;
+}
+// 공용폴더의 하루치 일마감 DB들을 [pStart,pEnd] 분배일로 병합 → 회차 DB 레코드 1개(고객키 dedup).
+// 파일명 날짜는 후보 추림(±5일)에만 쓰고, 포함 판정은 파일 안 실제 분배일로. 같은 종료일 병합본은 교체.
+// 폴더 미연결/권한없음/해당기간 파일없음이면 null(→ 직접 업로드한 DB로 폴백).
+async function gdPullDbForPeriod(pStart,pEnd){
+  if(!window.showDirectoryPicker||!pStart||!pEnd)return null;
+  if(!spIdb)await spOpenIDB();
+  const h=spDirHandle||await spIdbGetHandle();
+  if(!h)return null;
+  if(!await spVerifyPerm(h,false))return null;
+  spDirHandle=h; spDirName=h.name;
+  const dbEntries=[];
+  async function walk(dir,folderName,depth){
+    for await(const entry of dir.values()){
+      if(entry.kind==='file'){
+        if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
+        if(spDetectType(folderName,entry.name)==='db')dbEntries.push(entry);
+      }else if(entry.kind==='directory'&&depth<2){
+        if(spDetectType(entry.name,'')==='db'){ try{await walk(entry,entry.name,depth+1);}catch(e){} }
+      }
+    }
+  }
+  await walk(h,'',0);
+  if(!dbEntries.length)return null;
+  const psMs=new Date(pStart.getFullYear(),pStart.getMonth(),pStart.getDate(),0,0,0,0).getTime();
+  const peMs=new Date(pEnd.getFullYear(),pEnd.getMonth(),pEnd.getDate(),23,59,59,999).getTime();
+  const marginMs=5*86400000;
+  const cands=dbEntries.filter(e=>{const fd=gdParseFileDate(e.name);if(!fd)return true;const t=fd.getTime();return t>=psMs-marginMs&&t<=peMs+marginMs;});
+  let header=null; const seen=new Set(); const rows=[];
+  for(const e of cands){
+    let file; try{file=await e.getFile();}catch(err){continue;}
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+    if(!data.length)continue;
+    if(!header)header=data[0];
+    for(let i=1;i<data.length;i++){
+      const row=data[i]; if(!row)continue;
+      const d=parseDate(row[COL.distributeDate]); if(!d)continue;
+      const t=d.getTime(); if(t<psMs||t>peMs)continue;
+      const ck=str(row[COL.customerKey]);
+      if(ck){if(seen.has(ck))continue;seen.add(ck);}
+      rows.push(row);
+    }
+  }
+  if(!header||rows.length===0)return null;
+  const startISO=gdISO(pStart), endISO=gdISO(pEnd);
+  const existing=gdAllFiles.filter(f=>f.type==='db'&&f._merged&&f.periodEnd===endISO);
+  for(const o of existing){await gdIdbDelete(o.id);}
+  gdAllFiles=gdAllFiles.filter(f=>!(f.type==='db'&&f._merged&&f.periodEnd===endISO));
+  const rec={type:'db',fileName:`회차 ${startISO}~${endISO}`,uploadTime:Date.now(),data:[header,...rows],_merged:true,periodStart:startISO,periodEnd:endISO};
+  const id=await gdIdbAdd(rec); rec.id=id; gdAllFiles.push(rec);
+  return rec;
+}
+// [차등 산정] 버튼: 폴더 연결 시 집계기간으로 DB 병합 → 산정(저장). 폴더 없으면 업로드한 DB 사용.
+async function gdRunSanteong(){
+  const btn=document.getElementById('gdBtnGenerate');
+  const ps=gdGetPeriodDate('start'), pe=gdGetPeriodDate('end');
+  let _label=btn?btn.textContent:'';
+  try{
+    if(ps&&pe&&window.showDirectoryPicker){
+      let h=spDirHandle;
+      if(!h){ if(!spIdb)await spOpenIDB(); h=await spIdbGetHandle(); }
+      if(h&&await spVerifyPerm(h,false)){
+        if(btn){btn.disabled=true;btn.textContent='공용폴더에서 DB 가져오는 중…';}
+        const merged=await gdPullDbForPeriod(ps,pe);
+        if(!merged) console.warn('공용폴더에 해당 기간 DB 없음 → 업로드한 DB 사용');
+        gdUpdateUploadStatus(); gdUpdateStatusDots();
+      }
+    }
+  }catch(e){ console.warn('DB 폴더 병합 실패, 업로드 DB 사용',e); }
+  finally{ if(btn){btn.textContent=_label||'차등 산정';} }
+  await gdGenerate();   // 저장(집계 커밋)
+  gdCloseModal();
 }
 
 // ── 초기 등급 템플릿 다운로드 ──
@@ -6882,7 +6965,11 @@ function gdUpdateUploadStatus(){
     if(ifn && !ifn.textContent) ifn.textContent='초기등급 설정됨 (기준일: '+initSheet+')';
   }
   gdAutofillPeriod(false); // 집계기간 입력칸 비어 있으면 DB 파일 분배일 min~max로 자동 채움
-  const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
+  const have=k=>gdGetFilesByType(k).length>0;
+  // DB는 직접 업로드했거나, (공용폴더 연결 + 집계기간 설정)이면 산정 시 폴더에서 가져오므로 OK
+  const periodSet=!!gdGetPeriodDate('start')&&!!gdGetPeriodDate('end');
+  const dbReady=have('db')||(!!spDirHandle&&periodSet);
+  const ready=have('cont')&&have('cancel')&&have('attend')&&dbReady;
   const btn=document.getElementById('gdBtnGenerate');
   if(btn) btn.disabled=!ready;
 }
