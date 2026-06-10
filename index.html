@@ -1836,6 +1836,11 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           탭을 열 때마다 <b>명단</b> 최신본을 자동으로 가져옵니다. DB수·계약수·취소수는 직접 업로드하세요.
         </div>
       </div>
+      <div id="gdDetectedPeriodBox" style="margin-top:8px;padding:9px 14px;border:1px solid var(--border);border-radius:10px;background:#fffdf7;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700">📅 집계 기간 (분배일)</span>
+        <span id="gdDetectedPeriod" style="color:var(--gray)">DB수 파일을 올리면 자동 표시됩니다</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--gray)">[차등 산정]을 눌러야 이 기간으로 집계·저장됩니다</span>
+      </div>
       <h3 onclick="gdToggleInitSection()" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
         <span id="gd-init-arrow" style="display:inline-block;transition:transform .2s;font-size:11px;color:var(--gray)">▶</span>
         초기 등급 설정 (1회성)
@@ -2097,7 +2102,7 @@ async function autoSyncDownload(){
       if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
       gdUpdateStatusDots();gdUpdateUploadStatus();
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
-      if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+      if(gdReady){gdGenerate(undefined,{noSave:true});}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
     }
     // 부재인입 복원 (없거나 원격이 더 새로운 경우)
     if(payload.mc&&mcAccess&&(!mcHasLocal||remoteNewer)&&typeof mcRestoreSync==='function'){
@@ -2438,7 +2443,7 @@ async function doSyncDownloadManual(){
       if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
       gdUpdateStatusDots();gdUpdateUploadStatus();
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
-      if(gdReady){gdGenerate();}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
+      if(gdReady){gdGenerate(undefined,{noSave:true});}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
     }
     // 부재인입 복원 (강제 다운로드 — 항상 덮어쓰기)
     if(payload.mc&&authUser&&authUser.tabs.includes('missed-call')&&typeof mcRestoreSync==='function'){
@@ -6844,6 +6849,19 @@ function gdUpdateUploadStatus(){
     if(ib) ib.classList.add('loaded');
     if(ifn && !ifn.textContent) ifn.textContent='초기등급 설정됨 (기준일: '+initSheet+')';
   }
+  // 감지된 집계기간(분배일 min~max) 읽기전용 표시 — 업로드한 DB수 파일 기준
+  const _pEl=document.getElementById('gdDetectedPeriod');
+  if(_pEl){
+    const dbFile=gdGetLatest('db');
+    if(!dbFile){ _pEl.textContent='DB수 파일을 올리면 자동 표시됩니다'; _pEl.style.color='var(--gray)'; }
+    else{
+      let mn=null,mx=null;
+      for(let i=1;i<dbFile.data.length;i++){ const d=parseDate(dbFile.data[i][COL.distributeDate]); if(d){if(!mx||d>mx)mx=d;if(!mn||d<mn)mn=d;} }
+      const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      _pEl.textContent = (mn&&mx) ? `${f(mn)} ~ ${f(mx)}` : '분배일을 읽을 수 없습니다 (파일 확인)';
+      _pEl.style.color = (mn&&mx) ? 'var(--dark)' : 'var(--danger)';
+    }
+  }
   const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
   const btn=document.getElementById('gdBtnGenerate');
   if(btn) btn.disabled=!ready;
@@ -7619,7 +7637,9 @@ function gdSortRows(rows){
   return [...normal.slice(0,insertAt), ...protect, ...normal.slice(insertAt)];
 }
 
-async function gdGenerate(dbFileId){
+// opts.noSave=true → 계산·렌더만 하고 IDB results(등급 이력)에는 저장하지 않음.
+//   페이지 로드/동기화 복원/조회기간 드롭다운은 noSave(미리보기). [차등 산정] 버튼만 저장(집계 커밋).
+async function gdGenerate(dbFileId, opts={}){
   try{
     const attendFile=gdGetLatest('attend');
     const dbFile=dbFileId?gdAllFiles.find(f=>f.id===dbFileId):gdGetLatest('db');
@@ -7988,7 +8008,8 @@ async function gdGenerate(dbFileId){
     gdResult.savedRows=periodRows;
     const _day=['일','월','화','수','목','금','토'];
     const _fd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}(${_day[d.getDay()]})`;
-    await gdSaveResult({sheetName, startStr:minDistDate?_fd(minDistDate):'', endStr:maxDistDate?_fd(maxDistDate):'', rows:periodRows});
+    // [차등 산정] 버튼만 이력 저장(집계 커밋). 로드/동기화/조회는 noSave로 미리보기만.
+    if(!opts.noSave) await gdSaveResult({sheetName, startStr:minDistDate?_fd(minDistDate):'', endStr:maxDistDate?_fd(maxDistDate):'', rows:periodRows});
 
     gdBuildPeriodSelector();
     gdRenderDashboard();
@@ -8010,7 +8031,7 @@ function gdOnPeriodChange(){
   const sel=document.getElementById('gdPeriodSelect');
   const id=+sel.value;
   if(!id) return;
-  gdGenerate(id);
+  gdGenerate(id,{noSave:true}); // 조회기간 전환은 미리보기 — 저장 안 함
 }
 
 function gdRenderDashboard(){
@@ -9050,7 +9071,7 @@ async function gdDownloadAprilInitExcel(){
     gdUpdateStatusDots(); gdUpdateUploadStatus();
     const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
     if(ready){
-      gdGenerate();
+      gdGenerate(undefined,{noSave:true});
     } else {
       // 결과만 있어도 이력 표시 가능하게
       const all=await gdGetAllResults();
