@@ -84,6 +84,10 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 #gdModalUpload .upload-box .label{font-size:13px;margin-bottom:2px}
 #gdModalUpload .upload-box .desc{font-size:10.5px;line-height:1.35}
 #gdModalUpload .modal-footer{margin-top:12px}
+/* 업로드 박스 출처 배지: 자동 수집 vs 직접 업로드 */
+.gd-src-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px;margin-bottom:4px;letter-spacing:-.2px}
+.gd-src-badge.auto{background:#dcfce7;color:#166534}
+.gd-src-badge.manual{background:#e0e7ff;color:#3730a3}
 
 /* File History */
 .file-history{margin-top:8px}
@@ -1791,6 +1795,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div class="upload-grid">
         <div class="upload-box" id="box-gd-db">
           <input type="file" accept=".xlsx,.xls" id="file-gd-db">
+          <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📋</div><div class="label">DB수</div>
           <div class="desc">WM_고객관리<br>누적 저장 (3일 주기)</div>
           <div class="filename" id="fname-gd-db"></div>
@@ -1799,6 +1804,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         </div>
         <div class="upload-box" id="box-gd-cont">
           <input type="file" accept=".xlsx,.xls" id="file-gd-cont">
+          <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📝</div><div class="label">계약수</div>
           <div class="desc">WM_고객관리 · 오더일 기준 (보통 3일치)<br>직전 회차 이후 오더가 다 포함되게</div>
           <div class="filename" id="fname-gd-cont"></div>
@@ -1807,6 +1813,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         </div>
         <div class="upload-box" id="box-gd-cancel">
           <input type="file" accept=".xlsx,.xls" id="file-gd-cancel">
+          <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📉</div><div class="label">취소수</div>
           <div class="desc">신청자관리(오더일: 최근 3개월)<br>누적 저장 (3일 주기)</div>
           <div class="filename" id="fname-gd-cancel"></div>
@@ -1815,8 +1822,9 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         </div>
         <div class="upload-box" id="box-gd-attend">
           <input type="file" accept=".xls,.xlsx,.html" id="file-gd-attend">
+          <div class="gd-src-badge auto">📁 공용폴더 자동</div>
           <div class="icon">👥</div><div class="label">명단</div>
-          <div class="desc">2-8 그룹표기 엑셀<br>최신 1건 유지</div>
+          <div class="desc">2-8 그룹표기 엑셀 · 최신 1건<br>공용폴더에서 자동 수집(직접 업로드도 가능)</div>
           <div class="filename" id="fname-gd-attend"></div>
           <div class="progress-bar hidden" id="prog-gd-attend"><div class="progress-fill"></div></div>
         </div>
@@ -1838,8 +1846,11 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       </div>
       <div id="gdDetectedPeriodBox" style="margin-top:8px;padding:9px 14px;border:1px solid var(--border);border-radius:10px;background:#fffdf7;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-weight:700">📅 집계 기간 (분배일)</span>
-        <span id="gdDetectedPeriod" style="color:var(--gray)">DB수 파일을 올리면 자동 표시됩니다</span>
-        <span style="margin-left:auto;font-size:11px;color:var(--gray)">[차등 산정]을 눌러야 이 기간으로 집계·저장됩니다</span>
+        <input type="date" id="gd-period-start" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        <span style="color:var(--gray);font-weight:700">~</span>
+        <input type="date" id="gd-period-end" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        <button type="button" class="btn btn-outline btn-sm" onclick="gdAutofillPeriod(true)" title="업로드한 DB수 파일의 분배일 min~max로 다시 채움">↻ 파일 기준</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--gray)">DB 파일 기준 자동 입력 · 수정 가능 · [차등 산정] 눌러야 집계</span>
       </div>
       <h3 onclick="gdToggleInitSection()" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:15px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">
         <span id="gd-init-arrow" style="display:inline-block;transition:transform .2s;font-size:11px;color:var(--gray)">▶</span>
@@ -6412,6 +6423,7 @@ function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remo
       const id=await gdIdbAdd(rec); rec.id=id; gdAllFiles.push(rec);
       prog.classList.remove('loading'); prog.classList.add('done');
       box.classList.add('loaded');
+      if(key==='db') gdAutofillPeriod(true); // 새 DB 파일 → 그 파일 분배일로 집계기간 갱신
       gdUpdateUploadStatus(); gdUpdateStatusDots();
     }catch(err){
       prog.classList.remove('loading');
@@ -6830,6 +6842,26 @@ async function gdGenerateInitFromApril(){
   }
 }
 
+// 집계기간 입력칸(분배일) — 읽기/자동채움. 차등 산정은 최신 DB 파일에 한해 이 값을 적용.
+function gdGetPeriodDate(which){
+  const el=document.getElementById(which==='start'?'gd-period-start':'gd-period-end');
+  if(!el||!el.value)return null;
+  const p=el.value.split('-'); if(p.length!==3)return null;
+  const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d)?null:d;
+}
+// force=true면 기존 값 덮어씀, false면 비어있을 때만 채움. 소스=업로드한 DB수 파일의 분배일 min/max.
+function gdAutofillPeriod(force){
+  const sEl=document.getElementById('gd-period-start'), eEl=document.getElementById('gd-period-end');
+  if(!sEl||!eEl)return;
+  const dbFile=gdGetLatest('db');
+  if(!dbFile){ if(force){ sEl.value=''; eEl.value=''; } return; }
+  let mn=null,mx=null;
+  for(let i=1;i<dbFile.data.length;i++){ const d=parseDate(dbFile.data[i][COL.distributeDate]); if(d){if(!mx||d>mx)mx=d;if(!mn||d<mn)mn=d;} }
+  if(!mn||!mx)return;
+  const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  if(force||!sEl.value) sEl.value=f(mn);
+  if(force||!eEl.value) eEl.value=f(mx);
+}
 function gdUpdateUploadStatus(){
   for(const k of ['db','cont','cancel','attend']){
     const files=gdGetFilesByType(k);
@@ -6849,19 +6881,7 @@ function gdUpdateUploadStatus(){
     if(ib) ib.classList.add('loaded');
     if(ifn && !ifn.textContent) ifn.textContent='초기등급 설정됨 (기준일: '+initSheet+')';
   }
-  // 감지된 집계기간(분배일 min~max) 읽기전용 표시 — 업로드한 DB수 파일 기준
-  const _pEl=document.getElementById('gdDetectedPeriod');
-  if(_pEl){
-    const dbFile=gdGetLatest('db');
-    if(!dbFile){ _pEl.textContent='DB수 파일을 올리면 자동 표시됩니다'; _pEl.style.color='var(--gray)'; }
-    else{
-      let mn=null,mx=null;
-      for(let i=1;i<dbFile.data.length;i++){ const d=parseDate(dbFile.data[i][COL.distributeDate]); if(d){if(!mx||d>mx)mx=d;if(!mn||d<mn)mn=d;} }
-      const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      _pEl.textContent = (mn&&mx) ? `${f(mn)} ~ ${f(mx)}` : '분배일을 읽을 수 없습니다 (파일 확인)';
-      _pEl.style.color = (mn&&mx) ? 'var(--dark)' : 'var(--danger)';
-    }
-  }
+  gdAutofillPeriod(false); // 집계기간 입력칸 비어 있으면 DB 파일 분배일 min~max로 자동 채움
   const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
   const btn=document.getElementById('gdBtnGenerate');
   if(btn) btn.disabled=!ready;
@@ -7078,11 +7098,14 @@ function gdGetMembers(data){
   return {members, cmsGroups, excluded, longAbsentList};
 }
 
-function gdCountDb(data, members, uploadTime){
+function gdCountDb(data, members, uploadTime, periodStart, periodEnd){
   // N그룹과 동일 로직 (countDb 참조)
   // DB정보에 'in' 포함 + 매체코드(T) 공란이면 제외 (IN 행은 매체코드가 있어야 산정)
+  // periodStart/periodEnd(분배일): 집계기간 입력 시 그 범위만 카운트. 미전달이면 파일 전체.
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
+  const psMs=periodStart ? new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate(),0,0,0,0).getTime() : null;
+  const peMs=periodEnd ? new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999).getTime() : null;
   for(let i=1;i<data.length;i++){
     const row=data[i];
     const obName=str(row[COL.obName]);
@@ -7090,6 +7113,9 @@ function gdCountDb(data, members, uploadTime){
     const dbInfo=str(row[COL.dbInfo]);
     const mediaCode=str(row[COL.mediaCode]);
     if(!obName||!distDate) continue;
+    const _dMs=distDate.getTime();
+    if(psMs!==null && _dMs<psMs) continue;
+    if(peMs!==null && _dMs>peMs) continue;
     if(obName.includes('군자')||obName.includes('관리자')||obName.includes('삭제요청')) continue;
     if(dbInfo.includes('재콜')) continue;
     if(dbInfo.toLowerCase().includes('in')&&!mediaCode) continue;
@@ -7657,11 +7683,17 @@ async function gdGenerate(dbFileId, opts={}){
     gdMemberCmsGroups=cmsGroups;
     if(members.length===0) throw new Error('뇌새김영어 W/E/A/B/H 그룹 멤버를 찾을 수 없습니다.');
 
-    let minDistDate=null,maxDistDate=null;
+    let fileMinDist=null,fileMaxDist=null;
     for(let i=1;i<dbFile.data.length;i++){
       const d=parseDate(dbFile.data[i][COL.distributeDate]);
-      if(d){if(!maxDistDate||d>maxDistDate)maxDistDate=d;if(!minDistDate||d<minDistDate)minDistDate=d;}
+      if(d){if(!fileMaxDist||d>fileMaxDist)fileMaxDist=d;if(!fileMinDist||d<fileMinDist)fileMinDist=d;}
     }
+    // 집계기간 입력칸은 '최신 DB 파일(버튼/로드)'에 한해 적용. 조회 드롭다운(특정 dbFileId)은 그 파일 자체 범위 사용.
+    const _useUserPeriod=!dbFileId;
+    const _uStart=_useUserPeriod?gdGetPeriodDate('start'):null;
+    const _uEnd=_useUserPeriod?gdGetPeriodDate('end'):null;
+    let minDistDate=_uStart||fileMinDist;
+    let maxDistDate=_uEnd||fileMaxDist;
     // 회차 매칭: 오더일 기준. 직전 회차 분배 max(prevMaxDist) 이후 ~ 현재 분배 max(maxDistDate)까지의 오더가 현재 회차.
     // 직전 회차는 IDB results에서 현재 sheetName 직전 시트(YYMMDD desc)로 산출.
     const _currentSheetName=maxDistDate?fmtDateShort(maxDistDate):fmtDateShort(new Date());
@@ -7677,7 +7709,7 @@ async function gdGenerate(dbFileId, opts={}){
 
     // 키 상세 수집기 (수정 모드 이름 클릭 시 표시 — 집계 대상 고객키)
     const _contractKeys={}, _banpumKeys={}, _huPreKeys={};
-    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime);
+    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate);
     const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
     const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
 
