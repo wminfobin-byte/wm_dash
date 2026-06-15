@@ -2158,6 +2158,8 @@ function doLogout(){
 // ═══════════════════════════════════════════
 const SYNC_REPO='wminfobin-byte/wm_dash';
 const SYNC_FILE='sync_data.json.gz';
+const SYNC_MANIFEST='sync_manifest.json';   // 청크 분할 매니페스트 (대용량 대비)
+const SYNC_PART_BYTES=20*1024*1024;          // 청크당 압축 바이트 한도(20MB) — base64≈27MB로 GitHub blob 요청 한도 이내
 const SYNC_TOKEN_KEY='wm_sync_token';
 
 function syncData(){
@@ -2331,37 +2333,50 @@ async function doSyncUpload(token){
     const zip=new JSZip();
     zip.file('data.json',payload);
     const compressed=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
-    // 청크 단위 base64 변환 (spread 연산자 스택 초과 방지)
-    let bin='';for(let i=0;i<compressed.length;i+=8192){bin+=String.fromCharCode.apply(null,compressed.subarray(i,i+8192));}
-    const compressedB64=btoa(bin);
-    syncLog(`<span class="sync-spin">↻</span> 업로드 중... (압축 ${(compressed.length/1024/1024).toFixed(1)}MB)`);
+    // 바이트 → base64 (spread 연산자 스택 초과 방지, 8KB 단위)
+    const bytesToB64=(bytes)=>{let bin='';for(let i=0;i<bytes.length;i+=8192){bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));}return btoa(bin);};
+    const totalMB=(compressed.length/1024/1024).toFixed(1);
 
-    // Git Blobs API로 업로드
     const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
     const apiBase=`https://api.github.com/repos/${SYNC_REPO}`;
 
-    // 1) Blob 생성 (base64)
-    const blobRes=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:compressedB64,encoding:'base64'})});
-    if(!blobRes.ok){const e=await blobRes.json();throw new Error(e.message||'Blob 생성 실패');}
-    const blobSha=(await blobRes.json()).sha;
+    // 1) 압축 바이트를 SYNC_PART_BYTES 단위로 분할 → 각 청크를 별도 blob으로 업로드.
+    //    한 번에 올리는 요청 본문이 GitHub blob API 한도를 넘지 않도록 보장 (대용량 대비).
+    const partCount=Math.max(1,Math.ceil(compressed.length/SYNC_PART_BYTES));
+    syncLog(`<span class="sync-spin">↻</span> 업로드 중... (압축 ${totalMB}MB, ${partCount}개 청크)`);
+    const treeItems=[];
+    for(let p=0;p<partCount;p++){
+      const chunk=compressed.subarray(p*SYNC_PART_BYTES,(p+1)*SYNC_PART_BYTES);
+      const chunkB64=bytesToB64(chunk);
+      if(partCount>1) syncLog(`<span class="sync-spin">↻</span> 업로드 중... 청크 ${p+1}/${partCount}`);
+      const br=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:chunkB64,encoding:'base64'})});
+      if(!br.ok){const e=await br.json();throw new Error(e.message||`청크 ${p+1} blob 생성 실패`);}
+      treeItems.push({path:`${SYNC_FILE}.part${p}`,mode:'100644',type:'blob',sha:(await br.json()).sha});
+    }
 
-    // 2) 현재 main 브랜치의 최신 커밋 SHA
+    // 2) 매니페스트 blob (다운로드 시 재조립 기준)
+    const manifest={v:1,parts:partCount,partPrefix:`${SYNC_FILE}.part`,totalBytes:compressed.length,ts:Date.now()};
+    const mr=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(new TextEncoder().encode(JSON.stringify(manifest))),encoding:'base64'})});
+    if(!mr.ok){const e=await mr.json();throw new Error(e.message||'매니페스트 생성 실패');}
+    treeItems.push({path:SYNC_MANIFEST,mode:'100644',type:'blob',sha:(await mr.json()).sha});
+
+    // 3) 현재 main 브랜치의 최신 커밋 SHA
     const refRes=await fetch(`${apiBase}/git/ref/heads/main`,{headers});
     if(!refRes.ok) throw new Error('브랜치 정보 조회 실패');
     const latestCommitSha=(await refRes.json()).object.sha;
 
-    // 3) 새 Tree 생성 (sync_data.json만 교체)
+    // 4) 새 Tree 생성 (매니페스트 + 청크 파일들 교체)
     syncLog(`<span class="sync-spin">↻</span> 커밋 생성 중...`);
-    const treeRes=await fetch(`${apiBase}/git/trees`,{method:'POST',headers,body:JSON.stringify({base_tree:latestCommitSha,tree:[{path:SYNC_FILE,mode:'100644',type:'blob',sha:blobSha}]})});
+    const treeRes=await fetch(`${apiBase}/git/trees`,{method:'POST',headers,body:JSON.stringify({base_tree:latestCommitSha,tree:treeItems})});
     if(!treeRes.ok) throw new Error('Tree 생성 실패');
     const treeSha=(await treeRes.json()).sha;
 
-    // 4) 커밋 생성
+    // 5) 커밋 생성
     const commitRes=await fetch(`${apiBase}/git/commits`,{method:'POST',headers,body:JSON.stringify({message:`sync: ${new Date().toISOString()}`,tree:treeSha,parents:[latestCommitSha]})});
     if(!commitRes.ok) throw new Error('커밋 생성 실패');
     const newCommitSha=(await commitRes.json()).sha;
 
-    // 5) main 브랜치 포인터 업데이트
+    // 6) main 브랜치 포인터 업데이트
     const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:true})});
     if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
     // 업로드 성공: 로컬 dirty 해제 + 원격 ts 동기화
@@ -2375,17 +2390,36 @@ async function doSyncUpload(token){
 async function fetchSyncPayload(){
   // raw.githubusercontent.com은 Fastly CDN 캐시로 커밋 직후 stale 응답이 올 수 있어
   // 최신 커밋 SHA를 API로 받아 SHA-pinned URL로 받는다 (각 커밋 = unique URL = 항상 fresh)
-  let url=`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_FILE}?t=${Date.now()}`;
+  let base=`https://raw.githubusercontent.com/${SYNC_REPO}/main`;
+  let pinned=false;
   try{
     const refRes=await fetch(`https://api.github.com/repos/${SYNC_REPO}/commits/main?_=${Date.now()}`,{cache:'no-store'});
     if(refRes.ok){
       const sha=(await refRes.json()).sha;
-      if(sha) url=`https://raw.githubusercontent.com/${SYNC_REPO}/${sha}/${SYNC_FILE}`;
+      if(sha){base=`https://raw.githubusercontent.com/${SYNC_REPO}/${sha}`;pinned=true;}
     }
   }catch(e){/* API 실패(rate limit 등) 시 raw URL fallback */}
-  const res=await fetch(url,{cache:'no-store'});
-  if(!res.ok)throw new Error('동기화 데이터가 없습니다. 먼저 업로드하세요.');
-  const buf=await res.arrayBuffer();
+  const bust=(u)=>pinned?u:`${u}?t=${Date.now()}`;   // SHA 고정이면 URL 자체가 unique
+
+  // 1) 매니페스트 우선 (청크 분할 포맷). 없으면(404) 구 단일파일 포맷으로 폴백.
+  let buf=null;
+  const mRes=await fetch(bust(`${base}/${SYNC_MANIFEST}`),{cache:'no-store'});
+  if(mRes.ok){
+    const manifest=await mRes.json();
+    const prefix=manifest.partPrefix||`${SYNC_FILE}.part`;
+    const parts=[];let total=0;
+    for(let p=0;p<manifest.parts;p++){
+      const pr=await fetch(bust(`${base}/${prefix}${p}`),{cache:'no-store'});
+      if(!pr.ok)throw new Error(`동기화 청크 ${p+1}/${manifest.parts} 조회 실패`);
+      const ab=new Uint8Array(await pr.arrayBuffer());parts.push(ab);total+=ab.length;
+    }
+    buf=new Uint8Array(total);let off=0;for(const ab of parts){buf.set(ab,off);off+=ab.length;}
+  }else{
+    // 구 포맷: 단일 sync_data.json.gz
+    const res=await fetch(bust(`${base}/${SYNC_FILE}`),{cache:'no-store'});
+    if(!res.ok)throw new Error('동기화 데이터가 없습니다. 먼저 업로드하세요.');
+    buf=await res.arrayBuffer();
+  }
   const zip=await JSZip.loadAsync(buf);
   const jsonStr=await zip.file('data.json').async('string');
   return JSON.parse(jsonStr);
