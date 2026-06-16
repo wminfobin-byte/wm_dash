@@ -1889,6 +1889,11 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         <span id="tbWarn" style="font-size:12px;color:var(--warning);margin-left:auto"></span>
       </div>
       <div id="tbKpi" class="sp-kpi-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px"></div>
+      <div class="tb-langseg" id="tbLangSeg">
+        <button class="active" data-tblang="전체" onclick="tbSetLang('전체')">전체</button>
+        <button data-tblang="영어" onclick="tbSetLang('영어')">영어</button>
+        <button data-tblang="제2외국어" onclick="tbSetLang('제2외국어')">제2외국어</button>
+      </div>
       <div id="tbContent"></div>
     </div>
   </div>
@@ -12141,7 +12146,7 @@ async function spDownloadExcel(){
 //        ·재콜 완전 제외·매체 callback/tv_b 제외 / 조인 DB G(6) ↔ 계약 D(3) / 신청일 기준
 // ════════════════════════════════════════════════════════════
 const TB_DB_NAME='timeboardDashboard', TB_DB_VER=1;
-let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbChart=null;
+let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbChart=null, tbLangView='전체';
 const TB_TYPES=['db','contDaily','attend'];
 const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
 const TB_MIN_DB=5; // DB수가 이 값 이하인 행(시간대·일자)은 표본 부족 → 리스트에서 제외(DB수·계약수 무시)
@@ -12331,10 +12336,11 @@ function tbRender(){
   document.getElementById('tbWarn').textContent=(tbModel.warns||[]).join(' · ');
   tbRenderKpi(s,e);
   let html='<section class="tb-sec"><h3 class="tb-sec-h">📊 시간대별 계약률 (영어 vs 제2외국어)</h3><div style="height:280px"><canvas id="tbChartAll"></canvas></div></section>';
-  for(const lang of ['전체','영어','제2외국어'])html+=tbLangSection(lang,s,e);
+  html+=tbLangSection(tbLangView,s,e);   // 네비게이션으로 선택된 언어만 표시
   document.getElementById('tbContent').innerHTML=html;
   tbRenderSlotChart(s,e);
 }
+function tbSetLang(l){tbLangView=l;document.querySelectorAll('#tbLangSeg button').forEach(b=>b.classList.toggle('active',b.dataset.tblang===l));tbRender();}
 function tbInitDateRange(reset){
   const s=document.getElementById('tbDateStart'),e=document.getElementById('tbDateEnd');
   if(tbModel.minDay){s.min=tbModel.minDay;e.min=tbModel.minDay;}
@@ -12514,6 +12520,11 @@ function tbEnsureStyle(){
   #page-timeboard-perf .tb-tbl th,#page-timeboard-perf .tb-tbl td{padding:7px 10px;text-align:right;border-bottom:1px solid #eef2f7;white-space:nowrap}
   #page-timeboard-perf .tb-tbl thead th{background:#1e293b;color:#fff;font-weight:700;border-bottom:none;position:sticky;top:0}
   #page-timeboard-perf .tb-tbl tbody tr:hover{background:#f8fafc}
+  #page-timeboard-perf .tb-langseg{display:inline-flex;gap:0;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;margin-bottom:16px}
+  #page-timeboard-perf .tb-langseg button{border:none;background:#fff;color:#475569;font-size:13.5px;font-weight:700;padding:9px 22px;cursor:pointer;border-right:1px solid #e2e8f0}
+  #page-timeboard-perf .tb-langseg button:last-child{border-right:none}
+  #page-timeboard-perf .tb-langseg button:hover{background:#f1f5f9}
+  #page-timeboard-perf .tb-langseg button.active{background:#4361ee;color:#fff}
   #page-timeboard-perf .tb-sub-h{font-size:13px;font-weight:800;color:#334155;margin:18px 0 8px;padding-top:4px;border-top:1px dashed #e2e8f0}
   #page-timeboard-perf .tb-sub-s{font-weight:500;color:#94a3b8;font-size:11px}
   #page-timeboard-perf .tb-slotblk{margin-bottom:14px;border:1px solid #e8edf3;border-radius:10px;overflow:hidden}
