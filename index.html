@@ -840,6 +840,18 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn6">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-timeboard-perf" style="display:none">
+    <div class="status-dots" id="tbStatusDots" title="파일 상태: DB수 / 계약(일마감) / 명단">
+      <div class="status-dot" id="tb-dot-db"></div>
+      <div class="status-dot" id="tb-dot-cont"></div>
+      <div class="status-dot" id="tb-dot-attend"></div>
+    </div>
+    <span id="tbLastUpdate" style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap"></span>
+    <button class="btn-header" onclick="tbOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="tbOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
@@ -848,6 +860,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
   <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
+  <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
@@ -1784,6 +1797,103 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   </div>
 </div><!-- /page-missed-call -->
 
+<!-- ═══ Page: 타임보드성과 ═══ -->
+<div class="page" id="page-timeboard-perf">
+  <!-- Modal -->
+  <div class="modal-overlay" id="tbModalOverlay" onclick="if(event.target===this)tbCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="tbCloseModal()">&times;</button>
+      <div id="tbModalUpload">
+        <h2>파일 업로드 — 타임보드성과</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB수·계약(일마감)은 <b>누적 저장</b>, 명단은 최신 1건만 사용합니다. 보통은 <b>공용폴더 자동 연동</b>으로 가져옵니다. (타임보드성과는 폴더에서 재생성하므로 클라우드 동기화엔 포함되지 않습니다.)</p>
+        <div class="upload-grid">
+          <div class="upload-box" id="box-tb-db">
+            <input type="file" accept=".xlsx,.xls" data-tbtype="db" multiple>
+            <div class="icon">🗂️</div>
+            <div class="label">DB수 (고객관리)</div>
+            <div class="desc">WM_고객관리_yyyy-mm-dd<br>고객키 G · OB명 H · 분배일 I · DB정보 P · 매체 T</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-tb-db"></div>
+          </div>
+          <div class="upload-box" id="box-tb-cont">
+            <input type="file" accept=".xlsx,.xls" data-tbtype="contDaily" multiple>
+            <div class="icon">📝</div>
+            <div class="label">계약 — 일마감 (신청자관리)</div>
+            <div class="desc">신청자관리_yyyymmdd<br>고객키 D · 담당자 N · 신청일 P · 분류 Q</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-tb-cont"></div>
+          </div>
+          <div class="upload-box" id="box-tb-attend">
+            <input type="file" accept=".xlsx,.xls" data-tbtype="attend" multiple>
+            <div class="icon">👥</div>
+            <div class="label">명단 (그룹표기)</div>
+            <div class="desc">WM_근태보고_그룹 — 담당/그룹/센터/이름<br>군자·관리자 제외 + 이름 정규화</div>
+            <span class="upload-badge overwrite">최신 1건</span>
+            <div class="filename" id="fname-tb-attend"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동</div>
+              <div id="tbDirStatus" style="font-size:12px;color:var(--gray);margin-top:3px">연결 안 됨</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" id="tbConnBtn" onclick="tbConnectFolder()">공용폴더 연결</button>
+              <button class="btn btn-outline btn-sm" id="tbScanBtn" onclick="tbScanFolder({request:true,announce:true})">지금 스캔</button>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--gray);margin-top:10px;line-height:1.6">
+            계열별성과와 <b>같은 공용폴더</b>를 공유합니다 (한쪽에서 연결하면 양쪽 사용). 하위폴더명으로 종류 구분 — <b>DB수 / 일마감 / 명단</b>. 새로고침 후 첫 1회는 <b>[지금 스캔]</b> 클릭으로 접근 허용이 필요합니다.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="tbCloseModal()">닫기</button>
+          <button class="btn btn-primary" onclick="tbCloseModal();tbGenerate(true);">분석 실행</button>
+        </div>
+      </div>
+      <div id="tbModalManage" class="hidden">
+        <h2>파일 관리 — 타임보드성과</h2>
+        <div class="file-history" id="tbFileHistory"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" style="color:var(--danger);border-color:#fecaca" onclick="tbResetAll()">전체 초기화</button>
+          <button class="btn btn-outline" onclick="tbCloseModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="tbDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="tbDirBannerMsg" style="font-size:13px;font-weight:600;color:#92400e">📁 공용폴더 접근 허용이 필요합니다</span>
+      <button class="btn btn-primary btn-sm" onclick="tbScanFolder({request:true})">📁 공용폴더 새로고침</button>
+    </div>
+    <div id="tbEmpty" class="sp-empty">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">📺</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">타임보드 데이터를 불러오세요</div>
+      <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 공용폴더 연결/스캔 → DB수 + 계약(일마감) + 명단</div>
+      <div id="tbEmptyHint" style="font-size:13px;margin-top:10px;color:var(--warning)"></div>
+    </div>
+
+    <div class="hidden" id="tbDashboard">
+      <div class="sp-control-bar">
+        <label>기간</label>
+        <input type="date" id="tbDateStart" onchange="tbRender()">
+        <span style="color:var(--gray)">~</span>
+        <input type="date" id="tbDateEnd" onchange="tbRender()">
+        <span style="margin-left:6px"></span>
+        <button class="btn btn-outline btn-sm" data-tbquick="7d" onclick="tbQuickRange('7d')">최근 7일</button>
+        <button class="btn btn-outline btn-sm" data-tbquick="30d" onclick="tbQuickRange('30d')">최근 30일</button>
+        <button class="btn btn-outline btn-sm" data-tbquick="thisMonth" onclick="tbQuickRange('thisMonth')">이번 달</button>
+        <button class="btn btn-outline btn-sm" data-tbquick="all" onclick="tbQuickRange('all')">전체</button>
+        <span id="tbWarn" style="font-size:12px;color:var(--warning);margin-left:auto"></span>
+      </div>
+      <div id="tbKpi" class="sp-kpi-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px"></div>
+      <div id="tbContent"></div>
+    </div>
+  </div>
+</div><!-- /page-timeboard-perf -->
+
 <!-- ═══ Page: 차등성과 ═══ -->
 <div class="page active" id="page-grade-dash">
 
@@ -1991,7 +2101,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call','timeboard-perf']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash']},
 ];
 let authUser=null;
@@ -2636,9 +2746,12 @@ function switchPage(pageId){
   if(hrMc) hrMc.style.display = pageId==='missed-call' ? 'flex' : 'none';
   const hrSp=document.getElementById('headerRight-series-perf');
   if(hrSp) hrSp.style.display = pageId==='series-perf' ? 'flex' : 'none';
+  const hrTb=document.getElementById('headerRight-timeboard-perf');
+  if(hrTb) hrTb.style.display = pageId==='timeboard-perf' ? 'flex' : 'none';
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
   if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
   if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
+  if(pageId==='timeboard-perf' && typeof tbOnShow==='function') tbOnShow();
   if(pageId==='grade-dash' && typeof gdAutoScanOnShow==='function') gdAutoScanOnShow();
 }
 
@@ -12019,6 +12132,382 @@ async function spDownloadExcel(){
     const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
   }catch(err){console.warn('눈금선 제거 실패, 기본 저장',err);XLSX.writeFile(wb,fname,{bookSST:true});}
+}
+
+// ════════════════════════════════════════════════════════════
+//  타임보드성과 (tb*)  — naver_tb 타임보드 DB의 시간대별 계약 성과
+//  데이터: 계열별성과(sp)와 같은 공용폴더 재사용. 클라우드 싱크 미포함(폴더에서 재생성).
+//  기준: 성과_데이터_추출_기준.md — 고객키 dedup·OB 군자/관리자 제외·분배일 빈값 제외
+//        ·재콜 완전 제외·매체 callback/tv_b 제외 / 조인 DB G(6) ↔ 계약 D(3) / 신청일 기준
+// ════════════════════════════════════════════════════════════
+const TB_DB_NAME='timeboardDashboard', TB_DB_VER=1;
+let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbChart=null;
+const TB_TYPES=['db','contDaily','attend'];
+const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
+
+function tbOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TB_DB_NAME,TB_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tbIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
+function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>res(r.result);tx.onerror=()=>rej(tx.error);});}
+function tbIdbGetAll(){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function tbIdbDel(id){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function tbIdbClear(){const all=await tbIdbGetAll();for(const r of all)await tbIdbDel(r.id);}
+function tbFilesByType(t){return tbFiles.filter(f=>f.type===t);}
+async function tbLoadFiles(){try{await tbOpenIDB();tbFiles=await tbIdbGetAll();tbLoaded=true;tbUpdateUploadStatus();}catch(e){console.error('타임보드 IDB 로드:',e);}}
+
+// ── 파서 (필요 컬럼 + 매체(T)/분류(Q) 원문 보존: 타임보드·시간대·언어 판정용) ──
+function tbParseDb(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
+    const k=String(r[6]==null?'':r[6]).trim();if(!k)continue;       // 고객키 G(6)
+    rows.push({k, ob:String(r[7]==null?'':r[7]).trim(),             // OB명 H(7)
+      d:spNormDay(r[8]),                                            // 분배일 I(8)
+      rc:String(r[15]==null?'':r[15]).includes('재콜')?1:0,          // DB정보 P(15) 재콜
+      mc:String(r[19]==null?'':r[19]).trim()});                     // 매체 T(19) 원문
+  }
+  return rows;
+}
+function tbParseCont(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
+    const mgr=String(r[13]==null?'':r[13]).trim();if(!mgr)continue; // 담당자 N(13) 빈값 skip
+    rows.push({k:String(r[3]==null?'':r[3]).trim(), mgr,            // 고객키 D(3)
+      d:spNormDay(r[15]),                                           // 신청일 P(15)
+      cat:String(r[16]==null?'':r[16]).trim()});                    // 분류 Q(16) 원문
+  }
+  return rows;
+}
+
+// ── 타임보드 / 시간대 / 언어 판정 ──
+function tbIsTb(s){return /naver_tb/i.test(String(s||''));}
+function tbIsAdmin(name){return /군자|관리자/.test(String(name||''));}
+function tbSlot(s){const p=String(s||'').trim().toLowerCase().split('_');const last=p[p.length-1];return last||'(미상)';}
+function tbLang(s){return /japer|cnper|esper|frper/i.test(String(s||''))?'제2외국어':'영어';}
+function tbSlotMin(slot){const m=String(slot).match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);if(!m)return 99999;let h=+m[1];const mm=m[2]?+m[2]:0;const ap=(m[3]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;return h*60+mm;}
+
+// ── 인제스트 (수동 업로드·폴더 스캔 공통) ──
+async function tbIngestFile(type,file){
+  const fileHash=`${file.name}|${file.size}`;
+  if(type!=='attend'&&tbFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};
+  if(type==='attend'){const cur=tbFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup'};}
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+  let rows;
+  if(type==='db')rows=tbParseDb(wb);
+  else if(type==='contDaily')rows=tbParseCont(wb);
+  else rows=spParseAttend(wb);
+  if(type==='attend'){for(const f of tbFilesByType('attend'))await tbIdbDel(f.id);tbFiles=tbFiles.filter(f=>f.type!=='attend');}
+  const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
+  const id=await tbIdbAdd(rec);rec.id=id;tbFiles.push(rec);
+  return {status:'ok'};
+}
+
+// ── 집계 ──
+function tbBuildRoster(){
+  const att=tbFilesByType('attend');const src=att.length?att[att.length-1].rows:[];
+  const full=new Map(),bare=new Map();
+  for(const p of src){const nm=p.nm;if(!nm)continue;const b=nm.replace(/^\(.*?\)/,'').trim();const ent={nm,bare:b,team:p.team,ctr:p.ctr,grp:p.grp};full.set(nm,ent);if(bare.has(b)){if(bare.get(b)!=='AMBIG'&&bare.get(b).nm!==nm)bare.set(b,'AMBIG');}else bare.set(b,ent);}
+  return {full,bare};
+}
+function tbCompute(){
+  const roster=tbBuildRoster();
+  // DB: 고객키 dedup → 타임보드(naver_tb) + 제외규칙. dbKey 맵에 분배일/시간대/언어 보관(조인용)
+  const dbKey=new Map(); const dbRecs=[]; const seen=new Set();
+  const dbFiles=tbFilesByType('db').slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0));
+  for(const f of dbFiles)for(const r of f.rows){
+    if(!r.k||seen.has(r.k))continue; seen.add(r.k);     // 고객키 중복 제거(신규만)
+    if(!r.ob||tbIsAdmin(r.ob))continue;                 // OB 빈값/군자/관리자 제외
+    if(!r.d)continue;                                   // 분배일 없음 제외
+    if(r.rc)continue;                                   // 재콜 완전 제외
+    if(/callback|tv_b/i.test(r.mc))continue;            // 매체 callback/tv_b 제외
+    if(!tbIsTb(r.mc))continue;                          // 타임보드 아님 제외
+    const ent=spCanon(roster,r.ob);
+    const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang:tbLang(r.mc)};
+    dbRecs.push(rec); dbKey.set(r.k,rec);
+  }
+  // 계약: 일마감 고객키 dedup → 타임보드(Q naver_tb) + '집계된 타임보드 DB'와 매칭되는 것만(재콜 자동 제외)
+  const contRecs=[]; const seenC=new Set(); let unmatched=0;
+  const cFiles=tbFilesByType('contDaily').slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0));
+  for(const f of cFiles)for(const r of f.rows){
+    if(!r.k||seenC.has(r.k))continue; seenC.add(r.k);
+    if(!tbIsTb(r.cat))continue;                         // 타임보드 계약만
+    const db=dbKey.get(r.k);
+    if(!db){unmatched++;continue;}                      // 집계된 타임보드 DB와 매칭되는 것만
+    const day=r.d||db.day;                              // 신청일 기준
+    contRecs.push({k:r.k,day,slot:tbSlot(r.cat),lang:tbLang(r.cat),isDaily:(db.day===day)});
+  }
+  const days=[]; dbRecs.forEach(r=>{if(r.day)days.push(r.day);}); contRecs.forEach(r=>{if(r.day)days.push(r.day);}); days.sort();
+  const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
+  const warns=[];
+  if(!dbRecs.length)warns.push('타임보드 DB(매체코드 naver_tb)가 0건입니다. 공용폴더·파일을 확인하세요.');
+  if(unmatched)warns.push(`타임보드 계약 ${unmatched.toLocaleString()}건이 DB와 고객키 매칭이 안 돼 제외됨`);
+  if(!tbFilesByType('contDaily').length)warns.push('계약(일마감) 파일이 없어 계약수가 0으로 표시됩니다.');
+  tbModel={roster,dbRecs,contRecs,minDay:days[0]||'',maxDay:days[days.length-1]||'',slots,unmatched,warns};
+  return tbModel;
+}
+
+// ── 필터 / 집계 헬퍼 ──
+function tbRangeDays(){const s=document.getElementById('tbDateStart').value,e=document.getElementById('tbDateEnd').value;return [s||'0000-00-00',e||'9999-99-99'];}
+function tbInRange(r,lang,s,e){return r.day>=s&&r.day<=e&&(lang==='전체'||r.lang===lang);}
+function tbAggBy(keyFn,lang,s,e){
+  const map=new Map();
+  const get=k=>{if(!map.has(k))map.set(k,{db:0,cont:0,daily:0});return map.get(k);};
+  for(const r of tbModel.dbRecs)if(tbInRange(r,lang,s,e))get(keyFn(r)).db++;
+  for(const r of tbModel.contRecs)if(tbInRange(r,lang,s,e)){const g=get(keyFn(r));g.cont++;if(r.isDaily)g.daily++;}
+  return map;
+}
+function tbPct(n,d){return d?(n/d*100).toFixed(1)+'%':'-';}
+function tbMetricRow(label,g,strong){
+  const prev=g.cont-g.daily;
+  const c=(v)=>v.toLocaleString();
+  const st=strong?'font-weight:800;background:#f1f5f9':'';
+  return `<tr style="${st}"><td style="text-align:left;font-weight:600">${label}</td>`+
+    `<td>${c(g.db)}</td><td>${c(g.cont)}</td><td style="font-weight:700;color:#1d4ed8">${tbPct(g.cont,g.db)}</td>`+
+    `<td>${c(g.daily)}</td><td>${tbPct(g.daily,g.db)}</td>`+
+    `<td>${c(prev)}</td><td>${tbPct(prev,g.db)}</td></tr>`;
+}
+function tbSlotTable(lang,s,e){
+  const map=tbAggBy(r=>r.slot,lang,s,e);
+  const slots=Array.from(map.keys()).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
+  if(!slots.length)return '<div class="tb-empty">해당 조건의 타임보드 데이터가 없습니다.</div>';
+  const tot={db:0,cont:0,daily:0};let body='';
+  for(const sl of slots){const g=map.get(sl);tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(sl,g);}
+  body+=tbMetricRow('합계',tot,true);
+  return `<table class="tb-tbl"><thead><tr><th style="text-align:left">시간대</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+function tbDailyTable(lang,s,e){
+  const map=tbAggBy(r=>r.day+'|'+r.slot,lang,s,e);
+  const keys=Array.from(map.keys()).sort((a,b)=>{const[da,sa]=a.split('|'),[db,sb]=b.split('|');return da===db?tbSlotMin(sa)-tbSlotMin(sb):(da<db?1:-1);}); // 최신일 우선
+  if(!keys.length)return '';
+  let body='';let curDay='';
+  for(const k of keys){const[day,sl]=k.split('|');const g=map.get(k);
+    if(day!==curDay){curDay=day;body+=`<tr class="tb-daysep"><td colspan="8" style="text-align:left">${day}</td></tr>`;}
+    body+=tbMetricRow(sl,g);
+  }
+  return `<details class="tb-details"><summary>일자별 상세 (${keys.length}행)</summary><table class="tb-tbl"><thead><tr><th style="text-align:left">시간대</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></details>`;
+}
+function tbLangSection(lang,s,e){
+  const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','제2외국어':'🌏 제2외국어'};
+  return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>${tbSlotTable(lang,s,e)}${tbDailyTable(lang,s,e)}</section>`;
+}
+function tbRenderKpi(s,e){
+  const g={db:0,cont:0,daily:0};
+  for(const r of tbModel.dbRecs)if(tbInRange(r,'전체',s,e))g.db++;
+  for(const r of tbModel.contRecs)if(tbInRange(r,'전체',s,e)){g.cont++;if(r.isDaily)g.daily++;}
+  const card=(lab,val,sub)=>`<div class="tb-kpi"><div class="tb-kpi-l">${lab}</div><div class="tb-kpi-v">${val}</div><div class="tb-kpi-s">${sub||''}</div></div>`;
+  document.getElementById('tbKpi').innerHTML=
+    card('타임보드 DB수',g.db.toLocaleString(),'')+
+    card('계약수',g.cont.toLocaleString(),`일계약 ${g.daily.toLocaleString()} · 이전 ${(g.cont-g.daily).toLocaleString()}`)+
+    card('계약률',tbPct(g.cont,g.db),'계약수 / DB수')+
+    card('일계약률',tbPct(g.daily,g.db),'당일계약 / DB수');
+}
+function tbRenderSlotChart(s,e){
+  const cv=document.getElementById('tbChartAll');if(!cv||typeof Chart==='undefined')return;
+  try{
+    const en=tbAggBy(r=>r.slot,'영어',s,e), se=tbAggBy(r=>r.slot,'제2외국어',s,e);
+    const slots=Array.from(new Set([...en.keys(),...se.keys()])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
+    const rate=(m,sl)=>{const g=m.get(sl);return g&&g.db?+(g.cont/g.db*100).toFixed(1):0;};
+    if(tbChart){tbChart.destroy();tbChart=null;}
+    tbChart=new Chart(cv,{type:'bar',data:{labels:slots,datasets:[
+      {label:'영어 계약률(%)',data:slots.map(sl=>rate(en,sl)),backgroundColor:'#4361ee'},
+      {label:'제2외국어 계약률(%)',data:slots.map(sl=>rate(se,sl)),backgroundColor:'#f0920e'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}}});
+  }catch(err){console.warn('타임보드 차트',err);}
+}
+function tbRender(){
+  if(!tbModel)return;
+  const [s,e]=tbRangeDays();
+  tbEnsureStyle();
+  document.getElementById('tbWarn').textContent=(tbModel.warns||[]).join(' · ');
+  tbRenderKpi(s,e);
+  let html='<section class="tb-sec"><h3 class="tb-sec-h">📊 시간대별 계약률 (영어 vs 제2외국어)</h3><div style="height:280px"><canvas id="tbChartAll"></canvas></div></section>';
+  for(const lang of ['전체','영어','제2외국어'])html+=tbLangSection(lang,s,e);
+  document.getElementById('tbContent').innerHTML=html;
+  tbRenderSlotChart(s,e);
+}
+function tbInitDateRange(reset){
+  const s=document.getElementById('tbDateStart'),e=document.getElementById('tbDateEnd');
+  if(tbModel.minDay){s.min=tbModel.minDay;e.min=tbModel.minDay;}
+  if(tbModel.maxDay){s.max=tbModel.maxDay;e.max=tbModel.maxDay;}
+  if(reset||!e.value)e.value=tbModel.maxDay||'';
+  if(reset||!s.value){const mx=tbModel.maxDay?spDateObj(tbModel.maxDay):null;let st=tbModel.minDay||'';if(mx){const d=new Date(mx.getTime()-29*86400000);st=spNormDay(d);if(tbModel.minDay&&st<tbModel.minDay)st=tbModel.minDay;}s.value=st;}
+}
+function tbQuickRange(kind){
+  if(!tbModel)return;
+  const max=tbModel.maxDay?spDateObj(tbModel.maxDay):new Date();
+  const min=tbModel.minDay?spDateObj(tbModel.minDay):max;
+  let st,en=new Date(max);
+  if(kind==='7d')st=new Date(max.getTime()-6*86400000);
+  else if(kind==='30d')st=new Date(max.getTime()-29*86400000);
+  else if(kind==='thisMonth')st=new Date(max.getFullYear(),max.getMonth(),1);
+  else {st=new Date(min);en=new Date(max);}
+  if(st<min)st=new Date(min);
+  document.getElementById('tbDateStart').value=spNormDay(st);
+  document.getElementById('tbDateEnd').value=spNormDay(en);
+  document.querySelectorAll('[data-tbquick]').forEach(b=>b.classList.toggle('active',b.dataset.tbquick===kind));
+  tbRender();
+}
+function tbReady(){return tbFilesByType('db').length>0;}
+function tbGenerate(force){
+  if(!tbReady()){tbOnShow();return;}
+  if(force||!tbModel)tbCompute();
+  document.getElementById('tbEmpty').classList.add('hidden');
+  document.getElementById('tbDashboard').classList.remove('hidden');
+  tbInitDateRange(force);
+  tbRender();
+}
+async function tbOnShow(){
+  if(!tbLoaded)await tbLoadFiles();
+  await tbAutoScanOnShow();
+  if(tbReady()){
+    if(!tbModel){tbGenerate(false);return;}
+    document.getElementById('tbEmpty').classList.add('hidden');
+    document.getElementById('tbDashboard').classList.remove('hidden');
+  }else{
+    document.getElementById('tbDashboard').classList.add('hidden');
+    document.getElementById('tbEmpty').classList.remove('hidden');
+    tbUpdateEmptyHint();
+  }
+}
+
+// ── 모달 / 업로드 / 파일관리 ──
+function tbOpenModal(view){
+  document.getElementById('tbModalOverlay').classList.add('open');
+  document.getElementById('tbModalUpload').classList.toggle('hidden',view==='manage');
+  document.getElementById('tbModalManage').classList.toggle('hidden',view!=='manage');
+  tbBindUploadBoxes();tbUpdateUploadStatus();tbRenderFileHistory();tbUpdateDirStatus();
+}
+function tbCloseModal(){document.getElementById('tbModalOverlay').classList.remove('open');}
+function tbUpdateStatusDots(){TB_TYPES.forEach(k=>{const el=document.getElementById('tb-dot-'+(k==='contDaily'?'cont':k));if(el)el.classList.toggle('ok',tbFilesByType(k).length>0);});}
+function tbUpdateUploadStatus(){
+  const idmap={db:'db',contDaily:'cont',attend:'attend'};
+  TB_TYPES.forEach(k=>{const box=document.getElementById('box-tb-'+idmap[k]);const fn=document.getElementById('fname-tb-'+idmap[k]);const list=tbFilesByType(k);
+    if(box)box.classList.toggle('loaded',list.length>0);
+    if(fn){if(!list.length)fn.textContent='';else if(list.length===1)fn.textContent=list[0].fileName;else fn.textContent=`${list.length}개 파일 누적`;}
+  });
+  tbUpdateStatusDots();
+  const lu=document.getElementById('tbLastUpdate');
+  if(lu){let mx='';const scan=arr=>{for(const f of arr)for(const r of(f.rows||[]))if(r.d&&r.d>mx)mx=r.d;};scan(tbFilesByType('contDaily'));if(!mx)scan(tbFilesByType('db'));lu.textContent=mx?`최종업데이트일자 : ${mx}`:'';}
+}
+function tbUpdateEmptyHint(){
+  const need=[];if(!tbFilesByType('db').length)need.push('DB수');if(!tbFilesByType('contDaily').length)need.push('계약(일마감)');
+  const el=document.getElementById('tbEmptyHint');if(el)el.textContent=need.length?`필요 파일: ${need.join(' · ')}`:'';
+}
+function tbRenderFileHistory(){
+  const el=document.getElementById('tbFileHistory');if(!el)return;
+  if(!tbFiles.length){el.innerHTML='<div class="fh-empty" style="padding:20px;text-align:center">업로드된 파일이 없습니다.</div>';return;}
+  const tcls={db:'db',contDaily:'cont',attend:'attend'};
+  el.innerHTML=TB_TYPES.map(t=>{const list=tbFilesByType(t).slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0));if(!list.length)return '';
+    const items=list.map(f=>`<div class="fh-item"><span class="fh-name">${f.fileName}</span><span class="fh-date">${(f.rowsCount||(f.rows?f.rows.length:0)).toLocaleString()}행 · ${new Date(f.uploadTime).toLocaleDateString('ko-KR')}</span><button class="btn-del" onclick="tbDeleteFile(${f.id})">×</button></div>`).join('');
+    return `<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${tcls[t]}">${TB_TYPE_LABEL[t]}</span> ${list.length}개</div>${items}</div>`;
+  }).join('');
+}
+async function tbDeleteFile(id){await tbIdbDel(id);tbFiles=tbFiles.filter(f=>f.id!==id);tbModel=null;tbUpdateUploadStatus();tbRenderFileHistory();}
+async function tbResetAll(){if(!confirm('타임보드성과의 모든 파일을 삭제합니다. 계속할까요?'))return;await tbIdbClear();tbFiles=[];tbModel=null;tbUpdateUploadStatus();tbRenderFileHistory();document.getElementById('tbDashboard').classList.add('hidden');document.getElementById('tbEmpty').classList.remove('hidden');tbCloseModal();}
+let tbBound=false;
+function tbBindUploadBoxes(){
+  if(tbBound)return;tbBound=true;
+  document.querySelectorAll('#tbModalUpload input[type=file]').forEach(input=>{
+    input.addEventListener('change',async e=>{
+      const type=input.dataset.tbtype;const files=Array.from(e.target.files||[]);if(!files.length)return;
+      if(!tbLoaded)await tbLoadFiles();
+      let ok=0,dup=0;for(const file of files){try{const r=await tbIngestFile(type,file);if(r.status==='ok')ok++;else dup++;}catch(err){console.error(err);}}
+      input.value='';tbModel=null;tbUpdateUploadStatus();tbRenderFileHistory();
+      if(ok&&currentPage==='timeboard-perf'){/* 분석은 [분석 실행]에서 */}
+    });
+  });
+}
+
+// ── 공용폴더 (계열별성과와 핸들 공유) ──
+function tbUpdateDirStatus(state){
+  const el=document.getElementById('tbDirStatus');const scanBtn=document.getElementById('tbScanBtn');const connBtn=document.getElementById('tbConnBtn');
+  const supported=!!window.showDirectoryPicker;
+  if(connBtn)connBtn.disabled=!supported;
+  if(scanBtn)scanBtn.disabled=!supported||!spDirHandle;
+  if(!el)return;
+  if(!supported){el.textContent='이 브라우저는 폴더 자동연동 미지원 (Chrome·Edge 권장)';el.style.color='var(--danger)';return;}
+  if(state==='busy'){el.textContent='폴더 스캔 중…';el.style.color='var(--gray)';return;}
+  if(state==='need-perm'){el.innerHTML='🔒 연결됨 · 권한 필요 — <b>[지금 스캔]</b>을 눌러 접근을 허용하세요';el.style.color='#b45309';return;}
+  if(state==='ok'){el.textContent='✓ 스캔 완료';el.style.color='var(--success,#16a34a)';return;}
+  if(spDirHandle){el.innerHTML=`✓ 연결됨${spDirName?` · <b>${spDirName}</b>`:''} (계열별성과와 공유) — 탭 열 때 자동 스캔`;el.style.color='var(--success,#16a34a)';}
+  else{el.textContent='연결 안 됨 — [공용폴더 연결]로 네트워크 공유드라이브 폴더를 지정하세요';el.style.color='var(--gray)';}
+}
+function tbSetBanner(mode,info){
+  const b=document.getElementById('tbDirBanner');if(!b)return;const msg=document.getElementById('tbDirBannerMsg');
+  if(mode==='need-perm'){b.classList.remove('hidden');b.style.background='#fffbeb';b.style.borderColor='#fde68a';msg.style.color='#92400e';msg.innerHTML='📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요';return;}
+  if(mode==='busy'){b.classList.remove('hidden');b.style.background='#f8fafc';b.style.borderColor='#e2e8f0';msg.style.color='var(--gray)';msg.textContent='⏳ 공용폴더 스캔 중…';return;}
+  if(mode==='ok'){b.classList.remove('hidden');b.style.background='#f0fdf4';b.style.borderColor='#bbf7d0';msg.style.color='#166534';msg.innerHTML=`✓ 공용폴더 동기화 완료 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}`;return;}
+  b.classList.add('hidden');
+}
+async function tbConnectFolder(){
+  if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.');return;}
+  try{const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});if(!spIdb)await spOpenIDB();await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;tbUpdateDirStatus();await tbScanFolder({request:true,announce:true});}
+  catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
+}
+async function tbScanFolder(opts={}){
+  if(tbScanBusy)return;
+  if(!tbLoaded)await tbLoadFiles();
+  if(!window.showDirectoryPicker){if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.');return;}
+  if(!spIdb)await spOpenIDB();
+  const h=spDirHandle||await spIdbGetHandle();
+  if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
+  spDirHandle=h;spDirName=h.name;
+  if(!await spVerifyPerm(h,!!opts.request)){tbUpdateDirStatus('need-perm');tbSetBanner('need-perm');return;}
+  tbScanBusy=true;tbUpdateDirStatus('busy');if(!opts.fromShow)tbSetBanner('busy');
+  const WANT=new Set(['db','contDaily','attend']);
+  const tasks=[];
+  async function walk(dir,folderName,depth){
+    for await(const entry of dir.values()){
+      if(entry.kind==='file'){
+        if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
+        const type=spDetectType(folderName,entry.name);
+        if(WANT.has(type))tasks.push({type,entry});
+      }else if(entry.kind==='directory'&&depth<2){
+        if(WANT.has(spDetectType(entry.name,'')))try{await walk(entry,entry.name,depth+1);}catch(e){}
+      }
+    }
+  }
+  try{await walk(h,'',0);}catch(e){console.error('타임보드 폴더 스캔',e);tbScanBusy=false;tbUpdateDirStatus('error');return;}
+  const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
+  const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
+  let okCnt=0,dupCnt=0;
+  for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await tbIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
+  tbScanBusy=false;if(okCnt>0)tbModel=null;
+  tbUpdateUploadStatus();tbRenderFileHistory();tbUpdateDirStatus('ok');
+  if(!opts.fromShow||okCnt>0)tbSetBanner('ok',{okCnt,dupCnt});else tbSetBanner('hide');
+  if(okCnt>0&&!opts.fromShow&&currentPage==='timeboard-perf')tbOnShow();
+  return {okCnt,dupCnt};
+}
+async function tbAutoScanOnShow(){
+  if(!window.showDirectoryPicker){tbSetBanner('hide');return;}
+  try{
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=spDirHandle||await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';
+    if(!spDirHandle){tbSetBanner('hide');tbUpdateDirStatus();return;}
+    if(await spVerifyPerm(spDirHandle,true))await tbScanFolder({request:false,announce:false,fromShow:true});
+    else{tbUpdateDirStatus('need-perm');tbSetBanner('need-perm');}
+  }catch(e){console.error('타임보드 자동 스캔',e);}
+}
+
+// ── 스타일 (1회 주입) ──
+function tbEnsureStyle(){
+  if(document.getElementById('tbStyle'))return;
+  const st=document.createElement('style');st.id='tbStyle';
+  st.textContent=`
+  #page-timeboard-perf .tb-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px}
+  #page-timeboard-perf .tb-kpi-l{font-size:12px;color:#64748b;font-weight:600}
+  #page-timeboard-perf .tb-kpi-v{font-size:26px;font-weight:800;color:#1e293b;margin-top:4px}
+  #page-timeboard-perf .tb-kpi-s{font-size:11px;color:#94a3b8;margin-top:2px}
+  #page-timeboard-perf .tb-sec{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:18px}
+  #page-timeboard-perf .tb-sec-h{font-size:15px;font-weight:800;color:#1e293b;margin:0 0 12px}
+  #page-timeboard-perf .tb-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  #page-timeboard-perf .tb-tbl th,#page-timeboard-perf .tb-tbl td{padding:7px 10px;text-align:right;border-bottom:1px solid #eef2f7;white-space:nowrap}
+  #page-timeboard-perf .tb-tbl thead th{background:#1e293b;color:#fff;font-weight:700;border-bottom:none;position:sticky;top:0}
+  #page-timeboard-perf .tb-tbl tbody tr:hover{background:#f8fafc}
+  #page-timeboard-perf .tb-daysep td{background:#eef2ff;color:#3730a3;font-weight:800;font-size:12px}
+  #page-timeboard-perf .tb-details{margin-top:12px}
+  #page-timeboard-perf .tb-details summary{cursor:pointer;font-size:13px;font-weight:700;color:#475569;padding:6px 0}
+  #page-timeboard-perf .tb-details table{margin-top:8px}
+  #page-timeboard-perf .tb-empty{padding:20px;text-align:center;color:#94a3b8;font-size:13px}`;
+  document.head.appendChild(st);
 }
 
 </script>
