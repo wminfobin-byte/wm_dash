@@ -12352,7 +12352,7 @@ function tbRenderSlotChart(s,e){
     if(tbChart){tbChart.destroy();tbChart=null;}
     tbChart=new Chart(cv,{type:'bar',data:{labels:slots,datasets:[
       {label:'영어 계약률(%)',data:slots.map(sl=>rate(en,sl)),backgroundColor:'#4361ee'},
-      {label:'제2외국어 계약률(%)',data:slots.map(sl=>rate(se,sl)),backgroundColor:'#f0920e'}
+      {label:'제2외국어 계약률(%)',data:slots.map(sl=>rate(se,sl)),backgroundColor:'#84cc16'}
     ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}}});
   }catch(err){console.warn('타임보드 차트',err);}
 }
@@ -12568,18 +12568,18 @@ function tbEnsureStyle(){
   #page-timeboard-perf .tb-tblwrap{border:1px solid #e8edf3;border-radius:12px;overflow:hidden}
   #page-timeboard-perf .tb-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
   #page-timeboard-perf .tb-tbl th,#page-timeboard-perf .tb-tbl td{padding:10px 12px;text-align:center;white-space:nowrap}
-  #page-timeboard-perf .tb-tbl thead th{background:linear-gradient(180deg,#273449,#1e293b);color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;border:none}
+  #page-timeboard-perf .tb-tbl thead th{background:#f3f6fb;color:#3c4a63;font-weight:700;font-size:12px;letter-spacing:.01em;border-bottom:2px solid #dde6f1}
   #page-timeboard-perf .tb-tbl tbody td{border-bottom:1px solid #f1f5f9;color:#334155}
   #page-timeboard-perf .tb-tbl tbody tr:nth-child(even){background:#fafbfd}
   #page-timeboard-perf .tb-tbl tbody tr:hover{background:#eef4ff}
   #page-timeboard-perf .tb-tbl .tb-lab{font-weight:700;color:#1e293b}
   #page-timeboard-perf .tb-tbl .tb-rate{font-weight:800;color:#1d4ed8}
   #page-timeboard-perf .tb-tbl .tb-rate2{color:#64748b}
-  #page-timeboard-perf .tb-tbl tr.tb-total td{background:#1e293b;color:#fff;font-weight:800;border-bottom:none}
-  #page-timeboard-perf .tb-tbl tr.tb-total .tb-lab{color:#fff}
-  #page-timeboard-perf .tb-tbl tr.tb-total .tb-rate{color:#93c5fd}
-  #page-timeboard-perf .tb-tbl tr.tb-total .tb-rate2{color:#cbd5e1}
-  #page-timeboard-perf .tb-tbl tr.tb-total:hover{background:#1e293b}
+  #page-timeboard-perf .tb-tbl tr.tb-total td{background:#eef3ff;color:#1e293b;font-weight:800;border-top:2px solid #c7d4f5;border-bottom:none}
+  #page-timeboard-perf .tb-tbl tr.tb-total .tb-lab{color:#1e293b}
+  #page-timeboard-perf .tb-tbl tr.tb-total .tb-rate{color:#1d4ed8}
+  #page-timeboard-perf .tb-tbl tr.tb-total .tb-rate2{color:#475569}
+  #page-timeboard-perf .tb-tbl tr.tb-total:hover{background:#eef3ff}
   #page-timeboard-perf .tb-slotblk{margin-bottom:16px;border:1px solid #e8edf3;border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04)}
   #page-timeboard-perf .tb-slotblk-h{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,#f8fafc,#eef2f7);padding:11px 16px;border-bottom:1px solid #e8edf3}
   #page-timeboard-perf .tb-clk{font-weight:800;font-size:14px;color:#1e293b}
