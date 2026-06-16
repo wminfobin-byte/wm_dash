@@ -8,7 +8,9 @@ N그룹 성과 대시보드 — WM 뇌새김영어 A그룹 코디네이터의 �
 
 ## Running
 
-브라우저에서 `index.html` 직접 열기, 또는:
+**배포**: GitHub Pages — `wminfobin-byte/wm_dash` 레포 main 루트 → https://wminfobin-byte.github.io/wm_dash/ (main push 시 자동 재배포). 클라우드 싱크도 같은 레포를 사용.
+
+로컬은 브라우저에서 `index.html` 직접 열기, 또는:
 ```bash
 npx http-server -p 8082
 ```
