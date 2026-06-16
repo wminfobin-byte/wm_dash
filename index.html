@@ -12259,16 +12259,15 @@ function tbCompute(){
     const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang:tbLang(r.mc)};
     dbRecs.push(rec); dbKey.set(r.k,rec);
   }
-  // 계약: 일마감 고객키 dedup → 타임보드(Q naver_tb) + '집계된 타임보드 DB'와 매칭되는 것만(재콜 자동 제외)
+  // 계약: 일마감 고객키 dedup → '집계된 타임보드 DB'와 고객키 매칭되는 것만(재콜 자동 제외)
+  // 분배일 코호트: 매칭된 DB의 분배일·시간대·언어로 귀속(계약률=그 분배 DB의 계약 전환). 계약의 Q열은 사용 안 함.
   const contRecs=[]; const seenC=new Set(); let unmatched=0;
   const cFiles=tbFilesByType('contDaily').slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0));
   for(const f of cFiles)for(const r of f.rows){
     if(!r.k||seenC.has(r.k))continue; seenC.add(r.k);
-    if(!tbIsTb(r.cat))continue;                         // 타임보드 계약만
     const db=dbKey.get(r.k);
     if(!db){unmatched++;continue;}                      // 집계된 타임보드 DB와 매칭되는 것만
-    const day=r.d||db.day;                              // 신청일 기준
-    contRecs.push({k:r.k,day,slot:tbSlot(r.cat),lang:tbLang(r.cat),isDaily:(db.day===day)});
+    contRecs.push({k:r.k,day:db.day,slot:db.slot,lang:db.lang,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정
   }
   const days=[]; dbRecs.forEach(r=>{if(r.day)days.push(r.day);}); contRecs.forEach(r=>{if(r.day)days.push(r.day);}); days.sort();
   const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
@@ -12309,7 +12308,7 @@ function tbSlotTable(lang,s,e){
   return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>시간대</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function tbDayLabel(day){const d=spDateObj(day);const wd=d?['일','월','화','수','목','금','토'][d.getDay()]:'';return d?`${day.slice(5)}(${wd})`:day;}
-// 시간대를 1차 기준으로, 그 시간대 타임보드를 집행한 일자를 시간순(위→아래=경과)으로 나열 → DB·계약 추이 추적
+// 시간대를 1차 기준으로, 분배일을 시간순(위→아래=경과)으로 나열 → 분배 DB의 계약 전환 추이 추적
 function tbSlotDateBlocks(lang,s,e){
   const map=tbAggBy(r=>r.slot+'|'+r.day,lang,s,e);
   const bySlot=new Map();
@@ -12322,7 +12321,7 @@ function tbSlotDateBlocks(lang,s,e){
     const tot={db:0,cont:0,daily:0};let body='';
     for(const {day,g} of rows){tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(tbDayLabel(day),g);}
     body+=tbMetricRow('합계',tot,true);
-    html+=`<div class="tb-slotblk"><div class="tb-slotblk-h"><span class="tb-clk">⏰ ${sl}</span><span class="tb-slotblk-n">${rows.length}일 집행</span></div><table class="tb-tbl"><thead><tr><th>집행일</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    html+=`<div class="tb-slotblk"><div class="tb-slotblk-h"><span class="tb-clk">⏰ ${sl}</span><span class="tb-slotblk-n">${rows.length}개 분배일</span></div><table class="tb-tbl"><thead><tr><th>분배일</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
   }
   return html;
 }
@@ -12330,7 +12329,7 @@ function tbLangSection(lang,s,e){
   const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','제2외국어':'🌏 제2외국어'};
   return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>`+
     `<div class="tb-sub-h">시간대 요약</div>${tbSlotTable(lang,s,e)}`+
-    `<div class="tb-sub-h">시간대별 집행일 추이 <span class="tb-sub-s">(위→아래 = 시간 경과 · DB·계약 변화 추적)</span></div>${tbSlotDateBlocks(lang,s,e)}`+
+    `<div class="tb-sub-h">시간대별 분배일 추이 <span class="tb-sub-s">(위→아래 = 분배일 경과 · DB·계약 전환 추적)</span></div>${tbSlotDateBlocks(lang,s,e)}`+
     `</section>`;
 }
 function tbRenderKpi(s,e){
