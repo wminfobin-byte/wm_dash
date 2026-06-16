@@ -12144,6 +12144,7 @@ const TB_DB_NAME='timeboardDashboard', TB_DB_VER=1;
 let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbChart=null;
 const TB_TYPES=['db','contDaily','attend'];
 const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
+const TB_MIN_DB=5; // DB수가 이 값 이하인 행(시간대·일자)은 표본 부족 → 리스트에서 제외(DB수·계약수 무시)
 
 function tbOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TB_DB_NAME,TB_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tbIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
 function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>res(r.result);tx.onerror=()=>rej(tx.error);});}
@@ -12266,27 +12267,37 @@ function tbMetricRow(label,g,strong){
 }
 function tbSlotTable(lang,s,e){
   const map=tbAggBy(r=>r.slot,lang,s,e);
-  const slots=Array.from(map.keys()).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
-  if(!slots.length)return '<div class="tb-empty">해당 조건의 타임보드 데이터가 없습니다.</div>';
+  const slots=Array.from(map.keys()).filter(sl=>map.get(sl).db>TB_MIN_DB).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b)); // DB수 ≤ TB_MIN_DB 제외
+  if(!slots.length)return `<div class="tb-empty">DB수 ${TB_MIN_DB}건 초과 시간대가 없습니다.</div>`;
   const tot={db:0,cont:0,daily:0};let body='';
   for(const sl of slots){const g=map.get(sl);tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(sl,g);}
   body+=tbMetricRow('합계',tot,true);
   return `<table class="tb-tbl"><thead><tr><th style="text-align:left">시간대</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table>`;
 }
-function tbDailyTable(lang,s,e){
-  const map=tbAggBy(r=>r.day+'|'+r.slot,lang,s,e);
-  const keys=Array.from(map.keys()).sort((a,b)=>{const[da,sa]=a.split('|'),[db,sb]=b.split('|');return da===db?tbSlotMin(sa)-tbSlotMin(sb):(da<db?1:-1);}); // 최신일 우선
-  if(!keys.length)return '';
-  let body='';let curDay='';
-  for(const k of keys){const[day,sl]=k.split('|');const g=map.get(k);
-    if(day!==curDay){curDay=day;body+=`<tr class="tb-daysep"><td colspan="8" style="text-align:left">${day}</td></tr>`;}
-    body+=tbMetricRow(sl,g);
+function tbDayLabel(day){const d=spDateObj(day);const wd=d?['일','월','화','수','목','금','토'][d.getDay()]:'';return d?`${day.slice(5)}(${wd})`:day;}
+// 시간대를 1차 기준으로, 그 시간대 타임보드를 집행한 일자를 시간순(위→아래=경과)으로 나열 → DB·계약 추이 추적
+function tbSlotDateBlocks(lang,s,e){
+  const map=tbAggBy(r=>r.slot+'|'+r.day,lang,s,e);
+  const bySlot=new Map();
+  for(const [k,g] of map){if(g.db<=TB_MIN_DB)continue;const i=k.indexOf('|');const sl=k.slice(0,i),day=k.slice(i+1);if(!bySlot.has(sl))bySlot.set(sl,[]);bySlot.get(sl).push({day,g});}
+  const slots=Array.from(bySlot.keys()).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
+  if(!slots.length)return `<div class="tb-empty">DB수 ${TB_MIN_DB}건 초과 데이터가 없습니다.</div>`;
+  let html='';
+  for(const sl of slots){
+    const rows=bySlot.get(sl).sort((a,b)=>a.day<b.day?-1:1); // 오래된→최신
+    const tot={db:0,cont:0,daily:0};let body='';
+    for(const {day,g} of rows){tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(tbDayLabel(day),g);}
+    body+=tbMetricRow('합계',tot,true);
+    html+=`<div class="tb-slotblk"><div class="tb-slotblk-h">⏰ ${sl} <span class="tb-slotblk-n">· ${rows.length}일 집행</span></div><table class="tb-tbl"><thead><tr><th style="text-align:left">집행일</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
   }
-  return `<details class="tb-details"><summary>일자별 상세 (${keys.length}행)</summary><table class="tb-tbl"><thead><tr><th style="text-align:left">시간대</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></details>`;
+  return html;
 }
 function tbLangSection(lang,s,e){
   const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','제2외국어':'🌏 제2외국어'};
-  return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>${tbSlotTable(lang,s,e)}${tbDailyTable(lang,s,e)}</section>`;
+  return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>`+
+    `<div class="tb-sub-h">시간대 요약</div>${tbSlotTable(lang,s,e)}`+
+    `<div class="tb-sub-h">시간대별 집행일 추이 <span class="tb-sub-s">(위→아래 = 시간 경과 · DB·계약 변화 추적)</span></div>${tbSlotDateBlocks(lang,s,e)}`+
+    `</section>`;
 }
 function tbRenderKpi(s,e){
   const g={db:0,cont:0,daily:0};
@@ -12303,8 +12314,9 @@ function tbRenderSlotChart(s,e){
   const cv=document.getElementById('tbChartAll');if(!cv||typeof Chart==='undefined')return;
   try{
     const en=tbAggBy(r=>r.slot,'영어',s,e), se=tbAggBy(r=>r.slot,'제2외국어',s,e);
-    const slots=Array.from(new Set([...en.keys(),...se.keys()])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
-    const rate=(m,sl)=>{const g=m.get(sl);return g&&g.db?+(g.cont/g.db*100).toFixed(1):0;};
+    const dbOf=(m,sl)=>{const g=m.get(sl);return g?g.db:0;};
+    const slots=Array.from(new Set([...en.keys(),...se.keys()])).filter(sl=>dbOf(en,sl)+dbOf(se,sl)>TB_MIN_DB).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b)); // DB수 ≤ TB_MIN_DB 제외
+    const rate=(m,sl)=>{const g=m.get(sl);return (g&&g.db>TB_MIN_DB)?+(g.cont/g.db*100).toFixed(1):null;}; // 표본 ≤ TB_MIN_DB면 막대 생략(null)
     if(tbChart){tbChart.destroy();tbChart=null;}
     tbChart=new Chart(cv,{type:'bar',data:{labels:slots,datasets:[
       {label:'영어 계약률(%)',data:slots.map(sl=>rate(en,sl)),backgroundColor:'#4361ee'},
@@ -12502,10 +12514,12 @@ function tbEnsureStyle(){
   #page-timeboard-perf .tb-tbl th,#page-timeboard-perf .tb-tbl td{padding:7px 10px;text-align:right;border-bottom:1px solid #eef2f7;white-space:nowrap}
   #page-timeboard-perf .tb-tbl thead th{background:#1e293b;color:#fff;font-weight:700;border-bottom:none;position:sticky;top:0}
   #page-timeboard-perf .tb-tbl tbody tr:hover{background:#f8fafc}
-  #page-timeboard-perf .tb-daysep td{background:#eef2ff;color:#3730a3;font-weight:800;font-size:12px}
-  #page-timeboard-perf .tb-details{margin-top:12px}
-  #page-timeboard-perf .tb-details summary{cursor:pointer;font-size:13px;font-weight:700;color:#475569;padding:6px 0}
-  #page-timeboard-perf .tb-details table{margin-top:8px}
+  #page-timeboard-perf .tb-sub-h{font-size:13px;font-weight:800;color:#334155;margin:18px 0 8px;padding-top:4px;border-top:1px dashed #e2e8f0}
+  #page-timeboard-perf .tb-sub-s{font-weight:500;color:#94a3b8;font-size:11px}
+  #page-timeboard-perf .tb-slotblk{margin-bottom:14px;border:1px solid #e8edf3;border-radius:10px;overflow:hidden}
+  #page-timeboard-perf .tb-slotblk-h{background:#f1f5f9;padding:8px 12px;font-weight:800;font-size:13px;color:#1e293b}
+  #page-timeboard-perf .tb-slotblk-n{font-weight:500;color:#64748b;font-size:11px}
+  #page-timeboard-perf .tb-slotblk .tb-tbl th{position:static}
   #page-timeboard-perf .tb-empty{padding:20px;text-align:center;color:#94a3b8;font-size:13px}`;
   document.head.appendChild(st);
 }
