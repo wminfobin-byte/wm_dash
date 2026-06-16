@@ -141,7 +141,7 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 
 ## 타임보드성과 탭 (tb* 네임스페이스)
 
-부재인입↔유입분석 사이(부재인입 옆)에 배치. **naver_tb 타임보드 DB**를 **집행 시간대(8am/1pm 등)별·영어/제2외국어별로** 계약 성과를 본다. 기준 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`timeboardDashboard` v1, `files` 스토어). **공용폴더는 계열별성과(sp)와 같은 핸들 재사용**(`spDirHandle`/`spIdbGetHandle`/`spIdbPutHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 미포함** — 폴더에서 매번 재생성하므로 동기화 페이로드에 부담을 주지 않음(폴더 접근 가능한 PC에서만 표시).
+부재인입↔유입분석 사이(부재인입 옆)에 배치. **naver_tb 타임보드 DB**를 **집행 시간대(8am/1pm 등)별·영어/제2외국어별로** 계약 성과를 본다. 기준 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`timeboardDashboard` v1, `files` 스토어). **공용폴더는 계열별성과(sp)와 같은 핸들 재사용**(`spDirHandle`/`spIdbGetHandle`/`spIdbPutHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tb` 독립 슬라이스, `tbCollectSync`/`tbRestoreSync`, 헤더 `syncBtn8`) — 폴더 없는 PC/사람도 봄. sp와 같은 파일을 읽으므로 싱크에 일부 중복되나 청크 분할로 감당.
 
 - **업로드 3종**: `db`(DB수·고객관리, 누적), `contDaily`(계약·신청자관리 일마감, 누적), `attend`(명단, 최신 1건). 취소반영(월간누적)은 안 씀. 파서는 sp와 달리 **매체 T(19)·분류 Q(16) 원문 문자열을 보존**(타임보드·시간대·언어 판정용).
 - **컬럼**: DB = 고객키 G(6)·OB명 H(7)·분배일 I(8)·DB정보 P(15,재콜)·매체 T(19). 계약 = 고객키 D(3)·담당자 N(13)·신청일 P(15)·분류 Q(16). 명단 파싱은 `spParseAttend` 재사용.

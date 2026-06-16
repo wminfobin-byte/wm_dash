@@ -850,6 +850,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <button class="btn-header" onclick="tbOpenModal('upload')">파일 업로드</button>
     <button class="btn-header" onclick="tbOpenModal('manage')">파일 관리</button>
     <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn8">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
@@ -2134,6 +2135,7 @@ function applyAuth(){
     if(authUser.tabs.includes('inflow')) await iaLoad();
     if(authUser.tabs.includes('missed-call') && typeof mcLoadFiles==='function') await mcLoadFiles();
     if(authUser.tabs.includes('series-perf') && typeof spLoadFiles==='function') await spLoadFiles();
+    if(authUser.tabs.includes('timeboard-perf') && typeof tbLoadFiles==='function') await tbLoadFiles();
     autoSyncDownload();
   })();
 }
@@ -2145,6 +2147,7 @@ async function autoSyncDownload(){
   const dpAccess=authUser&&authUser.tabs.includes('daily-perf');
   const mcAccess=authUser&&authUser.tabs.includes('missed-call');
   const spAccess=authUser&&authUser.tabs.includes('series-perf');
+  const tbAccess=authUser&&authUser.tabs.includes('timeboard-perf');
 
   // 원격 동기화 타임스탬프 비교 — 원격이 더 새로우면 항상 갱신
   const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
@@ -2164,7 +2167,9 @@ async function autoSyncDownload(){
     const mcOk=!mcAccess||mcHasLocal||!payload.mc;
     const spHasLocal=typeof spFiles!=='undefined'&&spFiles&&spFiles.length>0;
     const spOk=!spAccess||spHasLocal||!payload.sp;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk)return;
+    const tbHasLocal=typeof tbFiles!=='undefined'&&tbFiles&&tbFiles.length>0;
+    const tbOk=!tbAccess||tbHasLocal||!payload.tb;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -2237,6 +2242,10 @@ async function autoSyncDownload(){
     // 계열별성과 복원 (없거나 원격이 더 새로운 경우)
     if(payload.sp&&spAccess&&(!spHasLocal||remoteNewer)&&typeof spRestoreSync==='function'){
       await spRestoreSync(payload.sp);
+    }
+    // 타임보드성과 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.tb&&tbAccess&&(!tbHasLocal||remoteNewer)&&typeof tbRestoreSync==='function'){
+      await tbRestoreSync(payload.tb);
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -2326,8 +2335,8 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -2372,7 +2381,7 @@ function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.in
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -2441,7 +2450,15 @@ async function doSyncUpload(token){
         spSync=spCollectSync();
       }
     }catch(e){console.warn('sp sync collect 실패',e);}
-    const payload=JSON.stringify({v:8,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,ls:lsData});
+    // 타임보드성과 데이터 (tbFiles 미로드 시 IDB에서 직접 읽어 누락 방지)
+    let tbSync=[];
+    try{
+      if(typeof tbCollectSync==='function'){
+        if((!tbFiles||!tbFiles.length)&&typeof tbLoadFiles==='function'){ if(!tbLoaded) await tbLoadFiles(); }
+        tbSync=tbCollectSync();
+      }
+    }catch(e){console.warn('tb sync collect 실패',e);}
+    const payload=JSON.stringify({v:8,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -2612,6 +2629,9 @@ async function doSyncDownloadManual(){
     // 계열별성과 복원 (강제 다운로드 — 항상 덮어쓰기)
     if(payload.sp&&authUser&&authUser.tabs.includes('series-perf')&&typeof spRestoreSync==='function'){
       await spRestoreSync(payload.sp);
+    }
+    if(payload.tb&&authUser&&authUser.tabs.includes('timeboard-perf')&&typeof tbRestoreSync==='function'){
+      await tbRestoreSync(payload.tb);
     }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
@@ -12152,12 +12172,22 @@ const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
 const TB_MIN_DB=5; // DB수가 이 값 이하인 행(시간대·일자)은 표본 부족 → 리스트에서 제외(DB수·계약수 무시)
 
 function tbOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TB_DB_NAME,TB_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tbIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
-function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>res(r.result);tx.onerror=()=>rej(tx.error);});}
+function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 function tbIdbGetAll(){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-function tbIdbDel(id){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function tbIdbDel(id){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
 async function tbIdbClear(){const all=await tbIdbGetAll();for(const r of all)await tbIdbDel(r.id);}
 function tbFilesByType(t){return tbFiles.filter(f=>f.type===t);}
 async function tbLoadFiles(){try{await tbOpenIDB();tbFiles=await tbIdbGetAll();tbLoaded=true;tbUpdateUploadStatus();}catch(e){console.error('타임보드 IDB 로드:',e);}}
+// 클라우드 싱크 (payload.tb 독립 슬라이스)
+function tbCollectSync(){return (tbFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+async function tbRestoreSync(arr){
+  if(!Array.isArray(arr))return;
+  if(!tbIdb)await tbOpenIDB();
+  await tbIdbClear();tbFiles=[];
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tbIdbAdd(rec);rec.id=id;tbFiles.push(rec);}
+  tbLoaded=true;tbModel=null;tbUpdateUploadStatus();
+  if(typeof currentPage!=='undefined'&&currentPage==='timeboard-perf')tbOnShow();
+}
 
 // ── 파서 (필요 컬럼 + 매체(T)/분류(Q) 원문 보존: 타임보드·시간대·언어 판정용) ──
 function tbParseDb(wb){
