@@ -12372,10 +12372,14 @@ function tbRender(){
 function tbSetLang(l){tbLangView=l;document.querySelectorAll('#tbLangSeg button').forEach(b=>b.classList.toggle('active',b.dataset.tblang===l));tbRender();}
 function tbInitDateRange(reset){
   const s=document.getElementById('tbDateStart'),e=document.getElementById('tbDateEnd');
-  if(tbModel.minDay){s.min=tbModel.minDay;e.min=tbModel.minDay;}
-  if(tbModel.maxDay){s.max=tbModel.maxDay;e.max=tbModel.maxDay;}
-  if(reset||!e.value)e.value=tbModel.maxDay||'';
-  if(reset||!s.value){const mx=tbModel.maxDay?spDateObj(tbModel.maxDay):null;let st=tbModel.minDay||'';if(mx){const d=new Date(mx.getTime()-29*86400000);st=spNormDay(d);if(tbModel.minDay&&st<tbModel.minDay)st=tbModel.minDay;}s.value=st;}
+  const today=new Date();const p=n=>String(n).padStart(2,'0');
+  const todayStr=`${today.getFullYear()}-${p(today.getMonth()+1)}-${p(today.getDate())}`;
+  const may1=`${today.getFullYear()}-05-01`;                                   // 기본 디폴트 = 5/1 ~ 금일
+  const lo=(tbModel.minDay&&tbModel.minDay<may1)?tbModel.minDay:may1;           // 입력 min/max는 데이터·기본범위 포괄
+  const hi=(tbModel.maxDay&&tbModel.maxDay>todayStr)?tbModel.maxDay:todayStr;
+  s.min=lo;e.min=lo;s.max=hi;e.max=hi;
+  if(reset||!s.value)s.value=may1;
+  if(reset||!e.value)e.value=todayStr;
 }
 function tbQuickRange(kind){
   if(!tbModel)return;
