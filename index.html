@@ -9244,8 +9244,11 @@ async function gdDownloadAprilInitExcel(){
 <!-- ═══════════ 부재인입 대시보드 ═══════════ -->
 <script>
 // ── IndexedDB ──
-const MC_DB_NAME='missedCallDashboard', MC_DB_VER=1;
+const MC_DB_NAME='missedCallDashboard', MC_DB_VER=2;
 let mcIdb=null, mcFiles=[], mcLoaded=false, mcJudged=null, mcMeta=null, mcCharts={};
+// 박제(seal): 과거 판정 결과를 값으로 고정 저장. mc는 사후 변경이 없으므로 한 번 계산하면 영구 유효.
+// 원본(IN call·콜백)을 정리해도 mcSealed에서 과거 일자 조회가 그대로 동작한다.
+let mcSealed=[], mcSealCutoffMs=0; // mcSealed: 박제된 판정 레코드, mcSealCutoffMs: 이 시각 미만은 sealed가 담당
 let mcCorpFilter='all', mcUnit='day', mcDetailPage=1;
 // 시간대 필터 (콜백 callTs의 시(0-23) 기준)
 const MC_HOUR_PRESETS={
@@ -9279,6 +9282,7 @@ function mcOpenIDB(){
     req.onupgradeneeded=()=>{
       const db=req.result;
       if(!db.objectStoreNames.contains('files')) db.createObjectStore('files',{keyPath:'id',autoIncrement:true});
+      if(!db.objectStoreNames.contains('sealed')) db.createObjectStore('sealed',{keyPath:'id'}); // 박제된 판정 레코드 (단일 레코드 id='meta')
     };
     req.onsuccess=()=>{mcIdb=req.result;res();};
     req.onerror=()=>rej(req.error);
@@ -9288,7 +9292,11 @@ function mcMarkDirty(){if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();
 function mcIdbAdd(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{mcMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 function mcIdbGetAll(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function mcIdbDel(id){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{mcMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
+function mcIdbPut(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').put(rec);r.onsuccess=()=>{mcMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)await mcIdbDel(r.id);}
+// 박제 스토어 (단일 레코드 id='meta')
+function mcSealedLoad(){return new Promise((res)=>{try{const tx=mcIdb.transaction('sealed','readonly');const r=tx.objectStore('sealed').get('meta');r.onsuccess=()=>{const v=r.result;mcSealed=(v&&v.records)||[];mcSealCutoffMs=(v&&v.cutoffMs)||0;res();};r.onerror=()=>res();}catch(e){res();}});}
+function mcSealedSave(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('sealed','readwrite');const r=tx.objectStore('sealed').put({id:'meta',records:mcSealed,cutoffMs:mcSealCutoffMs});r.onsuccess=()=>{mcMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
 
 // ── 정규화 / 날짜 헬퍼 ──
 function mcNormPhone(p){if(p==null)return '';return String(p).replace(/[^0-9]/g,'').replace(/^0+/,'');}
@@ -9374,6 +9382,21 @@ function mcUpdateUploadStatus(){
 }
 function mcRenderFileHistory(){
   let html='';
+  // 박제 & 원본 정리 패널
+  const defCut=mcDefaultCutoffISO();
+  const curCutISO=mcSealCutoffMs?mcCutoffISOof(mcSealCutoffMs):'';
+  const pv=mcSealCutoffMs?mcPrunePreview(mcSealCutoffMs):{inc:0,cb:0};
+  html+=`<div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-weight:700;color:#1e293b;margin-bottom:6px">🗜️ 오래된 원본 정리 (박제)</div>
+    <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:10px">기준일 <b>이전</b> 판정을 값으로 고정(박제)한 뒤 무거운 IN call·콜백 원본을 삭제해 동기화 용량을 줄입니다. 박제된 과거는 그대로 조회됩니다. (계약·DB·매핑 원본은 유지)</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <label style="font-size:12px;color:#334155">유지 기준일:</label>
+      <input type="date" id="mcSealCutoff" value="${curCutISO||defCut}" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+      <button onclick="mcSealOldData(document.getElementById('mcSealCutoff').value)" style="background:#4361ee;color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer">① 과거 판정 박제</button>
+      <button onclick="mcPruneSealed()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer">② 박제분 원본 삭제</button>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:8px">${mcSealed.length?`박제됨 <b>${mcSealed.length.toLocaleString()}건</b> (${curCutISO} 미만) · 정리 대상 원본: IN call ${pv.inc.toLocaleString()}행, 콜백 ${pv.cb.toLocaleString()}행`:'아직 박제된 데이터가 없습니다.'}</div>
+  </div>`;
   const groups=[
     {key:'incall',corp:null,label:'IN call 데이터',icon:'📞',cls:'db'},
     {key:'callback',corp:null,label:'콜백 데이터',icon:'📋',cls:'cont'},
@@ -9400,6 +9423,57 @@ async function mcDeleteFile(id){
   mcFiles=mcFiles.filter(f=>f.id!==id);
   mcJudged=null;
   mcUpdateStatusDots();mcUpdateUploadStatus();mcRenderFileHistory();
+}
+
+// ── 박제 & 원본 정리 ──
+// mc는 사후 변경이 없으므로 과거 판정을 값으로 고정(박제)하면 영구 유효. 박제 후 무거운 IN call·콜백 원본을 삭제해도 과거 조회 유지.
+// 기본 유지 기준일: 전월 1일(현재월+직전월 원본 유지, 그 이전은 박제 대상).
+function mcDefaultCutoffISO(){const d=new Date();const c=new Date(d.getFullYear(),d.getMonth()-1,1);const p=n=>String(n).padStart(2,'0');return `${c.getFullYear()}-${p(c.getMonth()+1)}-01`;}
+function mcCutoffMsOf(iso){return new Date(iso+'T00:00:00').getTime();}
+function mcCutoffISOof(ms){const d=new Date(ms);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// 정리 대상 원본 행 수 미리보기 (cutoff 미만 IN call·콜백 행)
+function mcPrunePreview(cutoffMs){let inc=0,cb=0;for(const f of mcFiles){if(f.type==='incall')inc+=(f.rows||[]).filter(r=>(r.startTs||0)<cutoffMs).length;else if(f.type==='callback')cb+=(f.rows||[]).filter(r=>(r.callTs||0)<cutoffMs).length;}return {inc,cb};}
+
+// ① 박제: 현재 원본에서 기준일 미만 판정을 계산해 mcSealed에 고정 저장 (원본은 유지 → 검증 가능)
+async function mcSealOldData(cutoffISO){
+  if(!cutoffISO){alert('유지 기준일을 선택하세요.');return;}
+  if(!mcLoaded) await mcLoadFiles();
+  if(!mcFilesByType('callback',null).length||!mcFilesByType('mapping',null).length){alert('박제하려면 콜백·매핑 원본이 있어야 합니다.');return;}
+  const cutoffMs=mcCutoffMsOf(cutoffISO);
+  const r=mcBuildJudged();
+  const oldRecs=r.records.filter(x=>x.callTs<cutoffMs);
+  if(!oldRecs.length){alert('박제할 과거 데이터가 없습니다 (기준일 이전 콜백 없음).');return;}
+  const seen=new Set(mcSealed.map(x=>x.caller+'|'+x.rep+'|'+x.callTs));
+  let added=0;
+  for(const rec of oldRecs){const k=rec.caller+'|'+rec.rep+'|'+rec.callTs;if(!seen.has(k)){seen.add(k);mcSealed.push(rec);added++;}}
+  mcSealCutoffMs=Math.max(mcSealCutoffMs,cutoffMs);
+  await mcSealedSave();
+  mcJudged=null;mcGenerate(true);
+  mcRenderFileHistory();
+  const pv=mcPrunePreview(cutoffMs);
+  alert(`박제 완료: ${added.toLocaleString()}건 (기준 ${cutoffISO} 미만).\n\n먼저 과거 일자를 조회해 정상 표시되는지 확인하세요.\n확인되면 [② 박제분 원본 삭제]로 IN call ${pv.inc.toLocaleString()}행·콜백 ${pv.cb.toLocaleString()}행을 정리해 용량을 줄일 수 있습니다.`);
+}
+
+// ② 원본 정리: 박제 기준 미만 IN call·콜백 원본 행 삭제 (계약·DB·매핑은 최근 판정에 필요하므로 유지)
+async function mcPruneSealed(){
+  if(!mcSealCutoffMs||!mcSealed.length){alert('먼저 [① 과거 판정 박제]를 실행하세요.');return;}
+  const cutoffMs=mcSealCutoffMs;
+  const pv=mcPrunePreview(cutoffMs);
+  if(!pv.inc&&!pv.cb){alert('정리할 원본이 없습니다.');return;}
+  const isoStr=mcCutoffISOof(cutoffMs);
+  if(!confirm(`${isoStr} 이전 원본을 삭제합니다.\n· IN call ${pv.inc.toLocaleString()}행\n· 콜백 ${pv.cb.toLocaleString()}행\n\n박제된 판정값으로 과거 조회는 계속 가능합니다. 진행할까요?`))return;
+  for(const f of mcFiles.slice()){
+    if(f.type!=='incall'&&f.type!=='callback')continue;
+    const fld=f.type==='incall'?'startTs':'callTs';
+    const before=(f.rows||[]).length;
+    const kept=(f.rows||[]).filter(row=>(row[fld]||0)>=cutoffMs);
+    if(kept.length===before)continue;
+    if(kept.length===0){await mcIdbDel(f.id);mcFiles=mcFiles.filter(x=>x.id!==f.id);}
+    else{f.rows=kept;await mcIdbPut(f);}
+  }
+  mcJudged=null;mcGenerate(true);
+  mcUpdateUploadStatus();mcRenderFileHistory();
+  alert('원본 정리 완료. 다음 동기화부터 페이로드가 가벼워집니다.');
 }
 
 // ── 진단 헬퍼 (콘솔에서 mcDiag() 호출) ──
@@ -9640,7 +9714,7 @@ function mcParseMapping(wb){
 }
 
 // ── 분석 ──
-function mcReady(){return mcFilesByType('callback',null).length>0 && mcFilesByType('mapping',null).length>0;}
+function mcReady(){return (mcFilesByType('callback',null).length>0 && mcFilesByType('mapping',null).length>0) || (mcSealed&&mcSealed.length>0);}
 
 // 매칭 룰: 0 ≤ inStartTs - callTs ≤ MC_MATCH_WINDOW_MS (비대칭, 응대는 콜백 이후만)
 //         + 같은 (caller,rep) 그룹에서 그리디 1:1 매칭 (한 IN call은 한 콜백에만 소비)
@@ -10331,7 +10405,10 @@ function mcGenerate(force){
   const run=()=>{
     try{
       const r=mcBuildJudged();
-      mcJudged=r.records;mcMeta={unmapped:r.unmapped,unmappedReps:r.unmappedReps,counts:r.counts};
+      // 박제분(과거) + 라이브(원본에서 즉석계산). 경계: mcSealCutoffMs 미만은 sealed가 담당하므로 라이브에서 제외(중복 방지).
+      const live=mcSealCutoffMs?r.records.filter(x=>x.callTs>=mcSealCutoffMs):r.records;
+      mcJudged=(mcSealed&&mcSealed.length)?mcSealed.concat(live):live;
+      mcMeta={unmapped:r.unmapped,unmappedReps:r.unmappedReps,counts:r.counts};
       mcInitDateRange();
       mcRender();
     }catch(e){alert('분석 오류: '+e.message);console.error(e);}
@@ -10973,16 +11050,25 @@ async function mcLoadFiles(){
   try{
     await mcOpenIDB();
     mcFiles=await mcIdbGetAll();
+    await mcSealedLoad();
     mcLoaded=true;
     mcUpdateStatusDots();mcUpdateUploadStatus();
   }catch(e){console.error('부재인입 IDB 로드:',e);}
 }
 // 클라우드 동기화 연동 (sync_data.json.gz 의 payload.mc)
 function mcCollectSync(){
-  return (mcFiles||[]).map(f=>({type:f.type,corp:f.corp,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,warn:f.warn||''}));
+  // 구 포맷(배열)과의 하위호환: 박제 사용 시 {files,sealed,sealCutoffMs} 객체로 전송
+  return {
+    files:(mcFiles||[]).map(f=>({type:f.type,corp:f.corp,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,warn:f.warn||''})),
+    sealed:mcSealed||[],
+    sealCutoffMs:mcSealCutoffMs||0
+  };
 }
-async function mcRestoreSync(arr){
-  if(!Array.isArray(arr))return;
+async function mcRestoreSync(data){
+  if(!data)return;
+  const arr=Array.isArray(data)?data:(data.files||[]);      // 구 포맷=배열, 신 포맷=객체
+  const sealed=Array.isArray(data)?[]:(data.sealed||[]);
+  const cutoff=Array.isArray(data)?0:(data.sealCutoffMs||0);
   if(!mcIdb) await mcOpenIDB();
   await mcIdbClear();
   mcFiles=[];
@@ -10990,6 +11076,7 @@ async function mcRestoreSync(arr){
     const rec={type:f.type,corp:f.corp||'',fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],warn:f.warn||''};
     const id=await mcIdbAdd(rec);rec.id=id;mcFiles.push(rec);
   }
+  mcSealed=sealed;mcSealCutoffMs=cutoff;await mcSealedSave();
   mcLoaded=true;mcJudged=null;
   mcUpdateStatusDots();mcUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='missed-call')mcOnShow();

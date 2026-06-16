@@ -121,6 +121,7 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 - **미수신률**: 전체 = 부재콜/전체모수콜, 유효(주력 ★) = 부재콜/유효모수콜.
 - **화면**: 기간/법인/집계단위 필터 + 빠른기간, KPI 4종(부재콜/부재고객/전체%·유효%) + 전기 대비 증감, Chart.js 막대(부재콜)+선(유효%) 이중축(법인 전체 시 법인별 스택), 법인별 비교 테이블, 상세 리스트(검색·페이지네이션 50건·CSV 내보내기).
 - **알려진 가정**: 콜백 E열은 `yyyy-mm-dd hh:mm:ss` 같은 날짜+시각이어야 함(시각만이면 해당 행 제외+경고). 명세서의 React/Vite/Dexie 스택은 단일 HTML 패턴에 맞춰 바닐라 JS로 이식함.
+- **박제(seal) & 원본 정리 (`MC_DB_VER` 2, `sealed` 스토어)**: mc는 사후 변경이 없으므로 과거 판정 레코드(`mcBuildJudged` out)를 값으로 고정 저장하면 영구 유효. 화면 렌더는 `mcSealed`(과거, callTs<`mcSealCutoffMs`) + 라이브(원본 즉석계산, callTs≥cutoff) 병합(`mcGenerate`). 파일관리 모달의 2단계 버튼: ① `mcSealOldData(cutoffISO)`=기준일 미만 박제(원본 유지·검증용), ② `mcPruneSealed`=박제분 IN call(`startTs`)·콜백(`callTs`) 원본 행 삭제(계약·DB·매핑은 최근 판정에 필요해 유지). 기본 기준일=전월 1일(`mcDefaultCutoffISO`). 클라우드 싱크 `payload.mc`는 `{files,sealed,sealCutoffMs}` 객체(구 배열 포맷 하위호환). **동기화 페이로드가 GitHub blob 한도를 넘는 대용량(mc가 최대 기여)일 때 핵심 감량 수단.** 업로드는 청크 분할(`SYNC_PART_BYTES` 20MB·`sync_manifest.json`)로도 한도 회피.
 
 ## 계열별성과 탭 (sp* 네임스페이스)
 
