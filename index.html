@@ -12273,7 +12273,6 @@ function tbCompute(){
   const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
   const warns=[];
   if(!dbRecs.length)warns.push('타임보드 DB(매체코드 naver_tb)가 0건입니다. 공용폴더·파일을 확인하세요.');
-  if(unmatched)warns.push(`타임보드 계약 ${unmatched.toLocaleString()}건이 DB와 고객키 매칭이 안 돼 제외됨`);
   if(!tbFilesByType('contDaily').length)warns.push('계약(일마감) 파일이 없어 계약수가 0으로 표시됩니다.');
   tbModel={roster,dbRecs,contRecs,minDay:days[0]||'',maxDay:days[days.length-1]||'',slots,unmatched,warns};
   return tbModel;
