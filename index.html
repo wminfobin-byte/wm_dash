@@ -11301,6 +11301,30 @@ function spJudge(db,cont,s){
   return {k:'good',t:'기대 충족'};
 }
 
+// 기대 계약수(=DB수×계열 기대% 최대치) 대비 부족/초과
+// 0계열 20% / 1계열 15% / 2계열 10% / 3계열 6% / 4계열 4% / 5계열 2%
+const SP_EXPMAX=[0.20,0.15,0.10,0.06,0.04,0.02];
+function spGap(db,cont,s){
+  if(!db)return null;
+  const exp=db*SP_EXPMAX[s];          // 기대 계약수
+  return {exp,dc:cont-exp,dr:cont/db-SP_EXPMAX[s]}; // dc:건수차(+초과/−부족), dr:계약률차
+}
+function spSign(n,dec){
+  const f=Math.pow(10,dec),r=Math.round(n*f)/f;
+  const sign=r>0?'+':r<0?'−':'';
+  const abs=Math.abs(r);
+  return sign+(dec?(abs%1===0?String(abs):abs.toFixed(dec)):String(abs));
+}
+// 화면 배지용: "−3.2건 · −2.1%p" (초과 시 +)
+function spGapText(db,cont,s){
+  const g=spGap(db,cont,s);if(!g)return '-';
+  return `${spSign(g.dc,1)}건 · ${spSign(g.dr*100,1)}%p`;
+}
+function spGapTitle(db,cont,s){
+  const g=spGap(db,cont,s);if(!g)return '';
+  return `기대 ${g.exp.toFixed(1)}건 (DB ${db}×${(SP_EXPMAX[s]*100).toFixed(0)}%) · 실제 ${cont}건`;
+}
+
 // ── 파서 (업로드 시 슬림 행으로 변환) ──
 function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
 function spParseDb(wb){
@@ -11855,7 +11879,7 @@ function spRenderSeries(){
       <div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div>
       <div class="rate" style="color:${db?SP_SCOLOR[b.s]:'#cbd5e1'}">${db?spPct(rate):'-'}</div>
       <div class="det">계약 ${spNum(cont)} / DB ${spNum(db)}</div>
-      <div class="jrow"><span class="sp-judge sp-j-${j.k}">${j.t}</span></div>
+      <div class="jrow"><span class="sp-judge sp-j-${j.k}" title="${spGapTitle(db,cont,b.s)}">${db?spGapText(db,cont,b.s):'-'}</span></div>
     </div>`;
   }).join('');
   // 차트: DB수(bar) + 계약률(line) + 기대하한(line)
@@ -12043,7 +12067,7 @@ function spDrill(encName){
   const aggDb=[0,0,0,0,0,0],aggG=[0,0,0,0,0,0],aggN=[0,0,0,0,0,0];
   db.forEach(r=>aggDb[r.se]++);gross.forEach(r=>{if(r.se>=0)aggG[r.se]++;});net.forEach(r=>{if(r.se>=0)aggN[r.se]++;});
   const cArr=spBasis==='gross'?aggG:aggN;
-  const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}">${j.t}</span></div></div>`;}).join('');
+  const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}" title="${spGapTitle(d,c,b.s)}">${d?spGapText(d,c,b.s):'-'}</span></div></div>`;}).join('');
   const tDb=aggDb.reduce((a,b)=>a+b,0),tC=cArr.reduce((a,b)=>a+b,0);
   document.getElementById('spDrillBody').innerHTML=`
     <h3>${name.replace(/^\(.*?\)/,'')} <span style="font-size:13px;color:var(--gray)">${SP_TEAM_TAG[person.team]||''} ${person.ctr||''}</span></h3>
@@ -12082,37 +12106,45 @@ async function spDownloadExcel(){
 
   // 시트1: 계열별 종합
   const teamTxt=spTeam==='all'?'전체':spTeam, ctrTxt=spCenter==='all'?'전체':spCenter;
-  const aoa1=[['WM 계열별 성과 — 종합','','','','','','','',''],
-    ['집계기간',`${s} ~ ${e}`,'담당',teamTxt,'센터',ctrTxt,'판정기준',basisLabel,''],
+  const aoa1=[['WM 계열별 성과 — 종합','','','','','','','','','',''],
+    ['집계기간',`${s} ~ ${e}`,'담당',teamTxt,'센터',ctrTxt,'판정기준',basisLabel,'','',''],
     [],
-    ['계열','기대구간','DB수','실계약','실계약률','취소반영','취소반영률','취소수','판정('+basisLabel+')']];
+    ['계열','기대구간','DB수','실계약','실계약률','취소반영','취소반영률','취소수','기대계약수','기대대비(건)','기대대비(%p)']];
   const judgeRows=[];
   SP_BANDS.forEach(b=>{
-    const db=agg.db[b.s],g=agg.gross[b.s],n=agg.net[b.s],c=spBasis==='gross'?g:n;const j=spJudge(db,c,b.s);
+    const db=agg.db[b.s],g=agg.gross[b.s],n=agg.net[b.s],c=spBasis==='gross'?g:n;const j=spJudge(db,c,b.s);const gp=spGap(db,c,b.s);
     judgeRows.push(j.k);
-    aoa1.push([`${b.s}계열`,b.label,db,g,db?g/db:'',n,db?n/db:'',Math.max(0,g-n),db?j.t:'-']);
+    aoa1.push([`${b.s}계열`,b.label,db,g,db?g/db:'',n,db?n/db:'',Math.max(0,g-n),gp?+gp.exp.toFixed(1):'',gp?+gp.dc.toFixed(1):'',gp?+(gp.dr*100).toFixed(1):'']);
   });
   const tDb=agg.db.reduce((a,b)=>a+b,0),tG=agg.gross.reduce((a,b)=>a+b,0),tN=agg.net.reduce((a,b)=>a+b,0);
-  aoa1.push(['합계','',tDb,tG,tDb?tG/tDb:'',tN,tDb?tN/tDb:'',Math.max(0,tG-tN),'']);
+  const tC=spBasis==='gross'?tG:tN;
+  const expTot=SP_BANDS.reduce((a,b)=>a+agg.db[b.s]*SP_EXPMAX[b.s],0);
+  aoa1.push(['합계','',tDb,tG,tDb?tG/tDb:'',tN,tDb?tN/tDb:'',Math.max(0,tG-tN),+expTot.toFixed(1),+(tC-expTot).toFixed(1),tDb?+((tC-expTot)/tDb*100).toFixed(1):'']);
   const ws1=XLSX.utils.aoa_to_sheet(aoa1);
-  ws1['!cols']=[{wch:9},{wch:11},{wch:9},{wch:9},{wch:10},{wch:9},{wch:10},{wch:9},{wch:14}];
-  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:8}}];
+  ws1['!cols']=[{wch:9},{wch:11},{wch:9},{wch:9},{wch:10},{wch:9},{wch:10},{wch:9},{wch:11},{wch:11},{wch:12}];
+  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}}];
   ws1['!rows']=[{hpt:26},{hpt:18},{},{hpt:20}];
   // 스타일
-  for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws1[a])ws1[a].s=titleS;}
+  for(let c=0;c<11;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws1[a])ws1[a].s=titleS;}
   [0,2,4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r:1,c});if(ws1[a])ws1[a].s=lblS;});
-  for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws1[a])ws1[a].s=hdrS;}
+  for(let c=0;c<11;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws1[a])ws1[a].s=hdrS;}
   SP_BANDS.forEach((b,i)=>{
     const r=4+i;const jk=judgeRows[i];
-    for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws1[a])continue;
-      ws1[a].s={alignment:{horizontal:c===0||c===1?'center':'center',vertical:'center'},border:bd,font:{sz:10,name:'맑은 고딕',bold:c===0}};
+    for(let c=0;c<11;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws1[a])continue;
+      ws1[a].s={alignment:{horizontal:'center',vertical:'center'},border:bd,font:{sz:10,name:'맑은 고딕',bold:c===0}};
       if(c===0)ws1[a].s.fill={fgColor:{rgb:SP_SCOLOR[b.s].replace('#','')}},ws1[a].s.font={sz:10,bold:true,color:{rgb:'FFFFFF'},name:'맑은 고딕'};
-      if(c===8){ws1[a].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws1[a].s.font={sz:10,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}
+      if(c===9||c===10){ws1[a].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws1[a].s.font={sz:10,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}
     }
     [4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r,c});if(ws1[a])ws1[a].z='0.0%';});
+    {const a8=XLSX.utils.encode_cell({r,c:8});if(ws1[a8])ws1[a8].z='0.0';}
+    {const a9=XLSX.utils.encode_cell({r,c:9});if(ws1[a9])ws1[a9].z='+0.0;-0.0';}
+    {const a10=XLSX.utils.encode_cell({r,c:10});if(ws1[a10])ws1[a10].z='+0.0"%p";-0.0"%p"';}
   });
-  const tr=4+SP_BANDS.length;for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:tr,c});if(ws1[a])ws1[a].s={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},border:bd,alignment:{horizontal:'center',vertical:'center'}};}
+  const tr=4+SP_BANDS.length;for(let c=0;c<11;c++){const a=XLSX.utils.encode_cell({r:tr,c});if(ws1[a])ws1[a].s={font:{bold:true,sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'F0F1F5'}},border:bd,alignment:{horizontal:'center',vertical:'center'}};}
   [4,6].forEach(c=>{const a=XLSX.utils.encode_cell({r:tr,c});if(ws1[a])ws1[a].z='0.0%';});
+  {const a8=XLSX.utils.encode_cell({r:tr,c:8});if(ws1[a8])ws1[a8].z='0.0';}
+  {const a9=XLSX.utils.encode_cell({r:tr,c:9});if(ws1[a9])ws1[a9].z='+0.0;-0.0';}
+  {const a10=XLSX.utils.encode_cell({r:tr,c:10});if(ws1[a10])ws1[a10].z='+0.0"%p";-0.0"%p"';}
   XLSX.utils.book_append_sheet(wb,ws1,'계열별 종합');
 
   // 시트2: 개인별 × 계열
