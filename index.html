@@ -1564,7 +1564,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div class="sp-section">
         <h3>
           개인별 × 계열 매트릭스
-          <span class="sub">셀 = 계약수/DB수 (계약률) · 색상 = 기대구간 판정 · 이름 클릭 시 연령대×체류시간 상세</span>
+          <span class="sub">셀 = 계약수/DB수 (계약률)·기대 N·대비 · 색상 = 기대 계약수 달성도(녹 120%↑·파 100%↑·노 70%↑·빨 70%미만) · 이름 클릭 시 상세</span>
           <span style="flex:1"></span>
           <select id="spMatrixSort" onchange="spRenderMatrix()" style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff;cursor:pointer">
             <option value="total_rate">정렬: 종합 계약률↓</option>
@@ -11292,14 +11292,16 @@ function spBucketLabel(key,unit){return unit==='week'?spWeekLabel(key):key;}
 function spPct(r){return (r*100).toFixed(1)+'%';}
 function spNum(n){return (n||0).toLocaleString();}
 
+// 색상 판정: 기대 계약수(=DB×기대%최대치) 달성도(실제÷기대) 기준
+// 120%↑ 녹(기대 이상) · 100~120% 파(기대 충족) · 70~100% 노(미흡) · 70%미만 빨(낭비)
 function spJudge(db,cont,s){
   if(!db)return {k:'none',t:'-'};
-  const r=cont/db, b=SP_BANDS[s];
-  if(r<b.lo)return {k:'waste',t:'낭비'};
-  if(b.hi===Infinity)return {k:'excel',t:'기대 이상'};
-  if(r>=b.hi)return {k:'excel',t:'기대 이상'};
-  if(r<=b.lo+0.005)return {k:'min',t:'최소수준'};
-  return {k:'good',t:'기대 충족'};
+  const exp=db*SP_EXPMAX[s];
+  const ach=exp>0?cont/exp:0;
+  if(ach>=1.2)return {k:'excel',t:'기대 이상'};
+  if(ach>=1.0)return {k:'good',t:'기대 충족'};
+  if(ach>=0.7)return {k:'min',t:'미흡'};
+  return {k:'waste',t:'낭비'};
 }
 
 // 기대 계약수(=DB수×계열 기대% 최대치) 대비 부족/초과
@@ -11862,9 +11864,9 @@ function spRenderKpi(){
     const pRate=pDb?pCont/pDb:0;
     if(pDb>0){const d=(rate-pRate)*100;const cls=d>=0?'up':'down';const arw=d>=0?'▲':'▼';deltaHtml=`<span class="${cls}">${arw}${Math.abs(d).toFixed(1)}%p</span> <span style="color:#cbd5e1">vs 직전 ${len}일</span>`;}
   }
-  // 기대 충족: db>0 계열 중 낭비 아닌(rate>=lo) 계열 수
+  // 기대충족: db>0 계열 중 기대 계약수 100%↑ 달성 계열 수 / 낭비: 70%미만
   let filled=0,active=0,waste=0;
-  for(let s2=0;s2<6;s2++){if(agg.db[s2]>0){active++;const r=contArr[s2]/agg.db[s2];if(r>=SP_BANDS[s2].lo)filled++;else waste++;}}
+  for(let s2=0;s2<6;s2++){if(agg.db[s2]>0){active++;const k=spJudge(agg.db[s2],contArr[s2],s2).k;if(k==='good'||k==='excel')filled++;else if(k==='waste')waste++;}}
   const basisLabel=spBasis==='gross'?'실계약':'취소반영';
   const grid=document.getElementById('spKpiGrid');
   grid.innerHTML=`
@@ -11923,7 +11925,7 @@ function spRenderMatrix(){
   const recs=spFiltered();let people=spPerPerson(recs).filter(p=>p.tDb>0);
   const sortBy=document.getElementById('spMatrixSort').value;
   const rateOf=p=>p.tDb?spPersonTotalCont(p)/p.tDb:0;
-  const achieveOf=p=>{let c=0;for(let s=0;s<6;s++){const cell=p.se[s];if(cell.db>0&&spCellCont(cell)/cell.db>=SP_BANDS[s].lo)c++;}return c;};
+  const achieveOf=p=>{let c=0;for(let s=0;s<6;s++){const cell=p.se[s];if(cell.db>0){const k=spJudge(cell.db,spCellCont(cell),s).k;if(k==='good'||k==='excel')c++;}}return c;};
   people.sort((a,b)=>{
     if(sortBy==='name')return a.name.localeCompare(b.name,'ko');
     if(sortBy==='total_db')return b.tDb-a.tDb;
