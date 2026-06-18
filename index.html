@@ -12158,19 +12158,22 @@ async function spDownloadExcel(){
   // 시트2: 개인별 × 계열
   const people=spPerPerson(recs).filter(p=>p.tDb>0).sort((a,b)=>(b.tDb?spPersonTotalCont(b)/b.tDb:0)-(a.tDb?spPersonTotalCont(a)/a.tDb:0));
   const h1=['코디','담당','센터'];const h2=['','',''];
-  SP_BANDS.forEach(b=>{h1.push(`${b.s}계열`,'','');h2.push('DB','계약','률');});
-  h1.push('종합','','');h2.push('DB','계약','률');
+  SP_BANDS.forEach(b=>{h1.push(`${b.s}계열`,'','','','');h2.push('DB','계약','률','기대','대비');});
+  h1.push('종합','','','','');h2.push('DB','계약','률','기대','대비');
   const aoa2=[h1,h2];
   const judgeMap2=[];
   people.forEach(p=>{
     const row=[p.name.replace(/^\(.*?\)/,''),p.team,p.ctr||''];const jrow=[];
-    SP_BANDS.forEach(b=>{const cell=p.se[b.s];const c=spCellCont(cell);row.push(cell.db,cell.db?c:0,cell.db?c/cell.db:'');jrow.push(cell.db?spJudge(cell.db,c,b.s).k:'none');});
-    const tc=spPersonTotalCont(p);row.push(p.tDb,tc,p.tDb?tc/p.tDb:'');
+    SP_BANDS.forEach(b=>{const cell=p.se[b.s];const c=spCellCont(cell);const db=cell.db;const exp=db*SP_EXPMAX[b.s];
+      row.push(db,db?c:0,db?c/db:'',db?+exp.toFixed(1):'',db?+(c-exp).toFixed(1):'');
+      jrow.push(db?spJudge(db,c,b.s).k:'none');});
+    const tc=spPersonTotalCont(p);const expT=SP_BANDS.reduce((a,b)=>a+p.se[b.s].db*SP_EXPMAX[b.s],0);
+    row.push(p.tDb,tc,p.tDb?tc/p.tDb:'',+expT.toFixed(1),+(tc-expT).toFixed(1));
     aoa2.push(row);judgeMap2.push(jrow);
   });
   const ws2=XLSX.utils.aoa_to_sheet(aoa2);
-  const cols2=[{wch:12},{wch:10},{wch:8}];for(let i=0;i<7;i++)cols2.push({wch:6},{wch:6},{wch:8});ws2['!cols']=cols2;
-  const merges2=[];for(let g=0;g<7;g++){merges2.push({s:{r:0,c:3+g*3},e:{r:0,c:3+g*3+2}});}
+  const cols2=[{wch:12},{wch:10},{wch:8}];for(let i=0;i<7;i++)cols2.push({wch:6},{wch:6},{wch:8},{wch:7},{wch:8});ws2['!cols']=cols2;
+  const merges2=[];for(let g=0;g<7;g++){merges2.push({s:{r:0,c:3+g*5},e:{r:0,c:3+g*5+4}});}
   ['코디','담당','센터'].forEach((_,c)=>merges2.push({s:{r:0,c},e:{r:1,c}}));
   ws2['!merges']=merges2;ws2['!rows']=[{hpt:18},{hpt:16}];
   for(let c=0;c<h1.length;c++){[0,1].forEach(r=>{const a=XLSX.utils.encode_cell({r,c});if(ws2[a])ws2[a].s=hdrS;});}
@@ -12178,8 +12181,15 @@ async function spDownloadExcel(){
     const r=2+i;const jrow=judgeMap2[i];
     for(let c=0;c<h1.length;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws2[a])continue;
       ws2[a].s={font:{sz:9,name:'맑은 고딕',bold:c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};}
-    SP_BANDS.forEach((b,gi)=>{const rateCol=3+gi*3+2;const a=XLSX.utils.encode_cell({r,c:rateCol});if(ws2[a]){ws2[a].z='0.0%';const jk=jrow[gi];ws2[a].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws2[a].s.font={sz:9,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}});
-    const totA=XLSX.utils.encode_cell({r,c:3+6*3+2});if(ws2[totA]){ws2[totA].z='0.0%';ws2[totA].s.font={sz:9,bold:true,name:'맑은 고딕'};}
+    SP_BANDS.forEach((b,gi)=>{const base=3+gi*5;const jk=jrow[gi];
+      const rA=XLSX.utils.encode_cell({r,c:base+2});if(ws2[rA]){ws2[rA].z='0.0%';ws2[rA].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws2[rA].s.font={sz:9,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}
+      const eA=XLSX.utils.encode_cell({r,c:base+3});if(ws2[eA])ws2[eA].z='0.0';
+      const dA=XLSX.utils.encode_cell({r,c:base+4});if(ws2[dA]){ws2[dA].z='+0.0;-0.0';ws2[dA].s.fill={fgColor:{rgb:JCOLOR[jk]}};ws2[dA].s.font={sz:9,bold:true,color:{rgb:JFONT[jk]},name:'맑은 고딕'};}
+    });
+    const tb=3+6*5;
+    const trA=XLSX.utils.encode_cell({r,c:tb+2});if(ws2[trA]){ws2[trA].z='0.0%';ws2[trA].s.font={sz:9,bold:true,name:'맑은 고딕'};}
+    const teA=XLSX.utils.encode_cell({r,c:tb+3});if(ws2[teA])ws2[teA].z='0.0';
+    const tdA=XLSX.utils.encode_cell({r,c:tb+4});if(ws2[tdA]){ws2[tdA].z='+0.0;-0.0';const v=aoa2[r][tb+4];ws2[tdA].s.font={sz:9,bold:true,color:{rgb:(typeof v==='number'&&v<0)?'DC2626':'059669'},name:'맑은 고딕'};}
   });
   XLSX.utils.book_append_sheet(wb,ws2,'개인별×계열');
 
