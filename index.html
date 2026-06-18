@@ -664,6 +664,7 @@ tr.row-h td{background:var(--gh-light)}
 
 /* 판정 뱃지 */
 .sp-judge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.sp-gap{font-size:9px;font-weight:700;margin-top:1px;color:#475569;white-space:nowrap}
 .sp-j-excel{background:#86efac;color:#15803d}
 .sp-j-good{background:#bfdbfe;color:#1d4ed8}
 .sp-j-min{background:#fde68a;color:#92400e}
@@ -11320,6 +11321,11 @@ function spGapText(db,cont,s){
   const g=spGap(db,cont,s);if(!g)return '-';
   return `${spSign(g.dc,1)}건 · ${spSign(g.dr*100,1)}%p`;
 }
+// 셀/표용 컴팩트: "기대 12.4 · −3.4" (기대 계약수 + 부족/초과 건수)
+function spGapCompact(db,cont,s){
+  const g=spGap(db,cont,s);if(!g)return '';
+  return `기대 ${g.exp.toFixed(1)} · ${spSign(g.dc,1)}`;
+}
 function spGapTitle(db,cont,s){
   const g=spGap(db,cont,s);if(!g)return '';
   return `기대 ${g.exp.toFixed(1)}건 (DB ${db}×${(SP_EXPMAX[s]*100).toFixed(0)}%) · 실제 ${cont}건`;
@@ -11878,7 +11884,7 @@ function spRenderSeries(){
     return `<div class="sp-scard sp-s${b.s}">
       <div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div>
       <div class="rate" style="color:${db?SP_SCOLOR[b.s]:'#cbd5e1'}">${db?spPct(rate):'-'}</div>
-      <div class="det">계약 ${spNum(cont)} / DB ${spNum(db)}</div>
+      <div class="det">계약 ${spNum(cont)} / DB ${spNum(db)}${db?` · 기대 ${(db*SP_EXPMAX[b.s]).toFixed(1)}`:''}</div>
       <div class="jrow"><span class="sp-judge sp-j-${j.k}" title="${spGapTitle(db,cont,b.s)}">${db?spGapText(db,cont,b.s):'-'}</span></div>
     </div>`;
   }).join('');
@@ -11929,7 +11935,7 @@ function spRenderMatrix(){
   const cellHtml=(cell,s)=>{
     if(cell.db===0)return `<td class="sp-grp-sep sp-j-none" style="color:#cbd5e1">-</td>`;
     const cont=spCellCont(cell);const r=cont/cell.db;const j=spJudge(cell.db,cont,s);
-    return `<td class="sp-grp-sep sp-j-${j.k}"><div class="sp-cell-rate">${spPct(r)}</div><div class="sp-meta">${cont}/${cell.db}</div></td>`;
+    return `<td class="sp-grp-sep sp-j-${j.k}" title="${spGapTitle(cell.db,cont,s)}"><div class="sp-cell-rate">${spPct(r)}</div><div class="sp-meta">${cont}/${cell.db}</div><div class="sp-gap">${spGapCompact(cell.db,cont,s)}</div></td>`;
   };
   const totCellHtml=(db,cont)=>db?`<td class="sp-grp-sep" style="background:#f8fafc"><div class="sp-cell-rate">${spPct(cont/db)}</div><div class="sp-meta">${cont}/${db}</div></td>`:`<td class="sp-grp-sep" style="color:#cbd5e1">-</td>`;
   const body=people.map(p=>{
@@ -11940,7 +11946,7 @@ function spRenderMatrix(){
   const agg=spAggBySeries(recs);const contArr=spContArr(agg);
   const totalRow=`<tr class="sp-total-row"><td class="sp-namecol">합계 <span class="sp-meta">${people.length}명</span></td>${SP_BANDS.map(b=>{
     const db=agg.db[b.s],cont=contArr[b.s];if(!db)return '<td class="sp-grp-sep">-</td>';
-    return `<td class="sp-grp-sep"><div class="sp-cell-rate">${spPct(cont/db)}</div><div class="sp-meta">${cont}/${db}</div></td>`;
+    return `<td class="sp-grp-sep"><div class="sp-cell-rate">${spPct(cont/db)}</div><div class="sp-meta">${cont}/${db}</div><div class="sp-gap">${spGapCompact(db,cont,b.s)}</div></td>`;
   }).join('')}${(()=>{const db=agg.db.reduce((a,b)=>a+b,0),cont=contArr.reduce((a,b)=>a+b,0);return `<td class="sp-grp-sep"><div class="sp-cell-rate">${db?spPct(cont/db):'-'}</div><div class="sp-meta">${cont}/${db}</div></td>`;})()}</tr>`;
   document.getElementById('spMatrixTable').innerHTML=head1+'<tbody>'+totalRow+body+'</tbody>';
 }
@@ -12027,11 +12033,13 @@ function spRenderTrend(){
       scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,position:'left',title:{display:true,text:'DB수'}},
         y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률 %'},ticks:{callback:v=>v+'%'}}}}});
   // 테이블
-  const th=`<thead><tr><th class="sp-namecol">${spUnit==='month'?'월':spUnit==='week'?'주차':'일자'}</th><th>DB수</th><th>실계약</th><th>취소반영</th><th>취소수</th><th>계약률</th>${SP_BANDS.map(b=>`<th class="sp-grp-sep">${b.s}계열률</th>`).join('')}</tr></thead>`;
+  const th=`<thead><tr><th class="sp-namecol">${spUnit==='month'?'월':spUnit==='week'?'주차':'일자'}</th><th>DB수</th><th>실계약</th><th>취소반영</th><th>취소수</th><th>계약률</th><th>기대대비</th>${SP_BANDS.map(b=>`<th class="sp-grp-sep">${b.s}계열률</th>`).join('')}</tr></thead>`;
   const rows=keys.map(k=>{
     const b=buckets.get(k);const tDb=b.db.reduce((a,c)=>a+c,0);const tG=b.gross.reduce((a,c)=>a+c,0);const tN=b.net.reduce((a,c)=>a+c,0);
     const cArr=spBasis==='gross'?b.gross:b.net;const tC=cArr.reduce((a,c)=>a+c,0);
-    return `<tr><td class="sp-namecol">${spBucketLabel(k,spUnit)}</td><td>${spNum(tDb)}</td><td>${spNum(tG)}</td><td>${spNum(tN)}</td><td>${spNum(Math.max(0,tG-tN))}</td><td class="sp-cell-rate">${tDb?spPct(tC/tDb):'-'}</td>${SP_BANDS.map(bd=>{const d=b.db[bd.s],c=cArr[bd.s];const j=spJudge(d,c,bd.s);return `<td class="sp-grp-sep sp-j-${d?j.k:'none'}">${d?spPct(c/d):'-'}</td>`;}).join('')}</tr>`;
+    const expTot=SP_BANDS.reduce((a,bd)=>a+b.db[bd.s]*SP_EXPMAX[bd.s],0);
+    const expCell=tDb?`<td class="sp-cell-rate" title="기대 ${expTot.toFixed(1)}건 · 실제 ${tC}건">기대 ${expTot.toFixed(1)}<div class="sp-gap">${spSign(tC-expTot,1)}건 · ${spSign((tC-expTot)/tDb*100,1)}%p</div></td>`:'<td>-</td>';
+    return `<tr><td class="sp-namecol">${spBucketLabel(k,spUnit)}</td><td>${spNum(tDb)}</td><td>${spNum(tG)}</td><td>${spNum(tN)}</td><td>${spNum(Math.max(0,tG-tN))}</td><td class="sp-cell-rate">${tDb?spPct(tC/tDb):'-'}</td>${expCell}${SP_BANDS.map(bd=>{const d=b.db[bd.s],c=cArr[bd.s];const j=spJudge(d,c,bd.s);return `<td class="sp-grp-sep sp-j-${d?j.k:'none'}" title="${d?spGapTitle(d,c,bd.s):''}">${d?spPct(c/d):'-'}${d?`<div class="sp-gap">${spGapCompact(d,c,bd.s)}</div>`:''}</td>`;}).join('')}</tr>`;
   }).join('');
   document.getElementById('spTrendTable').innerHTML=th+'<tbody>'+rows+'</tbody>';
 }
@@ -12067,7 +12075,7 @@ function spDrill(encName){
   const aggDb=[0,0,0,0,0,0],aggG=[0,0,0,0,0,0],aggN=[0,0,0,0,0,0];
   db.forEach(r=>aggDb[r.se]++);gross.forEach(r=>{if(r.se>=0)aggG[r.se]++;});net.forEach(r=>{if(r.se>=0)aggN[r.se]++;});
   const cArr=spBasis==='gross'?aggG:aggN;
-  const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}" title="${spGapTitle(d,c,b.s)}">${d?spGapText(d,c,b.s):'-'}</span></div></div>`;}).join('');
+  const serCards=SP_BANDS.map(b=>{const d=aggDb[b.s],c=cArr[b.s];const j=spJudge(d,c,b.s);return `<div class="sp-scard sp-s${b.s}" style="padding:10px 12px"><div class="t"><span>${b.s}계열</span><span class="band">${b.label}</span></div><div class="rate" style="font-size:19px;color:${d?SP_SCOLOR[b.s]:'#cbd5e1'}">${d?spPct(c/d):'-'}</div><div class="det">${c}/${d}${d?` · 기대 ${(d*SP_EXPMAX[b.s]).toFixed(1)}`:''}</div><div class="jrow"><span class="sp-judge sp-j-${j.k}" title="${spGapTitle(d,c,b.s)}">${d?spGapText(d,c,b.s):'-'}</span></div></div>`;}).join('');
   const tDb=aggDb.reduce((a,b)=>a+b,0),tC=cArr.reduce((a,b)=>a+b,0);
   document.getElementById('spDrillBody').innerHTML=`
     <h3>${name.replace(/^\(.*?\)/,'')} <span style="font-size:13px;color:var(--gray)">${SP_TEAM_TAG[person.team]||''} ${person.ctr||''}</span></h3>
