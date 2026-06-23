@@ -78,11 +78,21 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 /* 차등성과 업로드 모달 — 닫기·차등산정 버튼이 스크롤 없이 한 화면에 보이도록 압축 (gd 모달 전용) */
 #gdModalOverlay .modal{padding:22px}
 #gdModalOverlay .modal h2{margin-bottom:12px}
-#gdModalUpload .upload-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-#gdModalUpload .upload-box{padding:10px}
-#gdModalUpload .upload-box .icon{font-size:22px;margin-bottom:2px}
-#gdModalUpload .upload-box .label{font-size:13px;margin-bottom:2px}
-#gdModalUpload .upload-box .desc{font-size:10.5px;line-height:1.35}
+/* 메인 4종 업로드 박스를 가로로 긴 한 행 직사각형으로 — 세로폭 축소·가독성 (아이콘·라벨·설명·배지·파일명 한 줄) */
+#gdModalUpload .upload-grid{grid-template-columns:1fr;gap:8px}
+#gdModalUpload .upload-grid .upload-box{display:flex;align-items:center;text-align:left;gap:14px;padding:11px 18px;overflow:hidden}
+#gdModalUpload .upload-grid .upload-box .icon{font-size:24px;margin:0;line-height:1;flex:0 0 auto;order:1}
+#gdModalUpload .upload-grid .upload-box .label{font-size:14px;margin:0;flex:0 0 64px;order:2}
+#gdModalUpload .upload-grid .upload-box .desc{font-size:11.5px;line-height:1.4;margin:0;flex:1 1 auto;order:3;color:var(--gray)}
+#gdModalUpload .upload-grid .upload-box .gd-src-badge{margin:0;flex:0 0 auto;order:4;white-space:nowrap}
+#gdModalUpload .upload-grid .upload-box .filename{margin:0;flex:0 0 auto;order:5;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+#gdModalUpload .upload-grid .upload-box .badge-count{position:static;order:6;flex:0 0 auto;margin:0}
+#gdModalUpload .upload-grid .upload-box .progress-bar{position:absolute;left:0;right:0;bottom:0;width:100%;margin:0;border-radius:0 0 10px 10px}
+/* 초기등급(접힘 섹션)의 작은 박스는 기존 세로형 유지 */
+#gdModalUpload #box-gd-init,#gdModalUpload [id^="box-gd-april"]{padding:10px}
+#gdModalUpload #box-gd-init .icon,#gdModalUpload [id^="box-gd-april"] .icon{font-size:22px;margin-bottom:2px}
+#gdModalUpload #box-gd-init .label,#gdModalUpload [id^="box-gd-april"] .label{font-size:13px;margin-bottom:2px}
+#gdModalUpload #box-gd-init .desc{font-size:10.5px;line-height:1.35}
 #gdModalUpload .modal-footer{margin-top:12px}
 /* 업로드 박스 출처 배지: 자동 수집 vs 직접 업로드 */
 .gd-src-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px;margin-bottom:4px;letter-spacing:-.2px}
@@ -1914,7 +1924,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <input type="file" accept=".xlsx,.xls" id="file-gd-db">
           <div class="gd-src-badge auto">📁 산정 시 자동(기간)</div>
           <div class="icon">📋</div><div class="label">DB수</div>
-          <div class="desc">집계기간 정하고 [차등 산정]<br>그 기간 일마감 DB를 폴더에서 병합<br>(직접 업로드도 가능)</div>
+          <div class="desc">집계기간 정하고 [차등 산정] → 그 기간 일마감 DB를 폴더에서 병합 (직접 업로드도 가능)</div>
           <div class="filename" id="fname-gd-db"></div>
           <div class="badge-count hidden" id="count-gd-db"></div>
           <div class="progress-bar hidden" id="prog-gd-db"><div class="progress-fill"></div></div>
@@ -1923,7 +1933,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <input type="file" accept=".xlsx,.xls" id="file-gd-cont">
           <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📝</div><div class="label">계약수</div>
-          <div class="desc">WM_고객관리 · 오더일 기준 (보통 3일치)<br>직전 회차 이후 오더가 다 포함되게</div>
+          <div class="desc">WM_고객관리 · 오더일 기준 (보통 3일치) · 직전 회차 이후 오더가 다 포함되게</div>
           <div class="filename" id="fname-gd-cont"></div>
           <div class="badge-count hidden" id="count-gd-cont"></div>
           <div class="progress-bar hidden" id="prog-gd-cont"><div class="progress-fill"></div></div>
@@ -1932,7 +1942,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <input type="file" accept=".xlsx,.xls" id="file-gd-cancel">
           <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📉</div><div class="label">취소수</div>
-          <div class="desc">신청자관리(오더일: 최근 3개월)<br>누적 저장 (3일 주기)</div>
+          <div class="desc">신청자관리 (오더일: 최근 3개월) · 누적 저장 (3일 주기)</div>
           <div class="filename" id="fname-gd-cancel"></div>
           <div class="badge-count hidden" id="count-gd-cancel"></div>
           <div class="progress-bar hidden" id="prog-gd-cancel"><div class="progress-fill"></div></div>
@@ -1941,7 +1951,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <input type="file" accept=".xls,.xlsx,.html" id="file-gd-attend">
           <div class="gd-src-badge auto">📁 공용폴더 자동</div>
           <div class="icon">👥</div><div class="label">명단</div>
-          <div class="desc">2-8 그룹표기 엑셀 · 최신 1건<br>공용폴더에서 자동 수집(직접 업로드도 가능)</div>
+          <div class="desc">2-8 그룹표기 엑셀 · 최신 1건 · 공용폴더에서 자동 수집 (직접 업로드도 가능)</div>
           <div class="filename" id="fname-gd-attend"></div>
           <div class="progress-bar hidden" id="prog-gd-attend"><div class="progress-fill"></div></div>
         </div>
