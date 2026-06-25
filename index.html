@@ -11535,6 +11535,22 @@ async function spDisconnectFolder(){
   try{if(!spIdb)await spOpenIDB();await spIdbDelHandle();}catch(e){}
   spDirHandle=null;spDirName='';spUpdateDirStatus();spSetBanner('hide');
 }
+// 계열별성과 ↔ 타임보드성과 교차 스캔: 한쪽을 스캔하면 같은 공용폴더의 최신 파일을
+// 다른 쪽 IDB에도 함께 반영한다(탭별 데이터 시차 방지). 재진입은 cross 플래그로 차단.
+let _wmCrossScan=false;
+function wmHasTab(t){try{return !!(authUser&&authUser.tabs&&authUser.tabs.includes(t));}catch(e){return false;}}
+async function wmCrossScan(target){
+  if(_wmCrossScan)return;
+  if(!spDirHandle)return;
+  if(target==='tb'&&(!wmHasTab('timeboard-perf')||typeof tbScanFolder!=='function'))return;
+  if(target==='sp'&&(!wmHasTab('series-perf')||typeof spScanFolder!=='function'))return;
+  _wmCrossScan=true;
+  try{
+    if(target==='tb')await tbScanFolder({request:false,fromShow:true,cross:true});
+    else if(target==='sp')await spScanFolder({request:false,fromShow:true,cross:true});
+  }catch(e){console.warn('교차 폴더 스캔 실패',e);}
+  finally{_wmCrossScan=false;}
+}
 // 폴더(루트+하위 2단계) 스캔 → 신규 .xlsx 인제스트
 async function spScanFolder(opts={}){
   if(spScanBusy)return;
@@ -11581,6 +11597,7 @@ async function spScanFolder(opts={}){
   // 사용자가 직접 스캔했고 미인식 파일이 있으면 모달로 목록 표시
   if(opts.announce&&skipped.length)spShowSkipModal();
   if(opts.announce&&errs.length)alert('처리 오류:\n- '+errs.join('\n- '));
+  if(!opts.cross)wmCrossScan('tb');   // 타임보드성과도 같은 폴더 최신본으로 함께 갱신
   return {okCnt,dupCnt,skipped:skipped.length};
 }
 let spLastSkipped=[];
@@ -12585,6 +12602,7 @@ async function tbScanFolder(opts={}){
   tbUpdateUploadStatus();tbRenderFileHistory();tbUpdateDirStatus('ok');
   if(!opts.fromShow||okCnt>0)tbSetBanner('ok',{okCnt,dupCnt});else tbSetBanner('hide');
   if(okCnt>0&&!opts.fromShow&&currentPage==='timeboard-perf')tbOnShow();
+  if(!opts.cross)wmCrossScan('sp');   // 계열별성과도 같은 폴더 최신본으로 함께 갱신
   return {okCnt,dupCnt};
 }
 async function tbAutoScanOnShow(){
