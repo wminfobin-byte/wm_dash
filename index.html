@@ -12432,6 +12432,14 @@ function tbPersonSeriesRows(name,lang,s,e){
   const order=[0,1,2,3,4,5,-1];
   return order.filter(sr=>map.has(sr)&&(map.get(sr).db>0||map.get(sr).cont>0)).map(sr=>({sr,g:map.get(sr)}));
 }
+// 한 코디의 전체 + 계열 0~5 집계(고정 슬롯, 0충전) — 엑셀 매트릭스용
+function tbPersonSeriesAgg(name,lang,s,e){
+  const tot={db:0,cont:0,daily:0};
+  const ser=[0,1,2,3,4,5].map(()=>({db:0,cont:0,daily:0}));
+  for(const r of tbModel.dbRecs)if((r.name||'(미상)')===name&&tbInRange(r,lang,s,e)){tot.db++;if(r.sr>=0&&r.sr<=5)ser[r.sr].db++;}
+  for(const r of tbModel.contRecs)if((r.name||'(미상)')===name&&tbInRange(r,lang,s,e)){tot.cont++;if(r.isDaily)tot.daily++;if(r.sr>=0&&r.sr<=5){ser[r.sr].cont++;if(r.isDaily)ser[r.sr].daily++;}}
+  return {tot,ser};
+}
 function tbSeriesMetricRow(sr,g){
   const prev=g.cont-g.daily,c=v=>v.toLocaleString();
   return `<tr><td class="tb-lab"><span class="tb-sr-chip" style="background:${tbSeriesColor(sr)}">${tbSeriesLabel(sr)}</span></td>`+
@@ -12487,35 +12495,51 @@ async function tbDownloadPersonExcel(){
   const titleS={font:{bold:true,color:{rgb:'FFFFFF'},sz:16,name:'맑은 고딕'},fill:{fgColor:{rgb:'4361EE'}},alignment:{horizontal:'center',vertical:'center'}};
   const lblS={font:{bold:true,sz:10,name:'맑은 고딕'},alignment:{horizontal:'right',vertical:'center'}};
   const wb=XLSX.utils.book_new();
-  const HDR=['코디','DB수','계약수','계약률','일계약수','일계약률','이전계약수','이전계약률'];
+  // 컬럼 그룹: 전체 + 0~5계열, 각 그룹 = DB수·계약수·계약률 3열
+  const GROUPS=['전체','0계열','1계열','2계열','3계열','4계열','5계열'];
+  const GCOLOR=['1E293B','4338CA','2563EB','0891B2','CA8A04','EA580C','DC2626'];
+  const NG=GROUPS.length, NCOL=1+NG*3;            // 코디 + 그룹×3
   const buildSheet=(lang,title)=>{
-    const rows=tbPersonRows(lang,s,e);
-    const aoa=[[title,'','','','','','',''],
-      ['집계기간',`${sLab} ~ ${eLab}`,'언어',lang,'','','',''],
-      [],HDR];
-    const tot={db:0,cont:0,daily:0};
-    rows.forEach(({name,g})=>{const prev=g.cont-g.daily;tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;
-      aoa.push([name.replace(/^\(.*?\)/,''),g.db,g.cont,g.db?g.cont/g.db:'',g.daily,g.db?g.daily/g.db:'',prev,g.db?prev/g.db:'']);});
-    const tprev=tot.cont-tot.daily;
-    aoa.push(['합계',tot.db,tot.cont,tot.db?tot.cont/tot.db:'',tot.daily,tot.db?tot.daily/tot.db:'',tprev,tot.db?tprev/tot.db:'']);
+    const rows=tbPersonRows(lang,s,e);            // 화면과 동일 필터(전체 DB>TB_MIN_DB)·계약률 내림차순
+    const blank=Array(NCOL).fill('');
+    const h1=['코디'];GROUPS.forEach(g=>h1.push(g,'',''));
+    const h2=[''];GROUPS.forEach(()=>h2.push('DB수','계약수','계약률'));
+    const aoa=[[title,...Array(NCOL-1).fill('')],
+      ['집계기간',`${sLab} ~ ${eLab}`,'언어',lang,...Array(NCOL-4).fill('')],
+      blank.slice(),h1,h2];
+    // 그룹별 합계 누적
+    const gtot=GROUPS.map(()=>({db:0,cont:0}));
+    rows.forEach(({name})=>{
+      const {tot,ser}=tbPersonSeriesAgg(name,lang,s,e);
+      const cells=[tot,...ser];
+      const row=[name.replace(/^\(.*?\)/,'')];
+      cells.forEach((c,gi)=>{gtot[gi].db+=c.db;gtot[gi].cont+=c.cont;row.push(c.db,c.cont,c.db?c.cont/c.db:'');});
+      aoa.push(row);
+    });
+    const totRow=['합계'];gtot.forEach(t=>totRow.push(t.db,t.cont,t.db?t.cont/t.db:''));
+    aoa.push(totRow);
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:12},{wch:8},{wch:8},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10}];
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
-    ws['!rows']=[{hpt:26},{hpt:18},{},{hpt:20}];
-    for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws[a])ws[a].s=titleS;}
+    const cols=[{wch:12}];for(let g=0;g<NG;g++)cols.push({wch:7},{wch:7},{wch:9});ws['!cols']=cols;
+    const merges=[{s:{r:0,c:0},e:{r:0,c:NCOL-1}},{s:{r:3,c:0},e:{r:4,c:0}}];
+    for(let g=0;g<NG;g++){const base=1+g*3;merges.push({s:{r:3,c:base},e:{r:3,c:base+2}});}
+    ws['!merges']=merges;ws['!rows']=[{hpt:26},{hpt:18},{},{hpt:18},{hpt:16}];
+    for(let c=0;c<NCOL;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws[a])ws[a].s=titleS;}
     [0,2].forEach(c=>{const a=XLSX.utils.encode_cell({r:1,c});if(ws[a])ws[a].s=lblS;});
-    for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
-    const lastR=4+rows.length;
-    for(let r=4;r<=lastR;r++){const isTot=r===lastR;
-      for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws[a])continue;
-        ws[a].s={font:{sz:10,name:'맑은 고딕',bold:isTot||c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};
+    // 그룹 헤더(row3) — 그룹색 / 코디 셀
+    {const a=XLSX.utils.encode_cell({r:3,c:0});if(ws[a])ws[a].s=hdrS;}
+    for(let g=0;g<NG;g++){const base=1+g*3;const a=XLSX.utils.encode_cell({r:3,c:base});if(ws[a])ws[a].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:GCOLOR[g]}},alignment:{horizontal:'center',vertical:'center'},border:bd};}
+    for(let c=1;c<NCOL;c++){const a=XLSX.utils.encode_cell({r:4,c});if(ws[a])ws[a].s=hdrS;}
+    const lastR=5+rows.length;
+    for(let r=5;r<=lastR;r++){const isTot=r===lastR;
+      for(let c=0;c<NCOL;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws[a])continue;
+        ws[a].s={font:{sz:9,name:'맑은 고딕',bold:isTot||c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};
         if(isTot)ws[a].s.fill={fgColor:{rgb:'F0F1F5'}};
-        if(c===3||c===5||c===7)ws[a].z='0.0%';}
+        if(c>0&&(c-1)%3===2){ws[a].z='0.0%';ws[a].s.font={sz:9,bold:true,name:'맑은 고딕',color:{rgb:'1D4ED8'}};}}  // 계약률 열
     }
     return ws;
   };
-  XLSX.utils.book_append_sheet(wb,buildSheet('영어','WM 타임보드 개인별 성과 — 영어'),'영어');
-  XLSX.utils.book_append_sheet(wb,buildSheet('제2외국어','WM 타임보드 개인별 성과 — 제2외국어'),'제2외국어');
+  XLSX.utils.book_append_sheet(wb,buildSheet('영어','WM 타임보드 개인별×계열 성과 — 영어'),'영어');
+  XLSX.utils.book_append_sheet(wb,buildSheet('제2외국어','WM 타임보드 개인별×계열 성과 — 제2외국어'),'제2외국어');
   const fname=`WM_타임보드_개인별성과_${(sLab||'').replace(/-/g,'')}_${(eLab||'').replace(/-/g,'')}.xlsx`;
   try{
     const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
