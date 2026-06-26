@@ -1942,7 +1942,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <input type="file" accept=".xlsx,.xls" id="file-gd-cancel">
           <div class="gd-src-badge manual">✋ 직접 업로드</div>
           <div class="icon">📉</div><div class="label">취소수</div>
-          <div class="desc">신청자관리 (오더일: 최근 3개월) · 누적 저장 (3일 주기)</div>
+          <div class="desc">신청자관리 (오더일: 최근 1개월) · 누적 저장 (3일 주기)</div>
           <div class="filename" id="fname-gd-cancel"></div>
           <div class="badge-count hidden" id="count-gd-cancel"></div>
           <div class="progress-bar hidden" id="prog-gd-cancel"><div class="progress-fill"></div></div>
@@ -7512,7 +7512,7 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
   return counts;
 }
 
-// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드 'in' 제외(단 'IN'+Q열 분류 있으면 포함) + 매칭된 계약의 오더일이 달력상 3개월 이내
+// 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드 'in' 제외(단 'IN'+Q열 분류 있으면 포함) + 매칭된 계약의 오더일이 달력상 1개월 이내(취소 파일 오더일 윈도우)
 function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, uploadTime, keyCollect){
   // 룰: cancel 파일에서 반품일이 회차 분배일 min~max 범위 안인 행을 카운트.
   //     담당자는 cancel 파일 N열 그대로 사용 ((R_xxx) 접두 제거하여 멤버 매칭).
@@ -7833,7 +7833,7 @@ window.gdDebugVanished=function(refKey){
     for(let i=1;i<prev.data.length;i++){if(prev.data[i]&&String(prev.data[i][C.customerKey]).trim()===refKey){M=String(prev.data[i][C.manager]||'');break;}}
   }
   console.log('담당자(M)=',M||'(refKey로 못 찾음 — 전체 담당자 대상)');
-  const cutoff=cur.uploadTime-90*24*60*60*1000;
+  const cutoff=cur.uploadTime-30*24*60*60*1000;   // 1개월 윈도우 가드 (취소 파일 오더일 최근 1개월)
   const seen=new Set();const out=[];
   for(let i=1;i<prev.data.length;i++){
     const r=prev.data[i];if(!r)continue;
@@ -8001,8 +8001,9 @@ async function gdGenerate(dbFileId, opts={}){
         if(diff<bestDiff){bestDiff=diff;_prevCancelFile=c;}
       }
     }
-    // 이번 cancel cutoff start ≈ cancel 업로드 시점 - 90일(3개월) — cutoff drop 가드용
-    const _cancelCutoffStart=new Date(cancelFile.uploadTime - 90*24*60*60*1000);
+    // 이번 cancel cutoff start ≈ cancel 업로드 시점 - 30일(1개월) — cutoff drop 가드용
+    // (취소 파일이 오더일 최근 1개월치만 담기므로, 1개월 지나 자연 만료된 행을 사후취소로 오인하지 않게 가드도 1개월로 맞춤)
+    const _cancelCutoffStart=new Date(cancelFile.uploadTime - 30*24*60*60*1000);
     const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys);
     members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(vanishedCounts[name]||0); });
 
