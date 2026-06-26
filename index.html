@@ -12273,7 +12273,9 @@ function tbParseDb(wb){
   const aoa=spReadAOA(wb),rows=[];
   for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
     const k=String(r[6]==null?'':r[6]).trim();if(!k)continue;       // 고객키 G(6)
+    const ser=parseInt(String(r[2]==null?'':r[2]).trim(),10);       // 계열 C(2)
     rows.push({k, ob:String(r[7]==null?'':r[7]).trim(),             // OB명 H(7)
+      sr:(ser>=0&&ser<=5)?ser:-1,                                   // 계열 0~5 (그 외 -1=미상)
       d:spNormDay(r[8]),                                            // 분배일 I(8)
       rc:String(r[15]==null?'':r[15]).includes('재콜')?1:0,          // DB정보 P(15) 재콜
       mc:String(r[19]==null?'':r[19]).trim()});                     // 매체 T(19) 원문
@@ -12335,7 +12337,7 @@ function tbCompute(){
     if(/callback|tv_b/i.test(r.mc))continue;            // 매체 callback/tv_b 제외
     if(!tbIsTb(r.mc))continue;                          // 타임보드 아님 제외
     const ent=spCanon(roster,r.ob);
-    const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang:tbLang(r.mc)};
+    const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang:tbLang(r.mc),sr:(r.sr==null?-1:r.sr)};
     dbRecs.push(rec); dbKey.set(r.k,rec);
   }
   // 계약: 일마감 고객키 dedup → '집계된 타임보드 DB'와 고객키 매칭되는 것만(재콜 자동 제외)
@@ -12346,7 +12348,7 @@ function tbCompute(){
     if(!r.k||seenC.has(r.k))continue; seenC.add(r.k);
     const db=dbKey.get(r.k);
     if(!db){unmatched++;continue;}                      // 집계된 타임보드 DB와 매칭되는 것만
-    contRecs.push({k:r.k,name:db.name,ctr:db.ctr,day:db.day,slot:db.slot,lang:db.lang,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정. 코디 귀속=매칭된 DB의 OB명
+    contRecs.push({k:r.k,name:db.name,ctr:db.ctr,day:db.day,slot:db.slot,lang:db.lang,sr:db.sr,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정. 코디·계열 귀속=매칭된 DB
   }
   const days=[]; dbRecs.forEach(r=>{if(r.day)days.push(r.day);}); contRecs.forEach(r=>{if(r.day)days.push(r.day);}); days.sort();
   const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
@@ -12412,11 +12414,49 @@ function tbPersonRows(lang,s,e){
   rows.sort((a,b)=>{const ra=a.g.db?a.g.cont/a.g.db:0,rb=b.g.db?b.g.cont/b.g.db:0;return rb-ra||b.g.db-a.g.db;}); // 계약률 내림차순
   return rows;
 }
+function tbSeriesLabel(sr){return sr===-1?'미상':`${sr}계열`;}
+function tbSeriesColor(sr){return (sr>=0&&sr<=5)?SP_SCOLOR[sr]:'#94a3b8';}
+// 한 코디의 계열별(0~5,미상) 집계 → 0→5 순(미상 마지막), db|cont가 있는 계열만
+function tbPersonSeriesRows(name,lang,s,e){
+  const map=new Map();const get=k=>{if(!map.has(k))map.set(k,{db:0,cont:0,daily:0});return map.get(k);};
+  for(const r of tbModel.dbRecs)if((r.name||'(미상)')===name&&tbInRange(r,lang,s,e))get(r.sr==null?-1:r.sr).db++;
+  for(const r of tbModel.contRecs)if((r.name||'(미상)')===name&&tbInRange(r,lang,s,e)){const g=get(r.sr==null?-1:r.sr);g.cont++;if(r.isDaily)g.daily++;}
+  const order=[0,1,2,3,4,5,-1];
+  return order.filter(sr=>map.has(sr)&&(map.get(sr).db>0||map.get(sr).cont>0)).map(sr=>({sr,g:map.get(sr)}));
+}
+function tbSeriesMetricRow(sr,g){
+  const prev=g.cont-g.daily,c=v=>v.toLocaleString();
+  return `<tr><td class="tb-lab"><span class="tb-sr-chip" style="background:${tbSeriesColor(sr)}">${tbSeriesLabel(sr)}</span></td>`+
+    `<td>${c(g.db)}</td><td>${c(g.cont)}</td><td class="tb-rate">${tbPct(g.cont,g.db)}</td>`+
+    `<td>${c(g.daily)}</td><td class="tb-rate2">${tbPct(g.daily,g.db)}</td>`+
+    `<td>${c(prev)}</td><td class="tb-rate2">${tbPct(prev,g.db)}</td></tr>`;
+}
+function tbPersonDetail(name,lang,s,e){
+  const rows=tbPersonSeriesRows(name,lang,s,e);
+  if(!rows.length)return `<div class="tb-empty" style="margin:0">계열 정보가 없습니다.</div>`;
+  let body='';for(const {sr,g} of rows)body+=tbSeriesMetricRow(sr,g);
+  return `<table class="tb-tbl tb-sr-tbl"><thead><tr><th>계열</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+function tbTogglePersonDetail(idx){
+  const tr=document.getElementById('tb-pd-'+idx),btn=document.getElementById('tb-pb-'+idx);
+  if(!tr)return;const open=tr.classList.toggle('hidden')===false;
+  if(btn)btn.textContent=open?'접기 ▲':'펼치기 ▼';
+}
+function tbPersonRowHtml(name,g,idx,lang,s,e){
+  const disp=name.replace(/^\(.*?\)/,''),prev=g.cont-g.daily,c=v=>v.toLocaleString();
+  const row=`<tr><td class="tb-lab">${disp}</td>`+
+    `<td>${c(g.db)}</td><td>${c(g.cont)}</td>`+
+    `<td class="tb-rate"><span>${tbPct(g.cont,g.db)}</span><button class="tb-expand" id="tb-pb-${idx}" onclick="tbTogglePersonDetail('${idx}')">펼치기 ▼</button></td>`+
+    `<td>${c(g.daily)}</td><td class="tb-rate2">${tbPct(g.daily,g.db)}</td>`+
+    `<td>${c(prev)}</td><td class="tb-rate2">${tbPct(prev,g.db)}</td></tr>`;
+  const detail=`<tr class="tb-pd hidden" id="tb-pd-${idx}"><td colspan="8"><div class="tb-pd-wrap"><div class="tb-pd-h">${disp} · 계열별 분해</div>${tbPersonDetail(name,lang,s,e)}</div></td></tr>`;
+  return row+detail;
+}
 function tbPersonTable(lang,s,e){
   const rows=tbPersonRows(lang,s,e);
   if(!rows.length)return `<div class="tb-empty">DB수 ${TB_MIN_DB}건 초과 코디가 없습니다.</div>`;
   const tot={db:0,cont:0,daily:0};let body='';
-  for(const {name,g} of rows){tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(name.replace(/^\(.*?\)/,''),g);}
+  rows.forEach(({name,g},i)=>{tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbPersonRowHtml(name,g,`${lang}-${i}`,lang,s,e);});
   body+=tbMetricRow('합계',tot,true);
   return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>코디</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -12739,7 +12779,17 @@ function tbEnsureStyle(){
   #page-timeboard-perf .tb-slotblk-h{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,#f8fafc,#eef2f7);padding:11px 16px;border-bottom:1px solid #e8edf3}
   #page-timeboard-perf .tb-clk{font-weight:800;font-size:14px;color:#1e293b}
   #page-timeboard-perf .tb-slotblk-n{font-weight:700;color:#fff;font-size:11px;background:#4361ee;padding:3px 11px;border-radius:999px}
-  #page-timeboard-perf .tb-empty{padding:28px;text-align:center;color:#94a3b8;font-size:13px}`;
+  #page-timeboard-perf .tb-empty{padding:28px;text-align:center;color:#94a3b8;font-size:13px}
+  #page-timeboard-perf .tb-tbl .tb-rate{white-space:nowrap}
+  #page-timeboard-perf .tb-expand{margin-left:7px;padding:1px 8px;font-size:10.5px;font-weight:700;color:#4361ee;background:#eef2ff;border:1px solid #dbe3ff;border-radius:999px;cursor:pointer;vertical-align:middle}
+  #page-timeboard-perf .tb-expand:hover{background:#e0e7ff}
+  #page-timeboard-perf tr.tb-pd>td{padding:0!important;background:#f8fafc!important}
+  #page-timeboard-perf tr.tb-pd:hover>td{background:#f8fafc!important}
+  #page-timeboard-perf .tb-pd-wrap{padding:12px 16px 14px;border-left:3px solid #c7d4f5}
+  #page-timeboard-perf .tb-pd-h{font-size:12px;font-weight:800;color:#475569;margin-bottom:8px}
+  #page-timeboard-perf .tb-sr-tbl{box-shadow:none}
+  #page-timeboard-perf .tb-sr-tbl thead th{background:#eef2f7;color:#64748b}
+  #page-timeboard-perf .tb-sr-chip{display:inline-block;min-width:46px;padding:2px 9px;font-size:11px;font-weight:700;color:#fff;border-radius:999px;text-align:center}`;
   document.head.appendChild(st);
 }
 
