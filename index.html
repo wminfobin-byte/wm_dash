@@ -12346,7 +12346,7 @@ function tbCompute(){
     if(!r.k||seenC.has(r.k))continue; seenC.add(r.k);
     const db=dbKey.get(r.k);
     if(!db){unmatched++;continue;}                      // 집계된 타임보드 DB와 매칭되는 것만
-    contRecs.push({k:r.k,day:db.day,slot:db.slot,lang:db.lang,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정
+    contRecs.push({k:r.k,name:db.name,ctr:db.ctr,day:db.day,slot:db.slot,lang:db.lang,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정. 코디 귀속=매칭된 DB의 OB명
   }
   const days=[]; dbRecs.forEach(r=>{if(r.day)days.push(r.day);}); contRecs.forEach(r=>{if(r.day)days.push(r.day);}); days.sort();
   const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
@@ -12403,12 +12403,84 @@ function tbSlotDateBlocks(lang,s,e){
   }
   return html;
 }
+// 조회 기간 동안 개인(코디)별 성과 — 코디 귀속은 매칭된 DB의 OB명(name) 기준
+function tbPersonRows(lang,s,e){
+  const map=tbAggBy(r=>r.name||'(미상)',lang,s,e);
+  const rows=[];
+  for(const [name,g] of map){if(g.db<=TB_MIN_DB)continue;rows.push({name,g});}
+  // DB수가 의미 없는 0건 코디(계약만 잡힌 경우) 방지: 위에서 이미 db>TB_MIN_DB만 통과
+  rows.sort((a,b)=>{const ra=a.g.db?a.g.cont/a.g.db:0,rb=b.g.db?b.g.cont/b.g.db:0;return rb-ra||b.g.db-a.g.db;}); // 계약률 내림차순
+  return rows;
+}
+function tbPersonTable(lang,s,e){
+  const rows=tbPersonRows(lang,s,e);
+  if(!rows.length)return `<div class="tb-empty">DB수 ${TB_MIN_DB}건 초과 코디가 없습니다.</div>`;
+  const tot={db:0,cont:0,daily:0};let body='';
+  for(const {name,g} of rows){tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;body+=tbMetricRow(name.replace(/^\(.*?\)/,''),g);}
+  body+=tbMetricRow('합계',tot,true);
+  return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>코디</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
 function tbLangSection(lang,s,e){
   const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','제2외국어':'🌏 제2외국어'};
   return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>`+
     `<div class="tb-sub-h">시간대 요약</div>${tbSlotTable(lang,s,e)}`+
     `<div class="tb-sub-h">시간대별 분배일 추이 <span class="tb-sub-s">(위→아래 = 분배일 경과 · DB·계약 전환 추적)</span></div>${tbSlotDateBlocks(lang,s,e)}`+
+    `<div class="tb-sub-h" style="display:flex;align-items:center;gap:10px">개인별 성과 <span class="tb-sub-s">(코디별 · 계약률 내림차순)</span><button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="tbDownloadPersonExcel()">⬇ 개인별 엑셀</button></div>${tbPersonTable(lang,s,e)}`+
     `</section>`;
+}
+// 개인별 성과 엑셀 — 영어/제2외국어 시트 분리
+async function tbDownloadPersonExcel(){
+  if(!tbModel){alert('먼저 데이터를 불러오세요.');return;}
+  const [s,e]=tbRangeDays();
+  const sLab=document.getElementById('tbDateStart').value||tbModel.minDay||'';
+  const eLab=document.getElementById('tbDateEnd').value||tbModel.maxDay||'';
+  const bd={top:{style:'thin',color:{rgb:'E2E8F0'}},bottom:{style:'thin',color:{rgb:'E2E8F0'}},left:{style:'thin',color:{rgb:'E2E8F0'}},right:{style:'thin',color:{rgb:'E2E8F0'}}};
+  const hdrS={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:'1E293B'}},alignment:{horizontal:'center',vertical:'center'},border:bd};
+  const titleS={font:{bold:true,color:{rgb:'FFFFFF'},sz:16,name:'맑은 고딕'},fill:{fgColor:{rgb:'4361EE'}},alignment:{horizontal:'center',vertical:'center'}};
+  const lblS={font:{bold:true,sz:10,name:'맑은 고딕'},alignment:{horizontal:'right',vertical:'center'}};
+  const wb=XLSX.utils.book_new();
+  const HDR=['코디','DB수','계약수','계약률','일계약수','일계약률','이전계약수','이전계약률'];
+  const buildSheet=(lang,title)=>{
+    const rows=tbPersonRows(lang,s,e);
+    const aoa=[[title,'','','','','','',''],
+      ['집계기간',`${sLab} ~ ${eLab}`,'언어',lang,'','','',''],
+      [],HDR];
+    const tot={db:0,cont:0,daily:0};
+    rows.forEach(({name,g})=>{const prev=g.cont-g.daily;tot.db+=g.db;tot.cont+=g.cont;tot.daily+=g.daily;
+      aoa.push([name.replace(/^\(.*?\)/,''),g.db,g.cont,g.db?g.cont/g.db:'',g.daily,g.db?g.daily/g.db:'',prev,g.db?prev/g.db:'']);});
+    const tprev=tot.cont-tot.daily;
+    aoa.push(['합계',tot.db,tot.cont,tot.db?tot.cont/tot.db:'',tot.daily,tot.db?tot.daily/tot.db:'',tprev,tot.db?tprev/tot.db:'']);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:12},{wch:8},{wch:8},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10}];
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}}];
+    ws['!rows']=[{hpt:26},{hpt:18},{},{hpt:20}];
+    for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws[a])ws[a].s=titleS;}
+    [0,2].forEach(c=>{const a=XLSX.utils.encode_cell({r:1,c});if(ws[a])ws[a].s=lblS;});
+    for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:3,c});if(ws[a])ws[a].s=hdrS;}
+    const lastR=4+rows.length;
+    for(let r=4;r<=lastR;r++){const isTot=r===lastR;
+      for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws[a])continue;
+        ws[a].s={font:{sz:10,name:'맑은 고딕',bold:isTot||c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};
+        if(isTot)ws[a].s.fill={fgColor:{rgb:'F0F1F5'}};
+        if(c===3||c===5||c===7)ws[a].z='0.0%';}
+    }
+    return ws;
+  };
+  XLSX.utils.book_append_sheet(wb,buildSheet('영어','WM 타임보드 개인별 성과 — 영어'),'영어');
+  XLSX.utils.book_append_sheet(wb,buildSheet('제2외국어','WM 타임보드 개인별 성과 — 제2외국어'),'제2외국어');
+  const fname=`WM_타임보드_개인별성과_${(sLab||'').replace(/-/g,'')}_${(eLab||'').replace(/-/g,'')}.xlsx`;
+  try{
+    const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){
+      if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+        const xml=await zip.file(path).async('string');
+        zip.file(path,xml.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));
+      }
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+  }catch(err){console.warn('눈금선 제거 실패, 기본 저장',err);XLSX.writeFile(wb,fname,{bookSST:true});}
 }
 function tbRenderKpi(s,e){
   const g={db:0,cont:0,daily:0};
