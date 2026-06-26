@@ -12301,9 +12301,17 @@ function tbLang(s){return /japer|cnper|esper|frper/i.test(String(s||''))?'제2�
 function tbSlotMin(slot){const m=String(slot).match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);if(!m)return 99999;let h=+m[1];const mm=m[2]?+m[2]:0;const ap=(m[3]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;return h*60+mm;}
 
 // ── 인제스트 (수동 업로드·폴더 스캔 공통) ──
+// db 파일 중 계열(sr) 없이 파싱된 구버전 → 폴더 재스캔 시 같은 파일이라도 재파싱 대상
+function tbFileStale(f){return f.type==='db'&&f.rows&&f.rows.length>0&&!('sr' in f.rows[0]);}
 async function tbIngestFile(type,file){
   const fileHash=`${file.name}|${file.size}`;
-  if(type!=='attend'&&tbFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};
+  if(type!=='attend'){
+    const ex=tbFiles.find(f=>f.type===type&&f.fileHash===fileHash);
+    if(ex){
+      if(!tbFileStale(ex))return {status:'dup'};
+      await tbIdbDel(ex.id);tbFiles=tbFiles.filter(f=>f.id!==ex.id);   // 구버전(계열 없음) 제거 후 아래에서 재파싱
+    }
+  }
   if(type==='attend'){const cur=tbFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup'};}
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
