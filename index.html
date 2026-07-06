@@ -6702,17 +6702,18 @@ async function gdScanFolder(opts={}){
   gdScanBusy=true; gdUpdateDirStatus('busy'); if(!opts.fromShow&&!opts.silent)gdSetBanner('busy');
   try{
     const attEntries=[];
-    async function walk(dir,folderName,depth){
+    async function walk(dir,folderName,depth,inside){
       for await(const entry of dir.values()){
         if(entry.kind==='file'){
           if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
           if(spDetectType(folderName,entry.name)==='attend')attEntries.push(entry);
-        }else if(entry.kind==='directory'&&depth<2){
-          if(spDetectType(entry.name,'')==='attend'){ try{await walk(entry,entry.name,depth+1);}catch(e){} }
+        }else if(entry.kind==='directory'&&depth<3){
+          // 명단 폴더 안에 들어온 뒤엔 하위(월별 등) 폴더도 모두 진입 → 파일명으로 판별.
+          if(inside||spDetectType(entry.name,'')==='attend'){ try{await walk(entry,entry.name,depth+1,true);}catch(e){} }
         }
       }
     }
-    await walk(h,'',0);
+    await walk(h,'',0,false);
     let okCnt=0,dupCnt=0;
     // 명단: 파일명 최신 1개
     if(attEntries.length){
@@ -6759,17 +6760,18 @@ async function gdPullDbForPeriod(pStart,pEnd){
   if(!await spVerifyPerm(h,false))return null;
   spDirHandle=h; spDirName=h.name;
   const dbEntries=[];
-  async function walk(dir,folderName,depth){
+  async function walk(dir,folderName,depth,inside){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
         if(spDetectType(folderName,entry.name)==='db')dbEntries.push(entry);
-      }else if(entry.kind==='directory'&&depth<2){
-        if(spDetectType(entry.name,'')==='db'){ try{await walk(entry,entry.name,depth+1);}catch(e){} }
+      }else if(entry.kind==='directory'&&depth<3){
+        // DB수 폴더 안에 들어온 뒤엔 하위(2026-01 등 월별) 폴더도 모두 진입 → 파일명으로 판별.
+        if(inside||spDetectType(entry.name,'')==='db'){ try{await walk(entry,entry.name,depth+1,true);}catch(e){} }
       }
     }
   }
-  await walk(h,'',0);
+  await walk(h,'',0,false);
   if(!dbEntries.length)return null;
   const psMs=new Date(pStart.getFullYear(),pStart.getMonth(),pStart.getDate(),0,0,0,0).getTime();
   const peMs=new Date(pEnd.getFullYear(),pEnd.getMonth(),pEnd.getDate(),23,59,59,999).getTime();
@@ -11552,7 +11554,7 @@ async function wmCrossScan(target){
   }catch(e){console.warn('교차 폴더 스캔 실패',e);}
   finally{_wmCrossScan=false;}
 }
-// 폴더(루트+하위 2단계) 스캔 → 신규 .xlsx 인제스트
+// 폴더(루트+하위 최대 3단계·월별 폴더 포함) 스캔 → 신규 .xlsx 인제스트
 async function spScanFolder(opts={}){
   if(spScanBusy)return;
   if(!spLoaded)await spLoadFiles();
@@ -11563,20 +11565,20 @@ async function spScanFolder(opts={}){
   if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');spSetBanner('need-perm');return;}
   spScanBusy=true;spUpdateDirStatus('busy');if(!opts.fromShow)spSetBanner('busy');
   const tasks=[],skipped=[];
-  async function walk(dir,folderName,depth){
+  async function walk(dir,folderName,depth,inside){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
         const type=spDetectType(folderName,entry.name);
         if(type)tasks.push({type,entry});else skipped.push({name:entry.name,folder:folderName||'(루트)'});
-      }else if(entry.kind==='directory'&&depth<2){
-        // 알려진 타입 폴더만 진입 (일일성과 등 무관 폴더는 스캔 안 함)
-        const ftype=spDetectType(entry.name,'');
-        if(ftype){try{await walk(entry,entry.name,depth+1);}catch(e){}}
+      }else if(entry.kind==='directory'&&depth<3){
+        // 루트에선 알려진 타입 폴더만 진입(일일성과 등 무관 폴더 제외).
+        // 타입 폴더 안에 들어온 뒤엔 하위 폴더(2026-01 등 월별 폴더)도 모두 진입 → 파일명으로 타입 판별.
+        if(inside||spDetectType(entry.name,'')){try{await walk(entry,entry.name,depth+1,true);}catch(e){}}
       }
     }
   }
-  try{await walk(h,'',0);}
+  try{await walk(h,'',0,false);}
   catch(e){console.error('폴더 스캔 오류',e);spScanBusy=false;spUpdateDirStatus('error');if(opts.announce)alert('폴더 스캔 중 오류가 발생했습니다.\n'+(e.message||e));return;}
   // 명단(attend)은 파일명 최신 1개만 채택
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
@@ -12729,18 +12731,19 @@ async function tbScanFolder(opts={}){
   tbScanBusy=true;tbUpdateDirStatus('busy');if(!opts.fromShow)tbSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);
   const tasks=[];
-  async function walk(dir,folderName,depth){
+  async function walk(dir,folderName,depth,inside){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
         const type=spDetectType(folderName,entry.name);
         if(WANT.has(type))tasks.push({type,entry});
-      }else if(entry.kind==='directory'&&depth<2){
-        if(WANT.has(spDetectType(entry.name,'')))try{await walk(entry,entry.name,depth+1);}catch(e){}
+      }else if(entry.kind==='directory'&&depth<3){
+        // 루트에선 원하는 타입 폴더만 진입, 그 하위(2026-01 등 월별 폴더)는 모두 진입 → 파일명으로 판별.
+        if(inside||WANT.has(spDetectType(entry.name,'')))try{await walk(entry,entry.name,depth+1,true);}catch(e){}
       }
     }
   }
-  try{await walk(h,'',0);}catch(e){console.error('타임보드 폴더 스캔',e);tbScanBusy=false;tbUpdateDirStatus('error');return;}
+  try{await walk(h,'',0,false);}catch(e){console.error('타임보드 폴더 스캔',e);tbScanBusy=false;tbUpdateDirStatus('error');return;}
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;
