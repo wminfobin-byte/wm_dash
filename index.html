@@ -13164,7 +13164,9 @@ function tzCompute(){
 // ── 필터/집계 ──
 function tzRangeDays(){const s=document.getElementById('tzDateStart').value,e=document.getElementById('tzDateEnd').value;return [s||'0000-00-00',e||'9999-99-99'];}
 function tzSelSet(){return (tzSel&&tzSel.size)?tzSel:null;} // null = 전체
-function tzBlankAgg(){return {careTry:0,careConn:0,careValid:0,careDur:0,careCust:new Set(),fTry:0,fConn:0,fValid:0,fCont:0,fDb:new Set(),oTry:0,oConn:0,oValid:0,oCont:0,oDb:new Set()};}
+function tzBlankAgg(){return {careTry:0,careConn:0,careValid:0,careDur:0,careCust:new Set(),fTry:0,fConn:0,fValid:0,fCont:0,fDb:new Set(),fCohort:new Set(),oTry:0,oConn:0,oValid:0,oCont:0,oDb:new Set()};}
+// 당일 DB수 = 분배 코호트(콜 무관). keyRec에서 분배일 기준, 비재콜, 코디 sel 필터. keyFn(rec)=날짜 또는 코디.
+function tzAddCohort(getter,keyFn,s,e,sel){for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;getter(keyFn(rec)).fCohort.add(rec.k);}}
 function tzAggByDate(s,e){
   const sel=tzSelSet(),map=new Map();
   const g=d=>{if(!map.has(d))map.set(d,tzBlankAgg());return map.get(d);};
@@ -13175,6 +13177,7 @@ function tzAggByDate(s,e){
     else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;if(c.mk)d.oDb.add(c.mk);}
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.day);if(ct.daily)d.fCont++;else d.oCont++;}
+  tzAddCohort(g,rec=>rec.dist,s,e,sel);   // 당일 DB수 = 분배일별 코호트
   return map;
 }
 function tzAggByPerson(s,e){
@@ -13187,6 +13190,7 @@ function tzAggByPerson(s,e){
     else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;if(c.mk)d.oDb.add(c.mk);}
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.codi||'(미상)');if(ct.daily)d.fCont++;else d.oCont++;}
+  tzAddCohort(g,rec=>rec.codi||'(미상)',s,e,sel);   // 당일 DB수 = 코디별 분배 코호트
   return map;
 }
 function tzSumAgg(map){const t=tzBlankAgg();delete t.careCust;t.careCust=0;let cust=new Set();for(const g of map.values()){t.careTry+=g.careTry;t.careConn+=g.careConn;t.careValid+=g.careValid;t.careDur+=g.careDur;t.fTry+=g.fTry;t.fConn+=g.fConn;t.fValid+=g.fValid;t.fCont+=g.fCont;t.oTry+=g.oTry;t.oConn+=g.oConn;t.oValid+=g.oValid;t.oCont+=g.oCont;if(g.careCust&&g.careCust.forEach)g.careCust.forEach(x=>cust.add(x));}t.careCust=cust.size;return t;}
@@ -13219,6 +13223,7 @@ function tzAggAll(s,e){
     else if(c.cat==='old'){g.oTry++;g.oConn+=c.conn;g.oValid+=c.valid;if(c.mk)g.oDb.add(c.mk);}
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;if(ct.daily)g.fCont++;else g.oCont++;}
+  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;g.fCohort.add(rec.k);}   // 당일 DB수=분배 코호트
   return g;
 }
 function tzCareTable(map){
@@ -13238,7 +13243,7 @@ function tzAvg(t,db){return db?(t/db).toFixed(1):'-';}   // 평균 시도수 = �
 function tzNewTable(map,kind){
   const days=Array.from(map.keys()).sort();
   if(!days.length)return '<div class="tz-empty">데이터가 없습니다.</div>';
-  const pick=(g)=>kind==='fresh'?{t:g.fTry,c:g.fConn,v:g.fValid,ct:g.fCont,db:g.fDb.size}:kind==='old'?{t:g.oTry,c:g.oConn,v:g.oValid,ct:g.oCont,db:g.oDb.size}:{t:g.fTry+g.oTry,c:g.fConn+g.oConn,v:g.fValid+g.oValid,ct:g.fCont+g.oCont,db:g.fDb.size+g.oDb.size};
+  const pick=(g)=>kind==='fresh'?{t:g.fTry,c:g.fConn,v:g.fValid,ct:g.fCont,db:g.fCohort.size}:kind==='old'?{t:g.oTry,c:g.oConn,v:g.oValid,ct:g.oCont,db:g.oDb.size}:{t:g.fTry+g.oTry,c:g.fConn+g.oConn,v:g.fValid+g.oValid,ct:g.fCont+g.oCont,db:g.fCohort.size+g.oDb.size};
   const tot={t:0,c:0,v:0,ct:0,db:0};let body='';
   for(const day of days){const g=pick(map.get(day));if(!g.t&&!g.ct&&!g.db)continue;tot.t+=g.t;tot.c+=g.c;tot.v+=g.v;tot.ct+=g.ct;tot.db+=g.db;
     body+=`<tr><td class="tz-lab">${tzDayLabel(day)}</td><td>${tzC(g.db)}</td><td>${tzC(g.t)}</td><td class="tz-avg">${tzAvg(g.t,g.db)}</td><td>${tzC(g.c)}</td><td class="tz-rate2">${tzPct(g.c,g.t)}</td><td>${tzC(g.v)}</td><td class="tz-rate2">${tzPct(g.v,g.t)}</td><td>${tzC(g.ct)}</td><td class="tz-rate">${tzPct(g.ct,g.db)}</td></tr>`;}
@@ -13248,8 +13253,8 @@ function tzNewTable(map,kind){
 }
 // ── 개인별 성과: 케어 / 신규합계 / 당일 / 이전 4그룹, 코디별 펼치기→일자별 추이 ──
 function tzGroupsOf(g){
-  const f={db:g.fDb.size,tr:g.fTry,co:g.fConn,va:g.fValid,ct:g.fCont};
-  const o={db:g.oDb.size,tr:g.oTry,co:g.oConn,va:g.oValid,ct:g.oCont};
+  const f={db:g.fCohort.size,tr:g.fTry,co:g.fConn,va:g.fValid,ct:g.fCont};   // 당일 DB=분배 코호트(콜 무관)
+  const o={db:g.oDb.size,tr:g.oTry,co:g.oConn,va:g.oValid,ct:g.oCont};        // 이전 DB=그날 통화한 distinct
   const t={db:f.db+o.db,tr:f.tr+o.tr,co:f.co+o.co,va:f.va+o.va,ct:f.ct+o.ct};
   return {f,o,t};
 }
@@ -13286,6 +13291,7 @@ function tzAggPersonDates(name,s,e){
     else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;if(c.mk)d.oDb.add(c.mk);}
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(ct.codi!==name)continue;const d=g(ct.day);if(ct.daily)d.fCont++;else d.oCont++;}
+  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(rec.codi!==name)continue;g(rec.dist).fCohort.add(rec.k);}   // 당일 DB수=그 코디 분배 코호트
   return map;
 }
 function tzPersonDailyTable(name,s,e){
