@@ -11627,7 +11627,10 @@ function spDetectType(folderName,fileName){
     const m=n.match(/(20\d{2})[._-]?(\d{2})([._-]?(\d{2}))?/);
     return (m&&m[4])?'contDaily':'contCum';   // 날짜 8자리=일마감, 6자리=월간누적
   }
-  t=byKey(n);return t;
+  t=byKey(n);if(t)return t;
+  // 폴더명 최종 보조 판별: '신청자관리/계약' 폴더는 일마감(월간·취소반영은 위에서 이미 분기)
+  if(/신청자|계약/.test(f))return 'contDaily';
+  return null;
 }
 async function spVerifyPerm(h,request){
   try{
@@ -13021,7 +13024,7 @@ async function tzRestoreSync(arr){
 function tzBare(s){return String(s==null?'':s).replace(/\(.*?\)/g,'').trim();}      // (R_송내)이상인 / 이상인(종료) → 이상인
 function tzNormPhone(v){let s=String(v==null?'':v).replace(/[^0-9]/g,'');if(!s)return '';if(s.length===10)s='0'+s;return s;} // 숫자만, 10자리면 0 보정
 function tzDurSec(v){const s=String(v==null?'':v).trim();let m=s.match(/(\d+):(\d{1,2}):(\d{1,2})/);if(m)return (+m[1])*3600+(+m[2])*60+(+m[3]);m=s.match(/^(\d{1,2}):(\d{1,2})$/);if(m)return (+m[1])*60+(+m[2]);const n=parseFloat(s);return isNaN(n)?0:Math.round(n*86400);}
-function tzIsTalkis(p){return /톡이즈/.test((p.team||'')+(p.grp||''))||/송내/.test(p.ctr||'');}
+function tzIsTalkis(p){return /톡이즈/.test(p.team||'');}   // 명단 A열 담당='톡이즈'인 사람만
 
 // ── 파서 ──
 // DB(고객관리): 고객키 G(6)·OB명 H(7)·분배일 I(8)·DB정보 P(15,재콜)·전화 M/N/O(12/13/14)·오더일 X(23)
@@ -13093,11 +13096,10 @@ function tzBuildRoster(){
 }
 function tzCompute(){
   const rosterBare=tzBuildRoster();
-  // CTI 콜 수집 + 상담원명 집합
+  // CTI 콜 수집
   const calls=[];for(const f of tzFilesByType('cti'))for(const c of (f.rows||[]))calls.push(Object.assign({},c));
-  const ctiNames=new Set();for(const c of calls){const b=tzBare(c.name);if(b)ctiNames.add(b);}
-  // 톡이즈 인물 집합 = 명단 톡이즈 roster ∪ CTI 상담원명 (명단 미태깅 대비 보강)
-  const tzNames=new Set([...ctiNames,...rosterBare]);
+  // 톡이즈 인물 집합 = 명단 A열 담당=톡이즈 인원(E열 이름)만. 고객센터·매니저 등은 제외.
+  const tzNames=new Set(rosterBare);
   // DB: 톡이즈만, 고객키 dedup(병합), 전화 인덱스
   const keyRec=new Map(),phoneIdx=new Map();
   const dbFiles=tzFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:-1);
@@ -13123,9 +13125,10 @@ function tzCompute(){
     }
     if(!cancelled){const rec=keyRec.get(r.k);if(rec&&rec.order&&(!contractOrder.has(r.k)||rec.order<contractOrder.get(r.k)))contractOrder.set(r.k,rec.order);}
   }
-  // 콜 분류
+  // 콜 분류 (상담원명이 톡이즈 roster에 없는 콜=고객센터·매니저 등은 skip)
   let unmatched=0;
   for(const c of calls){
+    if(!tzNames.has(tzBare(c.name))){c.cat='skip';continue;}
     const keys=phoneIdx.get(c.phone);
     if(!keys||!keys.length){c.cat='none';unmatched++;continue;}
     let cat=null;
@@ -13139,13 +13142,17 @@ function tzCompute(){
     }
     c.cat=cat;
   }
-  const days=[];calls.forEach(c=>{if(c.day&&c.cat&&c.cat!=='none')days.push(c.day);});contracts.forEach(c=>{if(c.day)days.push(c.day);});days.sort();
-  const persons=Array.from(new Set([...ctiNames,...contracts.map(c=>c.codi)])).filter(Boolean).sort((a,b)=>a.localeCompare(b,'ko'));
+  const days=[];calls.forEach(c=>{if(c.day&&(c.cat==='care'||c.cat==='fresh'||c.cat==='old'))days.push(c.day);});contracts.forEach(c=>{if(c.day)days.push(c.day);});days.sort();
+  // 개인 목록 = 톡이즈 roster 중 실제 활동(콜/계약)이 있는 사람
+  const active=new Set();
+  for(const c of calls)if(c.cat==='care'||c.cat==='fresh'||c.cat==='old')active.add(tzBare(c.name));
+  for(const c of contracts)active.add(c.codi);
+  const persons=Array.from(active).filter(Boolean).sort((a,b)=>a.localeCompare(b,'ko'));
   const warns=[];
   if(!tzFilesByType('cti').length)warns.push('CTI(걸은전화) 파일이 없습니다.');
   if(!keyRec.size)warns.push('톡이즈 DB가 0건입니다. 명단(담당=톡이즈)·DB수 파일을 확인하세요.');
   if(unmatched)warns.push(`전화번호 미매칭 콜 ${unmatched.toLocaleString()}건 제외(뇌새김 등 비톡이즈 추정)`);
-  tzModel={rosterBare,calls,contracts,keyRec,phoneIdx,ctiNames,tzNames,persons,minDay:days[0]||'',maxDay:days[days.length-1]||'',unmatched,warns};
+  tzModel={rosterBare,calls,contracts,keyRec,phoneIdx,tzNames,persons,minDay:days[0]||'',maxDay:days[days.length-1]||'',unmatched,warns};
   return tzModel;
 }
 
@@ -13156,7 +13163,7 @@ function tzBlankAgg(){return {careTry:0,careConn:0,careValid:0,careDur:0,careCus
 function tzAggByDate(s,e){
   const sel=tzSelSet(),map=new Map();
   const g=d=>{if(!map.has(d))map.set(d,tzBlankAgg());return map.get(d);};
-  for(const c of tzModel.calls){if(c.cat==='none'||!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(tzBare(c.name)))continue;
+  for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(tzBare(c.name)))continue;
     const d=g(c.day);
     if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.conn)d.careDur+=c.dur;d.careCust.add(c.phone);}
     else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;}
@@ -13168,7 +13175,7 @@ function tzAggByDate(s,e){
 function tzAggByPerson(s,e){
   const sel=tzSelSet(),map=new Map();
   const g=n=>{if(!map.has(n))map.set(n,tzBlankAgg());return map.get(n);};
-  for(const c of tzModel.calls){if(c.cat==='none'||!c.day||c.day<s||c.day>e)continue;const nm=tzBare(c.name);if(sel&&!sel.has(nm))continue;
+  for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;const nm=tzBare(c.name);if(sel&&!sel.has(nm))continue;
     const d=g(nm||'(미상)');
     if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.conn)d.careDur+=c.dur;d.careCust.add(c.phone);}
     else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;}
