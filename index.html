@@ -13350,10 +13350,11 @@ function tzInitDateRange(reset){
   const s=document.getElementById('tzDateStart'),e=document.getElementById('tzDateEnd');
   const today=new Date();const p=n=>String(n).padStart(2,'0');
   const todayStr=`${today.getFullYear()}-${p(today.getMonth()+1)}-${p(today.getDate())}`;
-  const lo=tzModel.minDay||`${today.getFullYear()}-01-01`,hi=(tzModel.maxDay&&tzModel.maxDay>todayStr)?tzModel.maxDay:todayStr;
+  const DEF_START='2026-06-01';                                                // 기본 시작일 = 2026-06-01
+  const lo=(tzModel.minDay&&tzModel.minDay<DEF_START)?tzModel.minDay:DEF_START,hi=(tzModel.maxDay&&tzModel.maxDay>todayStr)?tzModel.maxDay:todayStr;
   s.min=lo;e.min=lo;s.max=hi;e.max=hi;
-  if(reset||!s.value)s.value=tzModel.minDay||lo;
-  if(reset||!e.value)e.value=tzModel.maxDay||todayStr;
+  if(reset||!s.value)s.value=DEF_START;
+  if(reset||!e.value)e.value=todayStr;
 }
 function tzQuickRange(kind){
   if(!tzModel)return;
