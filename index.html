@@ -13132,12 +13132,17 @@ function tzCompute(){
     const keys=phoneIdx.get(c.phone);
     if(!keys||!keys.length){c.cat='none';c.mk=null;unmatched++;continue;}
     let cat=null,mk=null;
-    for(const k of keys){const od=contractOrder.get(k);if(od&&c.day>=od){cat='care';mk=k;break;}}   // cat1 우선
-    if(!cat){
-      let best=null;
-      for(const k of keys){const rec=keyRec.get(k);if(rec&&rec.dist&&rec.dist<=c.day){if(!best||rec.dist>best.dist)best=rec;}}
-      if(!best)for(const k of keys){const rec=keyRec.get(k);if(rec){best=rec;break;}}
-      if(best){cat=(best.dist===c.day&&!best.recall)?'fresh':'old';mk=best.k;}
+    // 매칭 DB 중 콜일 이하 분배일 최댓값(동률이면 비재콜 우선)
+    let best=null;
+    for(const k of keys){const rec=keyRec.get(k);if(rec&&rec.dist&&rec.dist<=c.day){if(!best||rec.dist>best.dist||(rec.dist===best.dist&&best.recall&&!rec.recall))best=rec;}}
+    if(!best)for(const k of keys){const rec=keyRec.get(k);if(rec){best=rec;break;}}
+    // ① 당일 분배(분배일==콜일)면 같은 날 오더여도 '계약을 위한 sales 콜'=신규 당일(fresh), 케어보다 우선
+    if(best&&best.dist===c.day&&!best.recall){cat='fresh';mk=best.k;}
+    else{
+      // ② 실계약 고객 & 콜일≥오더일 → 케어(오더일 이후 사후 통화)
+      let ok=null;for(const k of keys){const od=contractOrder.get(k);if(od&&c.day>=od){ok=k;break;}}
+      if(ok){cat='care';mk=ok;}
+      else if(best){cat='old';mk=best.k;}   // ③ 이전 분배 또는 재콜
       else{cat='none';unmatched++;}
     }
     c.cat=cat;c.mk=mk;   // mk=매칭된 DB 고객키(distinct DB수 집계용)
