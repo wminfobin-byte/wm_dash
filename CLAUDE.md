@@ -152,3 +152,16 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 - **화면 레이아웃**: 기간/빠른기간 필터 + KPI 4종(선택 언어 반영) + 시간대별 계약률 차트(영어vs제2, Chart.js) + **전체/영어/제2외국어** 3섹션. 각 섹션 = ① `tbSlotTable` 시간대 요약표(slot×지표) + ② **`tbSlotDateBlocks` 시간대별 분배일 추이** — *시간대를 1차 기준*으로 분배일을 **시간순(오래된→최신)** 나열 + ③ **개인별 성과**(`tbPersonTable`, 코디별·계약률 내림차순, 계약률 옆 `펼치기`로 코디×계열 0~5/미상 분해 `tbPersonDetail`). 코디·계열 귀속=매칭된 DB(`contRecs.name/sr`). 개인별 엑셀(`tbDownloadPersonExcel`)=영어·제2외국어 2시트. 스타일은 `tbEnsureStyle`로 1회 주입.
 - **구버전 db 재파싱**: 계열(sr) 없이 파싱된 옛 db 파일은 `tbFileStale`로 감지 → 폴더 재스캔(`tbScanFolder`/자동) 시 같은 fileHash라도 삭제 후 재파싱(공용폴더 새로고침만으로 계열 채움). 폴더 없는 PC는 싱크로 전파.
 - **핵심 함수**: `tbCompute`(dbRecs/contRecs/dbKey 빌드), `tbAggBy`(slot 또는 slot|day 키 집계), `tbSlotTable`/`tbSlotDateBlocks`/`tbLangSection`/`tbRenderKpi`/`tbRenderSlotChart`/`tbRender`, `tbScanFolder`/`tbAutoScanOnShow`/`tbConnectFolder`(sp 폴더 공유), `tbOnShow`/`tbGenerate`/`tbReady`(db 1개 이상). 탭 등록=`switchPage` 훅 + `AUTH_ACCOUNTS` master tabs + 헤더 `headerRight-timeboard-perf`.
+
+## 톡이즈 성과 탭 (tz* 네임스페이스)
+
+타임보드성과 옆에 배치. **CTI(걸은전화상세) 통화 데이터 × 톡이즈 DB/계약**을 매칭해 **톡이즈 계약 하락 원인**(영업코디가 기존계약자 케어통화=학습케어에 시간을 뺏겨 신규 컨택이 떨어지는지)을 데이터로 검증. 별도 IndexedDB(`talkisPerfDashboard` v1, `files` 스토어). **공용폴더는 sp/tb와 같은 핸들 재사용**(`spDirHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tz` 독립 슬라이스, v9~, 헤더 `syncBtn9`).
+
+- **업로드 4종**: `cti`(걸은전화상세, **수동 업로드만**·누적), `db`(DB수·고객관리, 공용폴더·누적), `contDaily`(계약·신청자관리 일마감, 공용폴더·누적), `attend`(명단, 최신 1건). 폴더 스캔 WANT=db/contDaily/attend(CTI 제외).
+- **톡이즈 판별**: 명단 담당=톡이즈(또는 그룹 톡이즈·센터 송내)로 roster 추출(`tzBuildRoster`/`tzIsTalkis`) + CTI 상담원명 집합으로 보강 → `tzNames`. DB OB명·계약 담당자를 `tzBare`(괄호 제거)로 정규화해 `tzNames` 매칭되는 것만 톡이즈로 집계.
+- **CTI 컬럼**(시트마다 헤더행 위치 다름 — '수신자번호'/'상담원명' 포함행 자동 탐지, 1시트는 1행 검색조건 가비지·2행 헤더, 2시트부터 1행 헤더): 상담원명 C(2)·일자 E(4)·통화시간 H(7)·수신자번호 K(10,고객전화)·상태 L(11). 이름은 `(R_송내)` 없이 이름만 → DB/계약과 `tzBare`로 정규화 매칭.
+- **콜 지표**: 시도수=전체, 연결수=상태 'Out 연결', 유효통화수=연결 & 통화시간 ≥ 90초(`TZ_VALID_SEC`). 통화시간 `tzDurSec`(HH:MM:SS→초), 전화 `tzNormPhone`(숫자만·10자리 0보정, 양쪽 동일).
+- **매칭·분류(`tzCompute`, 콜 1건 단위)**: CTI 전화 K ↔ 고객관리 전화 M/N/O(12/13/14) 조인(`phoneIdx`). 콜일(E) vs 그 고객 DB 분배일(I)/오더일(X)로 → **cat1 care**(실계약 고객[신청자관리·반품일 없음] & 콜일≥오더일, 최우선) / **cat2 fresh**(콜일==분배일 & **비재콜**) / **cat3 old**(콜일>분배일 또는 **재콜 DB는 무조건 이전**). 미매칭 전화=제외(경고). **재콜 판정: 콜=고객관리 P열(DB정보) 재콜이면 무조건 old**.
+- **계약수(신청일 기준, DB정보 무시)**: 신청자관리 신청일==그날 발생 계약. 당일계약(cat2)=분배일==신청일 **AND 신청자관리 R열(17) 코드가 재콜 아님**, 그 외/재콜=이전계약(cat3). 즉 통화는 재콜이면 무조건 이전, 계약은 신청일 기준이되 **신청자관리 R열 재콜 코드면 이전계약**.
+- **화면**: 글로벌 필터 = 기간(start/end)+빠른기간 + **코디 멀티체크**(`tzCodiPanel`, 전체선택/해제, 콜·계약 양쪽에 적용). KPI 6종(케어통화/케어시간/신규시도/신규유효/신규계약/유효→계약). 일자별 스택 차트(케어·신규당일·신규이전재콜 막대 + 신규계약 선, 이중축). 섹션: ① 케어통화(일자별 시도/연결/유효/총통화시간/대상고객수) ② 신규 당일분배 ③ 신규 이전·재콜 ④ 신규 합계(②+③) ⑤ 개인별 성과(코디별 누적). y축=날짜.
+- **핵심 함수**: `tzCompute`(roster/keyRec/phoneIdx/contracts/콜분류), `tzAggByDate`/`tzAggByPerson`/`tzSumAgg`(집계), `tzCareTable`/`tzNewTable`(fresh/old/new)/`tzPersonTable`/`tzRenderChart`/`tzRenderKpi`/`tzRender`, `tzScanFolder`/`tzAutoScanOnShow`/`tzConnectFolder`(sp 폴더 공유), `tzOnShow`/`tzGenerate`/`tzReady`(cti+db 필요). 탭 등록=`switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin·admin) + 헤더 `headerRight-talkis-perf`.
