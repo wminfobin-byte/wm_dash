@@ -13183,8 +13183,8 @@ function tzAggByPerson(s,e){
   for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;const nm=tzBare(c.name);if(sel&&!sel.has(nm))continue;
     const d=g(nm||'(미상)');
     if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.conn)d.careDur+=c.dur;if(c.valid)d.careCust.add(c.phone);}
-    else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;}
-    else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;}
+    else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;if(c.mk)d.fDb.add(c.mk);}
+    else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;if(c.mk)d.oDb.add(c.mk);}
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.codi||'(미상)');if(ct.daily)d.fCont++;else d.oCont++;}
   return map;
