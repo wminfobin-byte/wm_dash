@@ -13314,10 +13314,10 @@ function tzRenderChart(map){
   const cont=days.map(d=>map.get(d).fCont+map.get(d).oCont);
   if(tzChart){tzChart.destroy();tzChart=null;}
   tzChart=new Chart(cv,{data:{labels,datasets:[
-    {type:'bar',label:'케어통화 시도(cat1)',data:care,backgroundColor:'#8b5cf6',stack:'s',yAxisID:'y'},
-    {type:'bar',label:'신규 당일분배 시도(cat2)',data:fresh,backgroundColor:'#22c55e',stack:'s',yAxisID:'y'},
-    {type:'bar',label:'신규 이전·재콜 시도(cat3)',data:old,backgroundColor:'#f59e0b',stack:'s',yAxisID:'y'},
-    {type:'line',label:'신규 계약수',data:cont,borderColor:'#ef4444',backgroundColor:'#ef4444',borderWidth:2,tension:.3,yAxisID:'y1',pointRadius:3}
+    {type:'line',label:'신규 계약수',data:cont,borderColor:'#ef4444',backgroundColor:'#ef4444',borderWidth:2.5,tension:.3,yAxisID:'y1',pointRadius:3.5,order:0},
+    {type:'bar',label:'케어통화 시도(cat1)',data:care,backgroundColor:'#8b5cf6',stack:'s',yAxisID:'y',order:1},
+    {type:'bar',label:'신규 당일분배 시도(cat2)',data:fresh,backgroundColor:'#22c55e',stack:'s',yAxisID:'y',order:2},
+    {type:'bar',label:'신규 이전·재콜 시도(cat3)',data:old,backgroundColor:'#f59e0b',stack:'s',yAxisID:'y',order:3}
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'}},
     scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,position:'left',title:{display:true,text:'통화 시도수'}},y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'신규 계약수'}}}}});
 }
