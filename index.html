@@ -13211,8 +13211,8 @@ function tzCareTable(map){
   for(const day of days){const g=map.get(day);if(!g.careTry)continue;tot.t+=g.careTry;tot.c+=g.careConn;tot.v+=g.careValid;tot.dur+=g.careDur;g.careCust.forEach(x=>tot.cust.add(x));
     body+=`<tr><td class="tz-lab">${tzDayLabel(day)}</td><td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td class="tz-rate2">${tzPct(g.careConn,g.careTry)}</td><td>${tzC(g.careValid)}</td><td>${tzFmtDur(g.careDur)}</td><td>${tzC(g.careCust.size)}</td></tr>`;}
   if(!body)return '<div class="tz-empty">케어통화 데이터가 없습니다.</div>';
-  body+=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.t)}</td><td>${tzC(tot.c)}</td><td class="tz-rate2">${tzPct(tot.c,tot.t)}</td><td>${tzC(tot.v)}</td><td>${tzFmtDur(tot.dur)}</td><td>${tzC(tot.cust.size)}</td></tr>`;
-  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>일자</th><th>시도수</th><th>연결수</th><th>연결률</th><th>유효통화</th><th>총 통화시간</th><th>대상고객수</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const totRow=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.t)}</td><td>${tzC(tot.c)}</td><td class="tz-rate2">${tzPct(tot.c,tot.t)}</td><td>${tzC(tot.v)}</td><td>${tzFmtDur(tot.dur)}</td><td>${tzC(tot.cust.size)}</td></tr>`;
+  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>일자</th><th>시도수</th><th>연결수</th><th>연결률</th><th>유효통화</th><th>총 통화시간</th><th>대상고객수</th></tr></thead><tbody>${totRow}${body}</tbody></table></div>`;
 }
 // kind: 'fresh'|'old'|'new'
 function tzAvg(t,db){return db?(t/db).toFixed(1):'-';}   // 평균 시도수 = 시도수 / DB수
@@ -13224,8 +13224,8 @@ function tzNewTable(map,kind){
   for(const day of days){const g=pick(map.get(day));if(!g.t&&!g.ct&&!g.db)continue;tot.t+=g.t;tot.c+=g.c;tot.v+=g.v;tot.ct+=g.ct;tot.db+=g.db;
     body+=`<tr><td class="tz-lab">${tzDayLabel(day)}</td><td>${tzC(g.db)}</td><td>${tzC(g.t)}</td><td class="tz-avg">${tzAvg(g.t,g.db)}</td><td>${tzC(g.c)}</td><td class="tz-rate2">${tzPct(g.c,g.t)}</td><td>${tzC(g.v)}</td><td class="tz-rate2">${tzPct(g.v,g.t)}</td><td>${tzC(g.ct)}</td><td class="tz-rate">${tzPct(g.ct,g.v)}</td></tr>`;}
   if(!body)return '<div class="tz-empty">데이터가 없습니다.</div>';
-  body+=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.db)}</td><td>${tzC(tot.t)}</td><td class="tz-avg">${tzAvg(tot.t,tot.db)}</td><td>${tzC(tot.c)}</td><td class="tz-rate2">${tzPct(tot.c,tot.t)}</td><td>${tzC(tot.v)}</td><td class="tz-rate2">${tzPct(tot.v,tot.t)}</td><td>${tzC(tot.ct)}</td><td class="tz-rate">${tzPct(tot.ct,tot.v)}</td></tr>`;
-  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>일자</th><th>DB수</th><th>시도수</th><th>평균시도수</th><th>연결수</th><th>연결률</th><th>유효통화</th><th>유효율</th><th>계약수</th><th>유효→계약</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const totRow=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.db)}</td><td>${tzC(tot.t)}</td><td class="tz-avg">${tzAvg(tot.t,tot.db)}</td><td>${tzC(tot.c)}</td><td class="tz-rate2">${tzPct(tot.c,tot.t)}</td><td>${tzC(tot.v)}</td><td class="tz-rate2">${tzPct(tot.v,tot.t)}</td><td>${tzC(tot.ct)}</td><td class="tz-rate">${tzPct(tot.ct,tot.v)}</td></tr>`;
+  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>일자</th><th>DB수</th><th>시도수</th><th>평균시도수</th><th>연결수</th><th>연결률</th><th>유효통화</th><th>유효율</th><th>계약수</th><th>유효→계약</th></tr></thead><tbody>${totRow}${body}</tbody></table></div>`;
 }
 function tzPersonTable(s,e){
   const map=tzAggByPerson(s,e);
@@ -13236,8 +13236,8 @@ function tzPersonTable(s,e){
   for(const {name,g} of rows){const nt=g.fTry+g.oTry,nc=g.fConn+g.oConn,nv=g.fValid+g.oValid,nct=g.fCont+g.oCont;
     tot.careTry+=g.careTry;tot.careConn+=g.careConn;tot.careDur+=g.careDur;tot.nt+=nt;tot.nc+=nc;tot.nv+=nv;tot.nct+=nct;
     body+=`<tr><td class="tz-lab">${name}</td><td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td>${tzFmtDur(g.careDur)}</td><td>${tzC(nt)}</td><td>${tzC(nc)}</td><td>${tzC(nv)}</td><td>${tzC(nct)}</td><td class="tz-rate">${tzPct(nct,nv)}</td></tr>`;}
-  body+=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.careTry)}</td><td>${tzC(tot.careConn)}</td><td>${tzFmtDur(tot.careDur)}</td><td>${tzC(tot.nt)}</td><td>${tzC(tot.nc)}</td><td>${tzC(tot.nv)}</td><td>${tzC(tot.nct)}</td><td class="tz-rate">${tzPct(tot.nct,tot.nv)}</td></tr>`;
-  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>코디</th><th>케어시도</th><th>케어연결</th><th>케어시간</th><th>신규시도</th><th>신규연결</th><th>신규유효</th><th>신규계약</th><th>유효→계약</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const totRow=`<tr class="tz-total"><td class="tz-lab">합계</td><td>${tzC(tot.careTry)}</td><td>${tzC(tot.careConn)}</td><td>${tzFmtDur(tot.careDur)}</td><td>${tzC(tot.nt)}</td><td>${tzC(tot.nc)}</td><td>${tzC(tot.nv)}</td><td>${tzC(tot.nct)}</td><td class="tz-rate">${tzPct(tot.nct,tot.nv)}</td></tr>`;
+  return `<div class="tz-tblwrap"><table class="tz-tbl"><thead><tr><th>코디</th><th>케어시도</th><th>케어연결</th><th>케어시간</th><th>신규시도</th><th>신규연결</th><th>신규유효</th><th>신규계약</th><th>유효→계약</th></tr></thead><tbody>${totRow}${body}</tbody></table></div>`;
 }
 function tzRenderChart(map){
   const cv=document.getElementById('tzChart');if(!cv||typeof Chart==='undefined')return;
@@ -13408,18 +13408,23 @@ async function tzScanFolder(opts={}){
   tzScanBusy=true;tzUpdateDirStatus('busy');if(!opts.fromShow)tzSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);   // CTI는 수동 업로드
   const tasks=[];
-  async function walk(dir,folderName,depth,inside){
+  // hint = 상위 타입 폴더(예: '1-5 신청자관리(일마감)'=contDaily)에서 상속받은 타입.
+  // 월별 하위폴더(2026-06 등)에선 파일명만으로 판별하다 6자리 날짜를 contCum으로 오판 → 상위 hint로 교정.
+  async function walk(dir,folderName,depth,inside,hint){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
-        const type=spDetectType(folderName,entry.name);
+        let type=spDetectType(folderName,entry.name);
+        if(!WANT.has(type)&&hint&&WANT.has(hint))type=hint;   // 파일명 판별이 원하는 타입이 아니면 상위 폴더 타입 상속
         if(WANT.has(type))tasks.push({type,entry});
       }else if(entry.kind==='directory'&&depth<3){
-        if(inside||WANT.has(spDetectType(entry.name,'')))try{await walk(entry,entry.name,depth+1,true);}catch(e){}
+        const dt=spDetectType(entry.name,'');
+        const nextHint=(dt==='db'||dt==='contDaily'||dt==='contCum'||dt==='attend')?dt:hint;   // 하위 월별폴더는 상위 hint 유지
+        if(inside||WANT.has(dt))try{await walk(entry,entry.name,depth+1,true,nextHint);}catch(e){}
       }
     }
   }
-  try{await walk(h,'',0,false);}catch(e){console.error('톡이즈 폴더 스캔',e);tzScanBusy=false;tzUpdateDirStatus('error');return;}
+  try{await walk(h,'',0,false,null);}catch(e){console.error('톡이즈 폴더 스캔',e);tzScanBusy=false;tzUpdateDirStatus('error');return;}
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;
@@ -13477,7 +13482,7 @@ function tzEnsureStyle(){
   #page-talkis-perf .tz-tbl .tz-rate2{color:#64748b}
   #page-talkis-perf .tz-tbl .tz-avg{font-weight:800;color:#7c3aed;background:#faf5ff}
   #page-talkis-perf .tz-tbl tr.tz-total .tz-avg{background:#efe7ff}
-  #page-talkis-perf .tz-tbl tr.tz-total td{background:#eef3ff;color:#1e293b;font-weight:800;border-top:2px solid #c7d4f5;border-bottom:none}
+  #page-talkis-perf .tz-tbl tr.tz-total td{background:#eef3ff;color:#1e293b;font-weight:800;border-top:none;border-bottom:2px solid #c7d4f5}
   #page-talkis-perf .tz-tbl tr.tz-total:hover td{background:#eef3ff}
   #page-talkis-perf .tz-empty{padding:26px;text-align:center;color:#94a3b8;font-size:13px}
   #page-talkis-perf .tz-codi-wrap{position:relative;display:inline-block}
