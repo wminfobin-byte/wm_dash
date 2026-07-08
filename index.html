@@ -1919,6 +1919,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div class="tb-langseg" id="tbLangSeg">
         <button class="active" data-tblang="전체" onclick="tbSetLang('전체')">전체</button>
         <button data-tblang="영어" onclick="tbSetLang('영어')">영어</button>
+        <button data-tblang="더위크" onclick="tbSetLang('더위크')">더위크</button>
+        <button data-tblang="결합" onclick="tbSetLang('결합')">결합</button>
         <button data-tblang="제2외국어" onclick="tbSetLang('제2외국어')">제2외국어</button>
       </div>
       <div id="tbContent"></div>
@@ -12458,6 +12460,7 @@ function tbIsTb(s){return /naver_tb/i.test(String(s||''));}
 function tbIsAdmin(name){return /군자|관리자/.test(String(name||''));}
 function tbSlot(s){const p=String(s||'').trim().toLowerCase().split('_');const last=p[p.length-1];return last||'(미상)';}
 function tbLang(s){return /japer|cnper|esper|frper/i.test(String(s||''))?'제2외국어':'영어';}
+function tbEngSub(s){return /tw2/i.test(String(s||''))?'더위크':'결합';}   // 영어 세부: 매체코드에 tw2 포함→더위크, 그 외→결합
 function tbSlotMin(slot){const m=String(slot).match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);if(!m)return 99999;let h=+m[1];const mm=m[2]?+m[2]:0;const ap=(m[3]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;return h*60+mm;}
 
 // ── 인제스트 (수동 업로드·폴더 스캔 공통) ──
@@ -12505,7 +12508,8 @@ function tbCompute(){
     if(/callback|tv_b/i.test(r.mc))continue;            // 매체 callback/tv_b 제외
     if(!tbIsTb(r.mc))continue;                          // 타임보드 아님 제외
     const ent=spCanon(roster,r.ob);
-    const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang:tbLang(r.mc),sr:(r.sr==null?-1:r.sr)};
+    const lang=tbLang(r.mc);
+    const rec={k:r.k,name:ent?ent.nm:r.ob,ctr:ent?ent.ctr:'',day:r.d,slot:tbSlot(r.mc),lang,sub:(lang==='영어'?tbEngSub(r.mc):''),sr:(r.sr==null?-1:r.sr),left:!ent};  // left=현재 명단에 없음(퇴사자)
     dbRecs.push(rec); dbKey.set(r.k,rec);
   }
   // 계약: 일마감 고객키 dedup → '집계된 타임보드 DB'와 고객키 매칭되는 것만(재콜 자동 제외)
@@ -12516,20 +12520,27 @@ function tbCompute(){
     if(!r.k||seenC.has(r.k))continue; seenC.add(r.k);
     const db=dbKey.get(r.k);
     if(!db){unmatched++;continue;}                      // 집계된 타임보드 DB와 매칭되는 것만
-    contRecs.push({k:r.k,name:db.name,ctr:db.ctr,day:db.day,slot:db.slot,lang:db.lang,sr:db.sr,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정. 코디·계열 귀속=매칭된 DB
+    contRecs.push({k:r.k,name:db.name,ctr:db.ctr,day:db.day,slot:db.slot,lang:db.lang,sub:db.sub,sr:db.sr,isDaily:(db.day===r.d)}); // r.d=신청일 → 당일 여부만 판정. 코디·계열 귀속=매칭된 DB
   }
   const days=[]; dbRecs.forEach(r=>{if(r.day)days.push(r.day);}); contRecs.forEach(r=>{if(r.day)days.push(r.day);}); days.sort();
   const slots=Array.from(new Set([...dbRecs.map(r=>r.slot),...contRecs.map(r=>r.slot)])).sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
+  const leftNames=new Set();dbRecs.forEach(r=>{if(r.left)leftNames.add(r.name);});   // 퇴사자(현재 명단에 없는 코디) 이름 집합
   const warns=[];
   if(!dbRecs.length)warns.push('타임보드 DB(매체코드 naver_tb)가 0건입니다. 공용폴더·파일을 확인하세요.');
   if(!tbFilesByType('contDaily').length)warns.push('계약(일마감) 파일이 없어 계약수가 0으로 표시됩니다.');
-  tbModel={roster,dbRecs,contRecs,minDay:days[0]||'',maxDay:days[days.length-1]||'',slots,unmatched,warns};
+  tbModel={roster,dbRecs,contRecs,minDay:days[0]||'',maxDay:days[days.length-1]||'',slots,unmatched,warns,leftNames};
   return tbModel;
 }
 
 // ── 필터 / 집계 헬퍼 ──
 function tbRangeDays(){const s=document.getElementById('tbDateStart').value,e=document.getElementById('tbDateEnd').value;return [s||'0000-00-00',e||'9999-99-99'];}
-function tbInRange(r,lang,s,e){return r.day>=s&&r.day<=e&&(lang==='전체'||r.lang===lang);}
+function tbInRange(r,lang,s,e){
+  if(r.day<s||r.day>e)return false;
+  if(lang==='전체')return true;
+  if(lang==='더위크')return r.lang==='영어'&&r.sub==='더위크';
+  if(lang==='결합')return r.lang==='영어'&&r.sub==='결합';
+  return r.lang===lang;   // '영어'(더위크+결합) 또는 '제2외국어'
+}
 function tbAggBy(keyFn,lang,s,e){
   const map=new Map();
   const get=k=>{if(!map.has(k))map.set(k,{db:0,cont:0,daily:0});return map.get(k);};
@@ -12618,9 +12629,12 @@ function tbTogglePersonDetail(idx){
   if(!tr)return;const open=tr.classList.toggle('hidden')===false;
   if(btn)btn.textContent=open?'접기 ▲':'펼치기 ▼';
 }
+function tbIsLeft(name){return !!(tbModel&&tbModel.leftNames&&tbModel.leftNames.has(name));}
 function tbPersonRowHtml(name,g,idx,lang,s,e){
   const disp=name.replace(/^\(.*?\)/,''),prev=g.cont-g.daily,c=v=>v.toLocaleString();
-  const row=`<tr><td class="tb-lab">${disp}</td>`+
+  const left=tbIsLeft(name);
+  const lab=left?`${disp}<span class="tb-left-badge">퇴사</span>`:disp;
+  const row=`<tr${left?' class="tb-left"':''}><td class="tb-lab">${lab}</td>`+
     `<td>${c(g.db)}</td><td>${c(g.cont)}</td>`+
     `<td class="tb-rate"><span>${tbPct(g.cont,g.db)}</span><button class="tb-expand" id="tb-pb-${idx}" onclick="tbTogglePersonDetail('${idx}')">펼치기 ▼</button></td>`+
     `<td>${c(g.daily)}</td><td class="tb-rate2">${tbPct(g.daily,g.db)}</td>`+
@@ -12637,7 +12651,7 @@ function tbPersonTable(lang,s,e){
   return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>코디</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function tbLangSection(lang,s,e){
-  const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','제2외국어':'🌏 제2외국어'};
+  const titleMap={'전체':'🗂️ 전체','영어':'🇬🇧 영어','더위크':'📘 더위크','결합':'📗 결합','제2외국어':'🌏 제2외국어'};
   return `<section class="tb-sec"><h3 class="tb-sec-h">${titleMap[lang]} · 시간대별 타임보드 성과</h3>`+
     `<div class="tb-sub-h">시간대 요약</div>${tbSlotTable(lang,s,e)}`+
     `<div class="tb-sub-h">시간대별 분배일 추이 <span class="tb-sub-s">(위→아래 = 분배일 경과 · DB·계약 전환 추적)</span></div>${tbSlotDateBlocks(lang,s,e)}`+
@@ -12672,7 +12686,7 @@ async function tbDownloadPersonExcel(){
     rows.forEach(({name})=>{
       const {tot,ser}=tbPersonSeriesAgg(name,lang,s,e);
       const cells=[tot,...ser];
-      const row=[name.replace(/^\(.*?\)/,'')];
+      const row=[name.replace(/^\(.*?\)/,'')+(tbIsLeft(name)?' (퇴사)':'')];
       cells.forEach((c,gi)=>{gtot[gi].db+=c.db;gtot[gi].cont+=c.cont;row.push(c.db,c.cont,c.db?c.cont/c.db:'');});
       aoa.push(row);
     });
@@ -12690,15 +12704,18 @@ async function tbDownloadPersonExcel(){
     for(let g=0;g<NG;g++){const base=1+g*3;const a=XLSX.utils.encode_cell({r:3,c:base});if(ws[a])ws[a].s={font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'맑은 고딕'},fill:{fgColor:{rgb:GCOLOR[g]}},alignment:{horizontal:'center',vertical:'center'},border:bd};}
     for(let c=1;c<NCOL;c++){const a=XLSX.utils.encode_cell({r:4,c});if(ws[a])ws[a].s=hdrS;}
     const lastR=5+rows.length;
-    for(let r=5;r<=lastR;r++){const isTot=r===lastR;
+    for(let r=5;r<=lastR;r++){const isTot=r===lastR;const isLeft=!isTot&&tbIsLeft(rows[r-5].name);   // 퇴사자 회색 처리
       for(let c=0;c<NCOL;c++){const a=XLSX.utils.encode_cell({r,c});if(!ws[a])continue;
-        ws[a].s={font:{sz:9,name:'맑은 고딕',bold:isTot||c===0},alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};
+        const f={sz:9,name:'맑은 고딕',bold:isTot||c===0};if(isLeft)f.color={rgb:'94A3B8'};
+        ws[a].s={font:f,alignment:{horizontal:c===0?'left':'center',vertical:'center'},border:bd};
         if(isTot)ws[a].s.fill={fgColor:{rgb:'F0F1F5'}};
-        if(c>0&&(c-1)%3===2){ws[a].z='0.0%';ws[a].s.font={sz:9,bold:true,name:'맑은 고딕',color:{rgb:'1D4ED8'}};}}  // 계약률 열
+        if(c>0&&(c-1)%3===2){ws[a].z='0.0%';ws[a].s.font={sz:9,bold:true,name:'맑은 고딕',color:{rgb:isLeft?'94A3B8':'1D4ED8'}};}}  // 계약률 열
     }
     return ws;
   };
   XLSX.utils.book_append_sheet(wb,buildSheet('영어','WM 타임보드 개인별×계열 성과 — 영어'),'영어');
+  XLSX.utils.book_append_sheet(wb,buildSheet('더위크','WM 타임보드 개인별×계열 성과 — 영어(더위크)'),'더위크');
+  XLSX.utils.book_append_sheet(wb,buildSheet('결합','WM 타임보드 개인별×계열 성과 — 영어(결합)'),'결합');
   XLSX.utils.book_append_sheet(wb,buildSheet('제2외국어','WM 타임보드 개인별×계열 성과 — 제2외국어'),'제2외국어');
   const fname=`WM_타임보드_개인별성과_${(sLab||'').replace(/-/g,'')}_${(eLab||'').replace(/-/g,'')}.xlsx`;
   try{
@@ -12982,7 +12999,11 @@ function tbEnsureStyle(){
   #page-timeboard-perf .tb-pd-h{font-size:12px;font-weight:800;color:#475569;margin-bottom:8px}
   #page-timeboard-perf .tb-sr-tbl{box-shadow:none}
   #page-timeboard-perf .tb-sr-tbl thead th{background:#eef2f7;color:#64748b}
-  #page-timeboard-perf .tb-sr-chip{display:inline-block;min-width:46px;padding:2px 9px;font-size:11px;font-weight:700;color:#fff;border-radius:999px;text-align:center}`;
+  #page-timeboard-perf .tb-sr-chip{display:inline-block;min-width:46px;padding:2px 9px;font-size:11px;font-weight:700;color:#fff;border-radius:999px;text-align:center}
+  #page-timeboard-perf .tb-tbl tr.tb-left td{color:#94a3b8}
+  #page-timeboard-perf .tb-tbl tr.tb-left .tb-lab{color:#94a3b8;font-weight:600}
+  #page-timeboard-perf .tb-tbl tr.tb-left .tb-rate{color:#94a3b8}
+  #page-timeboard-perf .tb-left-badge{display:inline-block;margin-left:6px;padding:1px 7px;font-size:10px;font-weight:700;color:#64748b;background:#e2e8f0;border-radius:999px;vertical-align:middle}`;
   document.head.appendChild(st);
 }
 
