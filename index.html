@@ -13382,18 +13382,18 @@ function tzRender(){
   const map=tzAggByDate(s,e);
   document.getElementById('tzWarn').textContent=(tzModel.warns||[]).join(' · ');
   tzRenderKpi(tzAggAll(s,e));
-  const PNG='<button class="tz-png tz-nocap" onclick="tzSectionPng(this)" title="이 섹션 PNG 저장">⬇ PNG</button>';
-  let html=`<section class="tz-sec"><h3 class="tz-sec-h">📊 일자별 통화 구성 — 케어 vs 신규 (막대) · 신규 계약수 (선)${PNG}</h3><div class="tz-chartseg" id="tzChartSeg"><button data-mode="valid" class="${tzChartMode==='valid'?'active':''}" onclick="tzSetChartMode('valid')">유효통화 (≥1분30초)</button><button data-mode="c5" class="${tzChartMode==='c5'?'active':''}" onclick="tzSetChartMode('c5')">5분 이상 (≥5분)</button></div><div style="height:300px"><canvas id="tzChart"></canvas></div><div class="tz-note">가설 검증: 케어통화(보라)가 늘수록 신규 컨택(초록·주황)이 줄고 계약(빨강 선)이 함께 떨어지는지 확인하세요.</div></section>`;
-  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🎧 ① 기존 계약자 케어통화 <span class="tz-sub-s">실계약 고객 · 오더일 이후 통화</span>${PNG}</h3>${tzCareTable(map)}</section>`;
-  html+=`<section class="tz-sec"><h3 class="tz-sec-h">Σ ② 통화 시도 합계 <span class="tz-sub-s">당일+이전</span>${PNG}</h3>${tzNewTable(map,'new')}</section>`;
-  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🟢 2-1 당일 DB 시도 현황${PNG}</h3>${tzNewTable(map,'fresh')}</section>`;
-  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🟠 2-2 이전 DB 시도 현황${PNG}</h3>${tzNewTable(map,'old')}</section>`;
-  html+=`<section class="tz-sec"><h3 class="tz-sec-h">👤 개인별 성과 <span class="tz-sub-s">기간 누적 · 신규시도 내림차순</span>${PNG}</h3>${tzPersonTable(s,e)}</section>`;
+  const PNG=nm=>`<button class="tz-png tz-nocap" onclick="tzSectionPng(this,'${nm}')" title="이 섹션 PNG 저장">⬇ PNG</button>`;
+  let html=`<section class="tz-sec"><h3 class="tz-sec-h">📊 일자별 통화 구성 — 케어 vs 신규 (막대) · 신규 계약수 (선)${PNG('일자별통화구성')}</h3><div class="tz-chartseg" id="tzChartSeg"><button data-mode="valid" class="${tzChartMode==='valid'?'active':''}" onclick="tzSetChartMode('valid')">유효통화 (≥1분30초)</button><button data-mode="c5" class="${tzChartMode==='c5'?'active':''}" onclick="tzSetChartMode('c5')">5분 이상 (≥5분)</button></div><div style="height:300px"><canvas id="tzChart"></canvas></div><div class="tz-note">가설 검증: 케어통화(보라)가 늘수록 신규 컨택(초록·주황)이 줄고 계약(빨강 선)이 함께 떨어지는지 확인하세요.</div></section>`;
+  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🎧 ① 기존 계약자 케어통화 <span class="tz-sub-s">실계약 고객 · 오더일 이후 통화</span>${PNG('기존계약자케어통화')}</h3>${tzCareTable(map)}</section>`;
+  html+=`<section class="tz-sec"><h3 class="tz-sec-h">Σ ② 통화 시도 합계 <span class="tz-sub-s">당일+이전</span>${PNG('통화시도합계')}</h3>${tzNewTable(map,'new')}</section>`;
+  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🟢 2-1 당일 DB 시도 현황${PNG('당일DB시도현황')}</h3>${tzNewTable(map,'fresh')}</section>`;
+  html+=`<section class="tz-sec"><h3 class="tz-sec-h">🟠 2-2 이전 DB 시도 현황${PNG('이전DB시도현황')}</h3>${tzNewTable(map,'old')}</section>`;
+  html+=`<section class="tz-sec"><h3 class="tz-sec-h">👤 개인별 성과 <span class="tz-sub-s">기간 누적 · 신규시도 내림차순</span>${PNG('개인별성과')}</h3>${tzPersonTable(s,e)}</section>`;
   document.getElementById('tzContent').innerHTML=html;
   tzRenderChart(map);
 }
-// 섹션 PNG 저장 — 가로 스크롤 표는 전체폭 펼쳐서 캡처
-async function tzSectionPng(btn){
+// 섹션 PNG 저장 — 가로 스크롤 표는 전체폭 펼쳐서 캡처. 파일명=섹션명_다운로드날짜(YYMMDD)
+async function tzSectionPng(btn,name){
   const sec=btn.closest('.tz-sec');if(!sec)return;
   if(typeof html2canvas==='undefined'){alert('html2canvas가 로드되지 않았습니다.');return;}
   const wraps=[...sec.querySelectorAll('.tz-tblwrap')];
@@ -13404,9 +13404,8 @@ async function tzSectionPng(btn){
   try{
     const fullW=Math.max(sec.scrollWidth,sec.offsetWidth);
     const canvas=await html2canvas(sec,{scale:2,backgroundColor:'#ffffff',width:fullW,windowWidth:Math.max(fullW,document.documentElement.clientWidth),ignoreElements:el=>el.classList&&el.classList.contains('tz-nocap')});
-    const [s,e]=tzRangeDays();
-    let title=(sec.querySelector('.tz-sec-h')?sec.querySelector('.tz-sec-h').textContent:'섹션').replace('⬇ PNG','').replace(/\s+/g,' ').trim().slice(0,40);
-    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=(`톡이즈_${title}_${s}~${e}`).replace(/[\/\\:*?"<>|]/g,'_')+'.png';a.click();
+    const d=new Date(),p=n=>String(n).padStart(2,'0');const ymd=`${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}`;
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`${(name||'섹션').replace(/[\/\\:*?"<>|]/g,'_')}_${ymd}.png`;a.click();
   }catch(err){console.error(err);alert('PNG 캡처 실패: '+(err.message||err));}
   finally{saved.forEach(x=>{x.w.style.overflowX=x.ov;x.w.style.width=x.wd;});btn.textContent=old;btn.disabled=false;}
 }
