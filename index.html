@@ -13123,7 +13123,8 @@ function tzCompute(){
       const isDaily=!!(rec&&rec.dist&&r.d&&rec.dist===r.d)&&!r.rc;
       contracts.push({k:r.k,codi,day:r.d,daily:isDaily,cancelled});
     }
-    if(!cancelled){const rec=keyRec.get(r.k);if(rec&&rec.order&&(!contractOrder.has(r.k)||rec.order<contractOrder.get(r.k)))contractOrder.set(r.k,rec.order);}
+    // 케어 판정용 오더일 = 신청자관리 신청일(P열, r.d). 고객관리 오더일(X)은 일부 비어/깨져 부정확 → 신청일 사용. 미취소 계약의 최초 신청일.
+    if(!cancelled&&r.d){if(!contractOrder.has(r.k)||r.d<contractOrder.get(r.k))contractOrder.set(r.k,r.d);}
   }
   // 콜 분류 (상담원명이 톡이즈 roster에 없는 콜=고객센터·매니저 등은 skip)
   let unmatched=0;
