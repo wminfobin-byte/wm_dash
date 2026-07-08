@@ -13274,8 +13274,8 @@ function tzGrpCells(m){   // DB수·시도·평균시도·연결·연결률·유
     +`<td>${tzC(m.va)}</td><td class="tz-rate2">${tzPct(m.va,m.tr)}</td>`
     +`<td>${tzC(m.ct)}</td><td class="tz-rate">${tzPct(m.ct,m.db)}</td>`;
 }
-function tzCareCells(g){   // 케어: 시도·연결·유효·5분·통화시간·유효평균(시간/유효)·5분평균(5분시간/5분)
-  return `<td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td>${tzC(g.careValid)}</td><td class="tz-c5">${tzC(g.care5||0)}</td><td>${tzFmtDur(g.careDur)}</td><td class="tz-avg">${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td>`;
+function tzCareCells(g){   // 케어: 시도·연결·유효·5분·통화시간·5분시간·유효평균(총시간/유효)·5분평균(5분시간/5분)
+  return `<td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td>${tzC(g.careValid)}</td><td class="tz-c5">${tzC(g.care5||0)}</td><td>${tzFmtDur(g.careDur)}</td><td class="tz-c5">${tzFmtDur(g.care5Dur||0)}</td><td class="tz-avg">${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td>`;
 }
 function tzFullRow(label,g,cls){
   const {f,o,t}=tzGroupsOf(g);
@@ -13285,11 +13285,11 @@ function tzSubHead(){return `<th>DB수</th><th>시도</th><th>평균시도</th><
 function tzFullHeader(firstCol){
   return `<thead>`
     +`<tr><th rowspan="2" class="tz-gh-first">${firstCol}</th>`
-    +`<th colspan="7" class="tz-gh-care">🎧 케어(기존계약자)</th>`
+    +`<th colspan="8" class="tz-gh-care">🎧 케어(기존계약자)</th>`
     +`<th colspan="9" class="tz-gh-tot">합계</th>`
     +`<th colspan="9" class="tz-gh-fresh">🟢 당일 분배</th>`
     +`<th colspan="9" class="tz-gh-old">🟠 이전·재콜</th></tr>`
-    +`<tr><th>시도</th><th>연결</th><th>유효</th><th>5분+</th><th>통화시간</th><th>유효평균</th><th>5분평균</th>${tzSubHead()}${tzSubHead()}${tzSubHead()}</tr>`
+    +`<tr><th>시도</th><th>연결</th><th>유효</th><th>5분+</th><th>통화시간</th><th>5분시간</th><th>유효평균</th><th>5분평균</th>${tzSubHead()}${tzSubHead()}${tzSubHead()}</tr>`
     +`</thead>`;
 }
 function tzAggPersonDates(name,s,e){
@@ -13334,7 +13334,7 @@ function tzPersonRowHtml(name,g,idx,s,e){
   const {f,o,t}=tzGroupsOf(g);
   const label=`<button class="tz-expand" id="tz-pb-${idx}" data-tzname="${(name||'').replace(/"/g,'&quot;')}" onclick="tzTogglePersonDetail('${idx}')">▶</button> ${name}`;
   const row=`<tr><td class="tz-lab">${label}</td>${tzCareCells(g)}${tzGrpCells(t)}${tzGrpCells(f)}${tzGrpCells(o)}</tr>`;
-  const detail=`<tr class="tz-pd hidden" id="tz-pd-${idx}"><td colspan="35"><div class="tz-pd-wrap"><div class="tz-pd-h">${name} · 일자별 추이 (오래된 → 최신)</div><div style="height:220px;margin-bottom:12px"><canvas id="tz-pchart-${idx}"></canvas></div>${tzPersonDailyTable(name,s,e)}</div></td></tr>`;
+  const detail=`<tr class="tz-pd hidden" id="tz-pd-${idx}"><td colspan="36"><div class="tz-pd-wrap"><div class="tz-pd-h">${name} · 일자별 추이 (오래된 → 최신)</div><div style="height:220px;margin-bottom:12px"><canvas id="tz-pchart-${idx}"></canvas></div>${tzPersonDailyTable(name,s,e)}</div></td></tr>`;
   return row+detail;
 }
 function tzPersonTable(s,e){
