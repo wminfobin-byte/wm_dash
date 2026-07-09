@@ -11724,20 +11724,24 @@ async function spScanFolder(opts={}){
   if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');spSetBanner('need-perm');return;}
   spScanBusy=true;spUpdateDirStatus('busy');if(!opts.fromShow)spSetBanner('busy');
   const tasks=[],skipped=[];
-  async function walk(dir,folderName,depth,inside){
+  async function walk(dir,folderName,depth,inside,hint){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
-        const type=spDetectType(folderName,entry.name);
+        let type=spDetectType(folderName,entry.name);
+        // 월별 하위폴더(2026-01 등)에선 폴더명이 타입을 안 주므로 파일명만으로 판별 →
+        // 일마감 신청자관리가 날짜 없이/6자리로 잡혀 contCum으로 오판될 수 있어 상위 타입 폴더(hint)로 교정.
+        if(hint){ if(!type)type=hint; else if((type==='contDaily'||type==='contCum')&&(hint==='contDaily'||hint==='contCum'))type=hint; }
         if(type)tasks.push({type,entry});else skipped.push({name:entry.name,folder:folderName||'(루트)'});
       }else if(entry.kind==='directory'&&depth<3){
         // 루트에선 알려진 타입 폴더만 진입(일일성과 등 무관 폴더 제외).
-        // 타입 폴더 안에 들어온 뒤엔 하위 폴더(2026-01 등 월별 폴더)도 모두 진입 → 파일명으로 타입 판별.
-        if(inside||spDetectType(entry.name,'')){try{await walk(entry,entry.name,depth+1,true);}catch(e){}}
+        // 타입 폴더 안에 들어온 뒤엔 하위 폴더(2026-01 등 월별 폴더)도 모두 진입 → 파일명+상위 hint로 타입 판별.
+        const dt=spDetectType(entry.name,'');
+        if(inside||dt){try{await walk(entry,entry.name,depth+1,true,dt||hint);}catch(e){}}
       }
     }
   }
-  try{await walk(h,'',0,false);}
+  try{await walk(h,'',0,false,null);}
   catch(e){console.error('폴더 스캔 오류',e);spScanBusy=false;spUpdateDirStatus('error');if(opts.announce)alert('폴더 스캔 중 오류가 발생했습니다.\n'+(e.message||e));return;}
   // 명단(attend)은 파일명 최신 1개만 채택
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
@@ -11897,7 +11901,10 @@ function spCompute(){
     grossRecs.push({name:ent.nm,team:ent.team,ctr:ent.ctr,day:r.d,se:matched?meta.se:-1,ag:matched?meta.ag:'',st:matched?meta.st:''});
   }
   // 취소반영(net): 월간누적 — 월(ym)별 최신본만, 반품일 빈 행, IN제외
-  const cumFiles=spFilesByType('contCum');
+  // 자기치유: 과거 월별 하위폴더에서 일마감 파일이 contCum으로 오판·저장된 잔재 제거.
+  // 재스캔하면 같은 파일이 올바른 contDaily로도 저장되므로, contDaily와 fileHash가 겹치는 contCum은 오판분으로 보고 배제.
+  const dailyHashes=new Set(dailyFiles.map(f=>f.fileHash));
+  const cumFiles=spFilesByType('contCum').filter(f=>!dailyHashes.has(f.fileHash));
   const latestByYm=new Map();
   for(const f of cumFiles){const ym=f.ym||spParseYm(f.fileName)||('?'+f.id);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
   const netRecs=[]; let returnCnt=0; const seenN=new Set();
@@ -12905,19 +12912,22 @@ async function tbScanFolder(opts={}){
   tbScanBusy=true;tbUpdateDirStatus('busy');if(!opts.fromShow)tbSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);
   const tasks=[];
-  async function walk(dir,folderName,depth,inside){
+  async function walk(dir,folderName,depth,inside,hint){
     for await(const entry of dir.values()){
       if(entry.kind==='file'){
         if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
-        const type=spDetectType(folderName,entry.name);
+        let type=spDetectType(folderName,entry.name);
+        // 월별 하위폴더(2026-01 등)에선 파일명만으로 판별 → 일마감 신청자관리가 6자리로 contCum 오판돼 누락될 수 있어 상위 타입 폴더(hint)로 교정.
+        if(hint){ if(!type)type=hint; else if((type==='contDaily'||type==='contCum')&&(hint==='contDaily'||hint==='contCum'))type=hint; }
         if(WANT.has(type))tasks.push({type,entry});
       }else if(entry.kind==='directory'&&depth<3){
-        // 루트에선 원하는 타입 폴더만 진입, 그 하위(2026-01 등 월별 폴더)는 모두 진입 → 파일명으로 판별.
-        if(inside||WANT.has(spDetectType(entry.name,'')))try{await walk(entry,entry.name,depth+1,true);}catch(e){}
+        // 루트에선 원하는 타입 폴더만 진입, 그 하위(2026-01 등 월별 폴더)는 모두 진입 → 파일명+상위 hint로 판별.
+        const dt=spDetectType(entry.name,'');
+        if(inside||WANT.has(dt))try{await walk(entry,entry.name,depth+1,true,dt||hint);}catch(e){}
       }
     }
   }
-  try{await walk(h,'',0,false);}catch(e){console.error('타임보드 폴더 스캔',e);tbScanBusy=false;tbUpdateDirStatus('error');return;}
+  try{await walk(h,'',0,false,null);}catch(e){console.error('타임보드 폴더 스캔',e);tbScanBusy=false;tbUpdateDirStatus('error');return;}
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;
