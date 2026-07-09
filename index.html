@@ -12658,6 +12658,18 @@ function tbPersonTable(lang,s,e){
   body+=tbMetricRow('합계',tot,true);
   return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>코디</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
+// 슬롯 집계 — 단, 분배일 추이 표와 동일하게 DB수 ≤ TB_MIN_DB인 (슬롯|분배일) 행은 제외 후 롤업
+function tbAggSlotSampled(lang,s,e){
+  const day=tbAggBy(r=>r.slot+'|'+r.day,lang,s,e);
+  const map=new Map();
+  for(const [k,g] of day){
+    if(g.db<=TB_MIN_DB)continue;
+    const sl=k.slice(0,k.indexOf('|'));
+    if(!map.has(sl))map.set(sl,{db:0,cont:0,daily:0});
+    const t=map.get(sl);t.db+=g.db;t.cont+=g.cont;t.daily+=g.daily;
+  }
+  return map;
+}
 // 6/24 차등분배 기준으로 조회기간을 전(~6/23)·후(6/24~)로 나눠 시간대별 성과 비교 (더위크 전용)
 function tbBeforeAfterSection(lang,s,e){
   if(lang!=='더위크')return '';
@@ -12665,13 +12677,13 @@ function tbBeforeAfterSection(lang,s,e){
   const before='2026-06-23';   // '전' 종료일
   const bS=s, bE=(e<before?e:before), aS=(s>TB_DIFF_CUTOFF?s:TB_DIFF_CUTOFF), aE=e;
   const hasB=bS<=bE, hasA=aS<=aE;
-  const mapB=hasB?tbAggBy(r=>r.slot,lang,bS,bE):new Map();
-  const mapA=hasA?tbAggBy(r=>r.slot,lang,aS,aE):new Map();
+  const mapB=hasB?tbAggSlotSampled(lang,bS,bE):new Map();
+  const mapA=hasA?tbAggSlotSampled(lang,aS,aE):new Map();
   const dbOf=(m,sl)=>{const g=m.get(sl);return g?g.db:0;};
   const slots=Array.from(new Set([...mapB.keys(),...mapA.keys()]))
     .filter(sl=>dbOf(mapB,sl)>TB_MIN_DB||dbOf(mapA,sl)>TB_MIN_DB)   // 어느 한쪽이라도 표본 충분
     .sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
-  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 타임보드 차등분배 전후 비교 <span class="tb-sub-s">(${mdd} 차등분배 기준 · 좌 ~6/23 · 우 ${mdd}~)</span></div>`;
+  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 타임보드 차등분배 전후 비교 <span class="tb-sub-s">(${mdd} 차등분배 기준 · 좌 ~6/23 · 우 ${mdd}~ · DB수 ${TB_MIN_DB}건 이하 분배일 제외)</span></div>`;
   if(!slots.length)return head+`<div class="tb-empty">비교할 데이터가 없습니다. (조회기간·표본 확인)</div>`;
   const c=v=>v.toLocaleString();
   const rc=(n,d)=>d?(n/d*100).toFixed(1)+'%':'-';
