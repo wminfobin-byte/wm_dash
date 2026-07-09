@@ -12418,7 +12418,8 @@ let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbCh
 const TB_TYPES=['db','contDaily','attend'];
 const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
 const TB_MIN_DB=5; // DB수가 이 값 이하인 행(시간대·일자)은 표본 부족 → 리스트에서 제외(DB수·계약수 무시)
-const TB_DIFF_CUTOFF='2026-06-24'; // 타임보드 차등분배 시작일 → 전후 비교 기준(이 날짜부터 '후')
+// 타임보드 차등분배 시작일(분배일 기준) → 전후 비교. 언어뷰별로 시행일이 다름. 이 날짜부터 '후'
+const TB_DIFF_CUTOFFS={'더위크':'2026-06-24','제2외국어':'2026-06-29'};
 
 function tbOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TB_DB_NAME,TB_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tbIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
 function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
@@ -12662,12 +12663,12 @@ function tbPersonTable(lang,s,e){
   body+=tbMetricRow('합계',tot,true);
   return `<div class="tb-tblwrap"><table class="tb-tbl"><thead><tr><th>코디</th><th>DB수</th><th>계약수</th><th>계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th><th>이전계약률</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
-// 조회기간(유입일) 내 레코드를 분배일 기준 전(~6/23)·후(6/24~)로 가른 뒤 슬롯 집계.
+// 조회기간(유입일) 내 레코드를 분배일 기준 전(~cutoff-1)·후(cutoff~)로 가른 뒤 슬롯 집계.
 // 표본 필터는 유입일 추이 표와 동일하게 (슬롯|유입일) 행 단위로 적용한 뒤 슬롯으로 롤업.
-function tbAggSlotSampledSplit(lang,s,e){
+function tbAggSlotSampledSplit(lang,s,e,cutoff){
   const dayB=new Map(),dayA=new Map();
   const get=(m,k)=>{if(!m.has(k))m.set(k,{db:0,cont:0,daily:0});return m.get(k);};
-  const bucket=r=>((r.dist||r.day)<TB_DIFF_CUTOFF?dayB:dayA);
+  const bucket=r=>((r.dist||r.day)<cutoff?dayB:dayA);
   for(const r of tbModel.dbRecs)if(tbInRange(r,lang,s,e))get(bucket(r),r.slot+'|'+r.day).db++;
   for(const r of tbModel.contRecs)if(tbInRange(r,lang,s,e)){const g=get(bucket(r),r.slot+'|'+r.day);g.cont++;if(r.isDaily)g.daily++;}
   const rollup=day=>{
@@ -12682,17 +12683,20 @@ function tbAggSlotSampledSplit(lang,s,e){
   };
   return [rollup(dayB),rollup(dayA)];
 }
-// 6/24 차등분배 기준으로 분배일을 전(~6/23)·후(6/24~)로 나눠 시간대별 성과 비교 (더위크 전용)
+function tbMD(iso){return iso.slice(5).replace('-','/').replace(/^0/,'');}   // '2026-06-24' → '6/24'
+function tbPrevDayISO(iso){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()-1);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
+// 차등분배 시행일(분배일) 기준으로 전·후를 나눠 시간대별 성과 비교. 시행일이 정의된 언어뷰에서만 노출.
 function tbBeforeAfterSection(lang,s,e){
-  if(lang!=='더위크')return '';
-  const mdd=TB_DIFF_CUTOFF.slice(5).replace('-','/').replace(/^0/,'');   // '6/24'
-  const [mapB,mapA]=tbAggSlotSampledSplit(lang,s,e);
+  const cutoff=TB_DIFF_CUTOFFS[lang];
+  if(!cutoff)return '';
+  const mdd=tbMD(cutoff), bdd=tbMD(tbPrevDayISO(cutoff));   // '6/24' / '6/23'
+  const [mapB,mapA]=tbAggSlotSampledSplit(lang,s,e,cutoff);
   const hasB=mapB.size>0, hasA=mapA.size>0;
   const dbOf=(m,sl)=>{const g=m.get(sl);return g?g.db:0;};
   const slots=Array.from(new Set([...mapB.keys(),...mapA.keys()]))
     .filter(sl=>dbOf(mapB,sl)>TB_MIN_DB||dbOf(mapA,sl)>TB_MIN_DB)   // 어느 한쪽이라도 표본 충분
     .sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
-  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 타임보드 차등분배 전후 비교 <span class="tb-sub-s">(분배일 ${mdd} 차등분배 기준 · 좌 ~6/23 · 우 ${mdd}~ · DB수 ${TB_MIN_DB}건 이하 유입일 제외)</span></div>`;
+  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 타임보드 차등분배 전후 비교 <span class="tb-sub-s">(분배일 ${mdd} 차등분배 기준 · 좌 ~${bdd} · 우 ${mdd}~ · DB수 ${TB_MIN_DB}건 이하 유입일 제외)</span></div>`;
   if(!slots.length)return head+`<div class="tb-empty">비교할 데이터가 없습니다. (조회기간·표본 확인)</div>`;
   const c=v=>v.toLocaleString();
   const rc=(n,d)=>d?(n/d*100).toFixed(1)+'%':'-';
@@ -12711,9 +12715,9 @@ function tbBeforeAfterSection(lang,s,e){
     `<td>${c(totB.db)}</td><td>${c(totB.cont)}</td><td class="tb-rate">${rc(totB.cont,totB.db)}</td>`+
     `<td>${c(totA.db)}</td><td>${c(totA.cont)}</td><td class="tb-rate">${rc(totA.cont,totA.db)}</td>`+
     dCell(rateNum(totB.cont,totB.db),rateNum(totA.cont,totA.db))+`</tr>`;
-  const note=(!hasB||!hasA)?` <span class="tb-sub-s">※ 현재 조회기간에 ${!hasB?`후(${mdd}~)`:'전(~6/23)'} 분배분만 있습니다.</span>`:'';
+  const note=(!hasB||!hasA)?` <span class="tb-sub-s">※ 현재 조회기간에 ${!hasB?`후(${mdd}~)`:`전(~${bdd})`} 분배분만 있습니다.</span>`:'';
   return head+note+`<div class="tb-tblwrap"><table class="tb-tbl"><thead>`+
-    `<tr><th rowspan="2">시간대</th><th colspan="3" style="background:#eef2ff;border-bottom-color:#c7d2fe">전 · ~6/23</th><th colspan="3" style="background:#ecfdf5;border-bottom-color:#bbf7d0">후 · ${mdd}~</th><th rowspan="2">계약률 Δ</th></tr>`+
+    `<tr><th rowspan="2">시간대</th><th colspan="3" style="background:#eef2ff;border-bottom-color:#c7d2fe">전 · ~${bdd}</th><th colspan="3" style="background:#ecfdf5;border-bottom-color:#bbf7d0">후 · ${mdd}~</th><th rowspan="2">계약률 Δ</th></tr>`+
     `<tr><th>DB수</th><th>계약수</th><th>계약률</th><th>DB수</th><th>계약수</th><th>계약률</th></tr>`+
     `</thead><tbody>${body}</tbody></table></div>`;
 }
