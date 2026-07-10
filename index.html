@@ -13261,11 +13261,6 @@ function tzCompute(){
   if(!tzFilesByType('cti').length)warns.push('CTI(걸은전화) 파일이 없습니다.');
   if(!keyRec.size)warns.push('톡이즈 DB가 0건입니다. 명단(담당=톡이즈)·DB수 파일을 확인하세요.');
   if(unmatched)warns.push(`전화번호 미매칭 콜 ${unmatched.toLocaleString()}건 제외(뇌새김 등 비톡이즈 추정)`);
-  if(skipped.size){
-    const top=Array.from(skipped.entries()).sort((a,b)=>b[1]-a[1]);
-    const nSkip=top.reduce((s,x)=>s+x[1],0);
-    warns.push(`명단 미등록 상담원 콜 ${nSkip.toLocaleString()}건 제외 → ${top.slice(0,8).map(([n,v])=>`${n} ${v.toLocaleString()}`).join(', ')}${top.length>8?` 외 ${top.length-8}명`:''}`);
-  }
   tzModel={rosterBare,calls,contracts,keyRec,phoneIdx,tzNames,persons,minDay:days[0]||'',maxDay:days[days.length-1]||'',unmatched,skipped,warns};
   return tzModel;
 }
