@@ -13198,16 +13198,20 @@ function tzCompute(){
   const calls=[];for(const f of tzFilesByType('cti'))for(const c of (f.rows||[])){const cc=Object.assign({},c);cc.v5=(cc.conn&&cc.dur>=TZ_CARE5_SEC)?1:0;cc.v15=(cc.conn&&cc.dur>=TZ_CARE15_SEC)?1:0;calls.push(cc);}  // v5/v15=5·15분이상(저장 dur에서 계산, 재업로드 불필요)
   // 톡이즈 인물 집합 = 명단 A열 담당=톡이즈 인원(E열 이름)만. 고객센터·매니저 등은 제외.
   const tzNames=new Set(rosterBare);
-  // DB: 톡이즈만, 고객키 dedup(병합), 전화 인덱스
+  // DB: 톡이즈만, 고객키별 '분배 이벤트 목록'(events) 보관 + 전화 인덱스.
+  // 재분배·재콜로 같은 고객키가 여러 번 등장하므로 하나로 병합하면(분배일 max·재콜 OR)
+  // 나중에 붙은 재콜이 과거 신규 분배 콜까지 소급 오염시킨다 → 이벤트 단위로 판정.
   const keyRec=new Map(),phoneIdx=new Map();
   const dbFiles=tzFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:-1);
   for(const f of dbFiles)for(const r of (f.rows||[])){
     const codi=tzBare(r.ob);if(!codi||!tzNames.has(codi)||!r.k)continue;
     let rec=keyRec.get(r.k);
-    if(!rec){rec={k:r.k,codi,dist:r.d||'',order:r.od||'',recall:r.rc?1:0,phones:[]};keyRec.set(r.k,rec);}
-    else{if(r.od&&r.od>rec.order)rec.order=r.od;if(r.d&&r.d>rec.dist)rec.dist=r.d;if(r.rc)rec.recall=1;}
+    if(!rec){rec={k:r.k,phones:[],events:[]};keyRec.set(r.k,rec);}
+    if(r.d){const rc=r.rc?1:0;
+      if(!rec.events.some(ev=>ev.d===r.d&&ev.rc===rc&&ev.codi===codi))rec.events.push({k:r.k,d:r.d,rc,codi});}   // 누적 파일 간 동일 이벤트 중복 제거
     for(const p of [r.p1,r.p2,r.p3])if(p&&!rec.phones.includes(p))rec.phones.push(p);
   }
+  for(const rec of keyRec.values())rec.events.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.rc-b.rc);   // 오래된→최신, 동일자면 비재콜 우선
   for(const rec of keyRec.values())for(const p of rec.phones){if(!phoneIdx.has(p))phoneIdx.set(p,[]);const a=phoneIdx.get(p);if(!a.includes(rec.k))a.push(rec.k);}
   // 계약(신청자관리): 톡이즈만, 고객키 dedup. 실계약(반품일 없음) → 케어 판정용 오더일 확보
   const contracts=[],contractOrder=new Map(),seenC=new Set();
@@ -13217,8 +13221,8 @@ function tzCompute(){
     const cancelled=!!r.rt;
     if(!seenC.has(r.k)){seenC.add(r.k);
       const rec=keyRec.get(r.k);
-      // 당일계약 = 분배일==신청일 AND 신청자관리 R열이 재콜 아님(재콜 코드면 무조건 이전계약)
-      const isDaily=!!(rec&&rec.dist&&r.d&&rec.dist===r.d)&&!r.rc;
+      // 당일계약 = 신청일과 같은 날 분배 이벤트가 있음 AND 신청자관리 R열이 재콜 아님(재콜 코드면 무조건 이전계약)
+      const isDaily=!!(rec&&r.d&&rec.events.some(ev=>ev.d===r.d))&&!r.rc;
       contracts.push({k:r.k,codi,day:r.d,daily:isDaily,cancelled});
     }
     // 케어 판정용 오더일 = 신청자관리 신청일(P열, r.d). 고객관리 오더일(X)은 일부 비어/깨져 부정확 → 신청일 사용. 미취소 계약의 최초 신청일.
@@ -13231,12 +13235,13 @@ function tzCompute(){
     const keys=phoneIdx.get(c.phone);
     if(!keys||!keys.length){c.cat='none';c.mk=null;unmatched++;continue;}
     let cat=null,mk=null;
-    // 매칭 DB 중 콜일 이하 분배일 최댓값(동률이면 비재콜 우선)
+    // 매칭 DB의 분배 이벤트 중 콜일 이하 분배일 최댓값(동률이면 비재콜 우선)
     let best=null;
-    for(const k of keys){const rec=keyRec.get(k);if(rec&&rec.dist&&rec.dist<=c.day){if(!best||rec.dist>best.dist||(rec.dist===best.dist&&best.recall&&!rec.recall))best=rec;}}
-    if(!best)for(const k of keys){const rec=keyRec.get(k);if(rec){best=rec;break;}}
+    for(const k of keys){const rec=keyRec.get(k);if(!rec)continue;
+      for(const ev of rec.events){if(ev.d>c.day)continue;if(!best||ev.d>best.d||(ev.d===best.d&&best.rc&&!ev.rc))best=ev;}}
+    if(!best)for(const k of keys){const rec=keyRec.get(k);if(rec&&rec.events.length){best=rec.events[0];break;}}
     // ① 당일 분배(분배일==콜일)면 같은 날 오더여도 '계약을 위한 sales 콜'=신규 당일(fresh), 케어보다 우선
-    if(best&&best.dist===c.day&&!best.recall){cat='fresh';mk=best.k;}
+    if(best&&best.d===c.day&&!best.rc){cat='fresh';mk=best.k;}
     else{
       // ② 실계약 고객 & 콜일≥오더일 → 케어(오더일 이후 사후 통화)
       let ok=null;for(const k of keys){const od=contractOrder.get(k);if(od&&c.day>=od){ok=k;break;}}
@@ -13277,8 +13282,10 @@ function tzAccum(d,c){
   else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;d.f5+=c.v5;d.f15+=c.v15;if(c.mk)d.fDb.add(c.mk);}
   else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;d.o5+=c.v5;d.o15+=c.v15;if(c.mk)d.oDb.add(c.mk);}
 }
-// 당일 DB수 = 분배 코호트(콜 무관). keyRec에서 분배일 기준, 비재콜, 코디 sel 필터. keyFn(rec)=날짜 또는 코디.
-function tzAddCohort(getter,keyFn,s,e,sel){for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;getter(keyFn(rec)).fCohort.add(rec.k);}}
+// 당일 DB수 = 분배 코호트(콜 무관). 비재콜 분배 이벤트 기준, 코디 sel 필터. keyFn(ev)=날짜 또는 코디.
+// 비재콜 분배 이벤트 순회 (당일 DB 코호트의 유일한 출처)
+function tzEachDist(cb){for(const rec of tzModel.keyRec.values())for(const ev of rec.events){if(!ev.rc)cb(ev);}}
+function tzAddCohort(getter,keyFn,s,e,sel){tzEachDist(ev=>{if(ev.d<s||ev.d>e)return;if(sel&&!sel.has(ev.codi))return;getter(keyFn(ev)).fCohort.add(ev.k);});}
 // keyFn: 날짜 → 집계 키. 기본은 일자별, 월별은 day.slice(0,7).
 function tzAggByDate(s,e,keyFn){
   const kf=keyFn||(d=>d);
@@ -13288,7 +13295,7 @@ function tzAggByDate(s,e,keyFn){
     tzAccum(g(kf(c.day)),c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(kf(ct.day));if(ct.daily)d.fCont++;else d.oCont++;}
-  tzAddCohort(g,rec=>kf(rec.dist),s,e,sel);   // 당일 DB수 = 분배일별 코호트
+  tzAddCohort(g,ev=>kf(ev.d),s,e,sel);   // 당일 DB수 = 분배일별 코호트
   return map;
 }
 function tzAggByPerson(s,e){
@@ -13298,7 +13305,7 @@ function tzAggByPerson(s,e){
     tzAccum(g(nm||'(미상)'),c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.codi||'(미상)');if(ct.daily)d.fCont++;else d.oCont++;}
-  tzAddCohort(g,rec=>rec.codi||'(미상)',s,e,sel);   // 당일 DB수 = 코디별 분배 코호트
+  tzAddCohort(g,ev=>ev.codi||'(미상)',s,e,sel);   // 당일 DB수 = 코디별 분배 코호트
   return map;
 }
 function tzSumAgg(map){const t=tzBlankAgg();delete t.careCust;t.careCust=0;let cust=new Set();for(const g of map.values()){t.careTry+=g.careTry;t.careConn+=g.careConn;t.careValid+=g.careValid;t.careDur+=g.careDur;t.fTry+=g.fTry;t.fConn+=g.fConn;t.fValid+=g.fValid;t.fCont+=g.fCont;t.oTry+=g.oTry;t.oConn+=g.oConn;t.oValid+=g.oValid;t.oCont+=g.oCont;if(g.careCust&&g.careCust.forEach)g.careCust.forEach(x=>cust.add(x));}t.careCust=cust.size;return t;}
@@ -13329,7 +13336,7 @@ function tzAggAll(s,e){
     tzAccum(g,c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;if(ct.daily)g.fCont++;else g.oCont++;}
-  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;g.fCohort.add(rec.k);}   // 당일 DB수=분배 코호트
+  tzEachDist(ev=>{if(ev.d<s||ev.d>e)return;if(sel&&!sel.has(ev.codi))return;g.fCohort.add(ev.k);});   // 당일 DB수=분배 코호트
   return g;
 }
 function tzCareTable(map,labelFn,firstCol){
@@ -13410,7 +13417,7 @@ function tzAggPersonDates(name,s,e,keyFn){
     tzAccum(g(kf(c.day)),c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(ct.codi!==name)continue;const d=g(kf(ct.day));if(ct.daily)d.fCont++;else d.oCont++;}
-  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(rec.codi!==name)continue;g(kf(rec.dist)).fCohort.add(rec.k);}   // 당일 DB수=그 코디 분배 코호트
+  tzEachDist(ev=>{if(ev.d<s||ev.d>e)return;if(ev.codi!==name)return;g(kf(ev.d)).fCohort.add(ev.k);});   // 당일 DB수=그 코디 분배 코호트
   return map;
 }
 function tzPersonDailyTable(name,s,e){
