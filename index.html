@@ -13098,6 +13098,7 @@ const TZ_TYPES=['db','contDaily','attend','cti'];
 const TZ_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단',cti:'CTI 통화(걸은전화)'};
 const TZ_VALID_SEC=90; // 유효통화 기준: 통화시간 ≥ 1분 30초
 const TZ_CARE5_SEC=300; // 5분 이상 통화 기준: 통화시간 ≥ 5분(케어 심층통화)
+const TZ_CARE15_SEC=900; // 15분 이상 통화 기준: 통화시간 ≥ 15분(장시간 케어)
 
 function tzOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TZ_DB_NAME,TZ_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tzIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
 function tzIdbAdd(rec){return new Promise((res,rej)=>{const tx=tzIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
@@ -13194,7 +13195,7 @@ function tzBuildRoster(){
 function tzCompute(){
   const rosterBare=tzBuildRoster();
   // CTI 콜 수집
-  const calls=[];for(const f of tzFilesByType('cti'))for(const c of (f.rows||[])){const cc=Object.assign({},c);cc.v5=(cc.conn&&cc.dur>=TZ_CARE5_SEC)?1:0;calls.push(cc);}  // v5=5분이상(저장 dur에서 계산, 재업로드 불필요)
+  const calls=[];for(const f of tzFilesByType('cti'))for(const c of (f.rows||[])){const cc=Object.assign({},c);cc.v5=(cc.conn&&cc.dur>=TZ_CARE5_SEC)?1:0;cc.v15=(cc.conn&&cc.dur>=TZ_CARE15_SEC)?1:0;calls.push(cc);}  // v5/v15=5·15분이상(저장 dur에서 계산, 재업로드 불필요)
   // 톡이즈 인물 집합 = 명단 A열 담당=톡이즈 인원(E열 이름)만. 고객센터·매니저 등은 제외.
   const tzNames=new Set(rosterBare);
   // DB: 톡이즈만, 고객키 dedup(병합), 전화 인덱스
@@ -13262,17 +13263,22 @@ function tzCompute(){
 // ── 필터/집계 ──
 function tzRangeDays(){const s=document.getElementById('tzDateStart').value,e=document.getElementById('tzDateEnd').value;return [s||'0000-00-00',e||'9999-99-99'];}
 function tzSelSet(){return (tzSel&&tzSel.size)?tzSel:null;} // null = 전체
-function tzBlankAgg(){return {careTry:0,careConn:0,careValid:0,careDur:0,careCust:new Set(),care5:0,care5Dur:0,care5Cust:new Set(),fTry:0,fConn:0,fValid:0,f5:0,fCont:0,fDb:new Set(),fCohort:new Set(),oTry:0,oConn:0,oValid:0,o5:0,oCont:0,oDb:new Set()};}
+function tzBlankAgg(){return {careTry:0,careConn:0,careValid:0,careDur:0,careCust:new Set(),care5:0,care5Dur:0,care5Cust:new Set(),care15:0,care15Dur:0,care15Cust:new Set(),fTry:0,fConn:0,fValid:0,f5:0,f15:0,fCont:0,fDb:new Set(),fCohort:new Set(),oTry:0,oConn:0,oValid:0,o5:0,o15:0,oCont:0,oDb:new Set()};}
+// 콜 1건을 집계 버킷에 누적 (care/fresh/old 공통)
+function tzAccum(d,c){
+  if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.valid){d.careDur+=c.dur;d.careCust.add(c.phone);}
+    d.care5+=c.v5;if(c.v5){d.care5Dur+=c.dur;d.care5Cust.add(c.phone);}
+    d.care15+=c.v15;if(c.v15){d.care15Dur+=c.dur;d.care15Cust.add(c.phone);}}
+  else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;d.f5+=c.v5;d.f15+=c.v15;if(c.mk)d.fDb.add(c.mk);}
+  else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;d.o5+=c.v5;d.o15+=c.v15;if(c.mk)d.oDb.add(c.mk);}
+}
 // 당일 DB수 = 분배 코호트(콜 무관). keyRec에서 분배일 기준, 비재콜, 코디 sel 필터. keyFn(rec)=날짜 또는 코디.
 function tzAddCohort(getter,keyFn,s,e,sel){for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;getter(keyFn(rec)).fCohort.add(rec.k);}}
 function tzAggByDate(s,e){
   const sel=tzSelSet(),map=new Map();
   const g=d=>{if(!map.has(d))map.set(d,tzBlankAgg());return map.get(d);};
   for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(tzBare(c.name)))continue;
-    const d=g(c.day);
-    if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.valid)d.careDur+=c.dur;if(c.valid)d.careCust.add(c.phone);d.care5+=c.v5;if(c.v5){d.care5Dur+=c.dur;d.care5Cust.add(c.phone);}}
-    else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;d.f5+=c.v5;if(c.mk)d.fDb.add(c.mk);}
-    else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;d.o5+=c.v5;if(c.mk)d.oDb.add(c.mk);}
+    tzAccum(g(c.day),c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.day);if(ct.daily)d.fCont++;else d.oCont++;}
   tzAddCohort(g,rec=>rec.dist,s,e,sel);   // 당일 DB수 = 분배일별 코호트
@@ -13282,10 +13288,7 @@ function tzAggByPerson(s,e){
   const sel=tzSelSet(),map=new Map();
   const g=n=>{if(!map.has(n))map.set(n,tzBlankAgg());return map.get(n);};
   for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;const nm=tzBare(c.name);if(sel&&!sel.has(nm))continue;
-    const d=g(nm||'(미상)');
-    if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.valid)d.careDur+=c.dur;if(c.valid)d.careCust.add(c.phone);d.care5+=c.v5;if(c.v5){d.care5Dur+=c.dur;d.care5Cust.add(c.phone);}}
-    else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;d.f5+=c.v5;if(c.mk)d.fDb.add(c.mk);}
-    else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;d.o5+=c.v5;if(c.mk)d.oDb.add(c.mk);}
+    tzAccum(g(nm||'(미상)'),c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;const d=g(ct.codi||'(미상)');if(ct.daily)d.fCont++;else d.oCont++;}
   tzAddCohort(g,rec=>rec.codi||'(미상)',s,e,sel);   // 당일 DB수 = 코디별 분배 코호트
@@ -13305,7 +13308,7 @@ function tzRenderKpi(g){
   const card=(ac,ic,lab,val,sub)=>`<div class="tz-kpi tz-kpi-${ac}"><div class="tz-kpi-top"><span class="tz-kpi-ic">${ic}</span><span class="tz-kpi-l">${lab}</span></div><div class="tz-kpi-v">${val}</div><div class="tz-kpi-s">${sub||'&nbsp;'}</div></div>`;
   const {f,o,t}=tzGroupsOf(g);const careCust=(g.careCust&&g.careCust.size)||0;
   document.getElementById('tzKpi').innerHTML=
-    card('violet','🎧','기존계약자 케어통화',tzC(g.careConn),`시도 ${tzC(g.careTry)} · 유효대상 ${tzC(careCust)}명`)+
+    card('violet','🎧','기존계약자 케어통화',tzC(g.careConn),`시도 ${tzC(g.careTry)} · 유효대상 ${tzC(careCust)}명 · 5분+ ${tzC(g.care5)} · 15분+ ${tzC(g.care15)}`)+
     card('violet2','⏱️','케어 유효통화시간',tzFmtDur(g.careDur),`유효콜당 평균 ${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}`)+
     card('green','📞','신규 시도수',tzC(t.tr),`연결 ${tzC(t.co)} · 유효 ${tzC(t.va)}`)+
     card('teal','✅','신규 유효통화',tzC(t.va),`유효율 ${tzPct(t.va,t.tr)}`)+
@@ -13316,9 +13319,7 @@ function tzRenderKpi(g){
 function tzAggAll(s,e){
   const sel=tzSelSet(),g=tzBlankAgg();
   for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(tzBare(c.name)))continue;
-    if(c.cat==='care'){g.careTry++;g.careConn+=c.conn;g.careValid+=c.valid;if(c.valid)g.careDur+=c.dur;if(c.valid)g.careCust.add(c.phone);g.care5+=c.v5;if(c.v5){g.care5Dur+=c.dur;g.care5Cust.add(c.phone);}}
-    else if(c.cat==='fresh'){g.fTry++;g.fConn+=c.conn;g.fValid+=c.valid;g.f5+=c.v5;if(c.mk)g.fDb.add(c.mk);}
-    else if(c.cat==='old'){g.oTry++;g.oConn+=c.conn;g.oValid+=c.valid;g.o5+=c.v5;if(c.mk)g.oDb.add(c.mk);}
+    tzAccum(g,c);
   }
   for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(sel&&!sel.has(ct.codi))continue;if(ct.daily)g.fCont++;else g.oCont++;}
   for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(sel&&!sel.has(rec.codi))continue;g.fCohort.add(rec.k);}   // 당일 DB수=분배 코호트
@@ -13327,21 +13328,23 @@ function tzAggAll(s,e){
 function tzCareTable(map){
   const days=Array.from(map.keys()).sort();
   if(!days.length)return '<div class="tz-empty">데이터가 없습니다.</div>';
-  const tot={t:0,c:0,v:0,dur:0,cust:new Set(),c5:0,d5:0,cust5:new Set()};let body='';
-  const cell=(g)=>{const cs=g.careCust.size,c5s=g.care5Cust.size;
+  const tot={t:0,c:0,v:0,dur:0,cust:new Set(),c5:0,d5:0,cust5:new Set(),c15:0,d15:0,cust15:new Set()};let body='';
+  const cell=(g)=>{const cs=g.careCust.size,c5s=g.care5Cust.size,c15s=g.care15Cust.size;
     return `<td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td class="tz-rate2">${tzPct(g.careConn,g.careTry)}</td>`
       +`<td class="tz-cv">${tzC(g.careValid)}</td><td class="tz-cv">${tzFmtDur(g.careDur)}</td><td class="tz-cv">${tzC(cs)}</td><td class="tz-cv tz-avgv">${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}</td><td class="tz-cv tz-avgv">${cs?tzFmtMS(g.careDur/cs):'-'}</td>`
-      +`<td class="tz-c5">${tzC(g.care5)}</td><td class="tz-c5">${tzFmtDur(g.care5Dur)}</td><td class="tz-c5">${tzC(c5s)}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td><td class="tz-avg5">${c5s?tzFmtMS(g.care5Dur/c5s):'-'}</td>`;};
+      +`<td class="tz-c5">${tzC(g.care5)}</td><td class="tz-c5">${tzFmtDur(g.care5Dur)}</td><td class="tz-c5">${tzC(c5s)}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td><td class="tz-avg5">${c5s?tzFmtMS(g.care5Dur/c5s):'-'}</td>`
+      +`<td class="tz-c15">${tzC(g.care15)}</td><td class="tz-c15">${tzFmtDur(g.care15Dur)}</td><td class="tz-c15">${tzC(c15s)}</td><td class="tz-avg15">${g.care15?tzFmtMS(g.care15Dur/g.care15):'-'}</td><td class="tz-avg15">${c15s?tzFmtMS(g.care15Dur/c15s):'-'}</td>`;};
   for(const day of days){const g=map.get(day);if(!g.careTry)continue;
     tot.t+=g.careTry;tot.c+=g.careConn;tot.v+=g.careValid;tot.dur+=g.careDur;g.careCust.forEach(x=>tot.cust.add(x));
     tot.c5+=g.care5;tot.d5+=g.care5Dur;g.care5Cust.forEach(x=>tot.cust5.add(x));
+    tot.c15+=g.care15;tot.d15+=g.care15Dur;g.care15Cust.forEach(x=>tot.cust15.add(x));
     body+=`<tr><td class="tz-lab">${tzDayLabel(day)}</td>${cell(g)}</tr>`;}
   if(!body)return '<div class="tz-empty">케어통화 데이터가 없습니다.</div>';
-  const totG={careTry:tot.t,careConn:tot.c,careValid:tot.v,careDur:tot.dur,careCust:tot.cust,care5:tot.c5,care5Dur:tot.d5,care5Cust:tot.cust5};
+  const totG={careTry:tot.t,careConn:tot.c,careValid:tot.v,careDur:tot.dur,careCust:tot.cust,care5:tot.c5,care5Dur:tot.d5,care5Cust:tot.cust5,care15:tot.c15,care15Dur:tot.d15,care15Cust:tot.cust15};
   const totRow=`<tr class="tz-total"><td class="tz-lab">합계</td>${cell(totG)}</tr>`;
   const head=`<thead><tr><th rowspan="2">일자</th><th rowspan="2">시도수</th><th rowspan="2">연결수</th><th rowspan="2">연결률</th>`
-    +`<th colspan="5" class="tz-gh-v">🎯 유효 (≥1분30초)</th><th colspan="5" class="tz-gh-5">⏱ 5분 이상 (≥5분)</th></tr>`
-    +`<tr><th>통화수</th><th>유효통화시간</th><th>대상고객</th><th>콜당평균</th><th>고객당평균</th><th>통화수</th><th>통화시간</th><th>대상고객</th><th>콜당평균</th><th>고객당평균</th></tr></thead>`;
+    +`<th colspan="5" class="tz-gh-v">🎯 유효 (≥1분30초)</th><th colspan="5" class="tz-gh-5">⏱ 5분 이상 (≥5분)</th><th colspan="5" class="tz-gh-15">⏱ 15분 이상 (≥15분)</th></tr>`
+    +`<tr><th>통화수</th><th>유효통화시간</th><th>대상고객</th><th>콜당평균</th><th>고객당평균</th><th>통화수</th><th>통화시간</th><th>대상고객</th><th>콜당평균</th><th>고객당평균</th><th>통화수</th><th>통화시간</th><th>대상고객</th><th>콜당평균</th><th>고객당평균</th></tr></thead>`;
   return `<div class="tz-tblwrap"><table class="tz-tbl tz-care">${head}<tbody>${totRow}${body}</tbody></table></div>`;
 }
 // kind: 'fresh'|'old'|'new' — 계약률 = 계약수 / DB수
@@ -13370,8 +13373,10 @@ function tzGrpCells(m){   // DB수·시도·평균시도·연결·연결률·유
     +`<td>${tzC(m.va)}</td><td class="tz-rate2">${tzPct(m.va,m.tr)}</td>`
     +`<td>${tzC(m.ct)}</td><td class="tz-rate">${tzPct(m.ct,m.db)}</td>`;
 }
-function tzCareCells(g){   // 케어: 시도·연결·유효·5분·통화시간·5분시간·유효평균(총시간/유효)·5분평균(5분시간/5분)
-  return `<td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td class="tz-cv">${tzC(g.careValid)}</td><td class="tz-c5">${tzC(g.care5||0)}</td><td class="tz-cv">${tzFmtDur(g.careDur)}</td><td class="tz-c5">${tzFmtDur(g.care5Dur||0)}</td><td class="tz-cv tz-avgv">${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td>`;
+function tzCareCells(g){   // 케어: 시도·연결·유효·5분·15분·통화시간(유효/5분/15분)·평균(각 시간/각 건수)
+  return `<td>${tzC(g.careTry)}</td><td>${tzC(g.careConn)}</td><td class="tz-cv">${tzC(g.careValid)}</td><td class="tz-c5">${tzC(g.care5||0)}</td><td class="tz-c15">${tzC(g.care15||0)}</td>`
+    +`<td class="tz-cv">${tzFmtDur(g.careDur)}</td><td class="tz-c5">${tzFmtDur(g.care5Dur||0)}</td><td class="tz-c15">${tzFmtDur(g.care15Dur||0)}</td>`
+    +`<td class="tz-cv tz-avgv">${g.careValid?tzFmtMS(g.careDur/g.careValid):'-'}</td><td class="tz-avg5">${g.care5?tzFmtMS(g.care5Dur/g.care5):'-'}</td><td class="tz-avg15">${g.care15?tzFmtMS(g.care15Dur/g.care15):'-'}</td>`;
 }
 function tzFullRow(label,g,cls){
   const {f,o,t}=tzGroupsOf(g);
@@ -13381,23 +13386,22 @@ function tzSubHead(){return `<th>DB수</th><th>시도</th><th>평균시도</th><
 function tzFullHeader(firstCol){
   return `<thead>`
     +`<tr><th rowspan="2" class="tz-gh-first">${firstCol}</th>`
-    +`<th colspan="8" class="tz-gh-care">🎧 케어(기존계약자)</th>`
+    +`<th colspan="11" class="tz-gh-care">🎧 케어(기존계약자)</th>`
     +`<th colspan="9" class="tz-gh-tot">합계</th>`
     +`<th colspan="9" class="tz-gh-fresh">🟢 당일 분배</th>`
     +`<th colspan="9" class="tz-gh-old">🟠 이전·재콜</th></tr>`
-    +`<tr><th>시도</th><th>연결</th><th>유효</th><th>5분+</th><th>유효시간</th><th>5분시간</th><th>유효평균</th><th>5분평균</th>${tzSubHead()}${tzSubHead()}${tzSubHead()}</tr>`
+    +`<tr><th>시도</th><th>연결</th><th>유효</th><th>5분+</th><th>15분+</th><th>유효시간</th><th>5분시간</th><th>15분시간</th><th>유효평균</th><th>5분평균</th><th>15분평균</th>${tzSubHead()}${tzSubHead()}${tzSubHead()}</tr>`
     +`</thead>`;
 }
-function tzAggPersonDates(name,s,e){
+// keyFn: 날짜 → 집계 키. 기본은 일자별, 월별은 day.slice(0,7).
+function tzAggPersonDates(name,s,e,keyFn){
+  const kf=keyFn||(d=>d);
   const map=new Map();const g=d=>{if(!map.has(d))map.set(d,tzBlankAgg());return map.get(d);};
   for(const c of tzModel.calls){if(c.cat!=='care'&&c.cat!=='fresh'&&c.cat!=='old')continue;if(!c.day||c.day<s||c.day>e)continue;if(tzBare(c.name)!==name)continue;
-    const d=g(c.day);
-    if(c.cat==='care'){d.careTry++;d.careConn+=c.conn;d.careValid+=c.valid;if(c.valid)d.careDur+=c.dur;if(c.valid)d.careCust.add(c.phone);d.care5+=c.v5;if(c.v5){d.care5Dur+=c.dur;d.care5Cust.add(c.phone);}}
-    else if(c.cat==='fresh'){d.fTry++;d.fConn+=c.conn;d.fValid+=c.valid;d.f5+=c.v5;if(c.mk)d.fDb.add(c.mk);}
-    else if(c.cat==='old'){d.oTry++;d.oConn+=c.conn;d.oValid+=c.valid;d.o5+=c.v5;if(c.mk)d.oDb.add(c.mk);}
+    tzAccum(g(kf(c.day)),c);
   }
-  for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(ct.codi!==name)continue;const d=g(ct.day);if(ct.daily)d.fCont++;else d.oCont++;}
-  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(rec.codi!==name)continue;g(rec.dist).fCohort.add(rec.k);}   // 당일 DB수=그 코디 분배 코호트
+  for(const ct of tzModel.contracts){if(!ct.day||ct.day<s||ct.day>e)continue;if(ct.codi!==name)continue;const d=g(kf(ct.day));if(ct.daily)d.fCont++;else d.oCont++;}
+  for(const rec of tzModel.keyRec.values()){if(rec.recall||!rec.dist||rec.dist<s||rec.dist>e)continue;if(rec.codi!==name)continue;g(kf(rec.dist)).fCohort.add(rec.k);}   // 당일 DB수=그 코디 분배 코호트
   return map;
 }
 function tzPersonDailyTable(name,s,e){
@@ -13405,6 +13409,13 @@ function tzPersonDailyTable(name,s,e){
   if(!days.length)return '<div class="tz-empty" style="margin:0">일자별 데이터가 없습니다.</div>';
   let body='';for(const day of days)body+=tzFullRow(tzDayLabel(day),map.get(day));
   return `<div class="tz-tblwrap"><table class="tz-tbl tz-full">${tzFullHeader('일자')}<tbody>${body}</tbody></table></div>`;
+}
+function tzMonthLabel(ym){const[y,m]=ym.split('-');return `${y}년 ${+m}월`;}
+function tzPersonMonthlyTable(name,s,e){
+  const map=tzAggPersonDates(name,s,e,d=>d.slice(0,7));const months=Array.from(map.keys()).sort();   // 오래된→최신
+  if(!months.length)return '<div class="tz-empty" style="margin:0">월별 데이터가 없습니다.</div>';
+  let body='';for(const ym of months)body+=tzFullRow(tzMonthLabel(ym),map.get(ym),'tz-month');
+  return `<div class="tz-tblwrap"><table class="tz-tbl tz-full">${tzFullHeader('월')}<tbody>${body}</tbody></table></div>`;
 }
 // 펼침 시 일자별 차트: 케어 통화시간(막대) + 계약수(선) — 일자별 통화 구성과 동일 스타일
 function tzRenderPersonChart(idx,name){
@@ -13430,7 +13441,7 @@ function tzPersonRowHtml(name,g,idx,s,e){
   const {f,o,t}=tzGroupsOf(g);
   const label=`<button class="tz-expand" id="tz-pb-${idx}" data-tzname="${(name||'').replace(/"/g,'&quot;')}" onclick="tzTogglePersonDetail('${idx}')">▶</button> ${name}`;
   const row=`<tr><td class="tz-lab">${label}</td>${tzCareCells(g)}${tzGrpCells(t)}${tzGrpCells(f)}${tzGrpCells(o)}</tr>`;
-  const detail=`<tr class="tz-pd hidden" id="tz-pd-${idx}"><td colspan="36"><div class="tz-pd-wrap"><div class="tz-pd-h">${name} · 일자별 추이 (오래된 → 최신)</div><div style="height:220px;margin-bottom:12px"><canvas id="tz-pchart-${idx}"></canvas></div>${tzPersonDailyTable(name,s,e)}</div></td></tr>`;
+  const detail=`<tr class="tz-pd hidden" id="tz-pd-${idx}"><td colspan="39"><div class="tz-pd-wrap"><div class="tz-pd-h">${name} · 일자별 추이 (오래된 → 최신)</div><div style="height:220px;margin-bottom:12px"><canvas id="tz-pchart-${idx}"></canvas></div><div class="tz-pd-h">${name} · 월별 집계</div>${tzPersonMonthlyTable(name,s,e)}<div class="tz-pd-h" style="margin-top:14px">${name} · 일자별 집계</div>${tzPersonDailyTable(name,s,e)}</div></td></tr>`;
   return row+detail;
 }
 function tzPersonTable(s,e){
@@ -13447,10 +13458,11 @@ function tzRenderChart(map){
   const cv=document.getElementById('tzChart');if(!cv||typeof Chart==='undefined')return;
   const days=Array.from(map.keys()).sort();
   const labels=days.map(tzDayLabel);
-  const m5=tzChartMode==='c5', suf=m5?'5분+':'유효';
-  const care=days.map(d=>{const g=map.get(d);return m5?g.care5:g.careValid;});
-  const fresh=days.map(d=>{const g=map.get(d);return m5?g.f5:g.fValid;});
-  const old=days.map(d=>{const g=map.get(d);return m5?g.o5:g.oValid;});
+  const mode=tzChartMode, suf=mode==='c15'?'15분+':mode==='c5'?'5분+':'유효';
+  const pick=(g,base)=>mode==='c15'?g[base+'15']:mode==='c5'?g[base+'5']:g[base==='care'?'careValid':base+'Valid'];
+  const care=days.map(d=>pick(map.get(d),'care'));
+  const fresh=days.map(d=>pick(map.get(d),'f'));
+  const old=days.map(d=>pick(map.get(d),'o'));
   const cont=days.map(d=>map.get(d).fCont+map.get(d).oCont);
   if(tzChart){tzChart.destroy();tzChart=null;}
   tzChart=new Chart(cv,{data:{labels,datasets:[
@@ -13479,7 +13491,7 @@ function tzRender(){
   document.getElementById('tzWarn').textContent=(tzModel.warns||[]).join(' · ');
   tzRenderKpi(tzAggAll(s,e));
   const PNG=nm=>`<button class="tz-png tz-nocap" onclick="tzSectionPng(this,'${nm}')" title="이 섹션 PNG 저장">⬇ PNG</button>`;
-  let html=`<section class="tz-sec"><h3 class="tz-sec-h">📊 일자별 통화 구성 — 케어 vs 신규 (막대) · 신규 계약수 (선)${PNG('일자별통화구성')}</h3><div class="tz-chartseg" id="tzChartSeg"><button data-mode="valid" class="${tzChartMode==='valid'?'active':''}" onclick="tzSetChartMode('valid')">유효통화 (≥1분30초)</button><button data-mode="c5" class="${tzChartMode==='c5'?'active':''}" onclick="tzSetChartMode('c5')">5분 이상 (≥5분)</button></div><div style="height:300px"><canvas id="tzChart"></canvas></div><div class="tz-note">가설 검증: 케어통화(보라)가 늘수록 신규 컨택(초록·주황)이 줄고 계약(빨강 선)이 함께 떨어지는지 확인하세요.</div></section>`;
+  let html=`<section class="tz-sec"><h3 class="tz-sec-h">📊 일자별 통화 구성 — 케어 vs 신규 (막대) · 신규 계약수 (선)${PNG('일자별통화구성')}</h3><div class="tz-chartseg" id="tzChartSeg"><button data-mode="valid" class="${tzChartMode==='valid'?'active':''}" onclick="tzSetChartMode('valid')">유효통화 (≥1분30초)</button><button data-mode="c5" class="${tzChartMode==='c5'?'active':''}" onclick="tzSetChartMode('c5')">5분 이상 (≥5분)</button><button data-mode="c15" class="${tzChartMode==='c15'?'active':''}" onclick="tzSetChartMode('c15')">15분 이상 (≥15분)</button></div><div style="height:300px"><canvas id="tzChart"></canvas></div><div class="tz-note">가설 검증: 케어통화(보라)가 늘수록 신규 컨택(초록·주황)이 줄고 계약(빨강 선)이 함께 떨어지는지 확인하세요.</div></section>`;
   html+=`<section class="tz-sec"><h3 class="tz-sec-h">🎧 ① 기존 계약자 케어통화 <span class="tz-sub-s">실계약 고객 · 오더일 이후 통화</span>${PNG('기존계약자케어통화')}</h3>${tzCareTable(map)}</section>`;
   html+=`<section class="tz-sec"><h3 class="tz-sec-h">Σ ② 통화 시도 합계 <span class="tz-sub-s">당일+이전</span>${PNG('통화시도합계')}</h3>${tzNewTable(map,'new')}</section>`;
   html+=`<section class="tz-sec"><h3 class="tz-sec-h">🟢 2-1 당일 DB 시도 현황${PNG('당일DB시도현황')}</h3>${tzNewTable(map,'fresh')}</section>`;
@@ -13715,12 +13727,18 @@ function tzEnsureStyle(){
   #page-talkis-perf .tz-tbl .tz-c5{background:#fff7ed;color:#9a3412}
   #page-talkis-perf .tz-tbl .tz-avg5{font-weight:800;color:#ea580c;background:#fff7ed}
   #page-talkis-perf .tz-tbl tr.tz-total .tz-c5,#page-talkis-perf .tz-tbl tr.tz-total .tz-avg5{background:#ffedd5}
+  #page-talkis-perf .tz-tbl .tz-c15{background:#fef2f2;color:#991b1b}
+  #page-talkis-perf .tz-tbl .tz-avg15{font-weight:800;color:#dc2626;background:#fef2f2}
+  #page-talkis-perf .tz-tbl tr.tz-total .tz-c15,#page-talkis-perf .tz-tbl tr.tz-total .tz-avg15{background:#fee2e2}
+  #page-talkis-perf .tz-tbl tr.tz-month td{background:#f8fafc;font-weight:700}
+  #page-talkis-perf .tz-tbl tr.tz-month:hover td{background:#eef4ff}
   #page-talkis-perf .tz-tbl .tz-cv{background:#ecfdf7;color:#0f766e}
   #page-talkis-perf .tz-tbl .tz-avgv{font-weight:800;color:#0d9488;background:#d8f5ec}
   #page-talkis-perf .tz-tbl tr.tz-total .tz-cv{background:#d5f2ea}
   #page-talkis-perf .tz-tbl tr.tz-total .tz-avgv{background:#c2ecdf}
   #page-talkis-perf .tz-care .tz-gh-v{background:#0d9488;color:#fff}
   #page-talkis-perf .tz-care .tz-gh-5{background:#ea580c;color:#fff}
+  #page-talkis-perf .tz-care .tz-gh-15{background:#dc2626;color:#fff}
   #page-talkis-perf .tz-chartseg{display:inline-flex;background:#eef2f7;border:1px solid #e2e8f0;border-radius:10px;padding:3px;gap:3px;margin:0 0 12px}
   #page-talkis-perf .tz-chartseg button{border:none;background:transparent;color:#475569;font-size:12.5px;font-weight:700;padding:6px 16px;cursor:pointer;border-radius:8px;transition:all .15s}
   #page-talkis-perf .tz-chartseg button.active{background:#fff;color:#4361ee;box-shadow:0 1px 3px rgba(15,23,42,.12)}
