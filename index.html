@@ -13985,6 +13985,15 @@ function ncIdbDel(id){return new Promise((res,rej)=>{const tx=ncIdb.transaction(
 async function ncIdbClear(){const all=await ncIdbGetAll();for(const r of all)await ncIdbDel(r.id);}
 function ncFilesByType(t){return ncFiles.filter(f=>f.type===t);}
 async function ncLoadFiles(){try{await ncOpenIDB();ncFiles=await ncIdbGetAll();ncLoaded=true;ncUpdateUploadStatus();}catch(e){console.error('뇌새김콜 IDB 로드:',e);}}
+// 구버전 파싱된 계약 파일(분류 cls 필드 없음) 감지 후 삭제 → 폴더 재스캔 시 새로 파싱(cls 채움)
+async function ncPurgeStaleContracts(){
+  const stale=ncFilesByType('contDaily').filter(f=>f.rows&&f.rows.length&&!('cls' in f.rows[0]));
+  if(!stale.length)return 0;
+  const ids=new Set(stale.map(f=>f.id));
+  for(const f of stale)await ncIdbDel(f.id);
+  ncFiles=ncFiles.filter(f=>!ids.has(f.id));ncModel=null;
+  return stale.length;
+}
 
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
 // 용량 절감: CTI(수동·공용폴더에 없음)만 rows 포함. DB수·계약·명단은 sp/tb/tz와 중복이라 제외하고
@@ -14221,11 +14230,11 @@ function ncDiagTable(rows,title){
 }
 function ncDiagVerdict(cls){   // 왜 언어가 안 잡혔는지
   const c=String(cls==null?'':cls).trim();
-  if(!c)return '분류 빈값';
+  if(!c)return '분류 빈값(구버전 파싱일 수 있음 → 공용폴더 새로고침)';
   const raw=ncLang(c);
   if(raw===null)return '톡이즈/tv_b 코드 → 뇌새김 제외';
   const l=ncLangFromCls(c);
-  return l?`판정됨→${l}(재확인)`:'미인식 코드';
+  return l?`판정 가능(${l}) — 공용폴더 새로고침 필요`:'미인식 코드';
 }
 function ncGunjaDiagTable(rows,title){
   if(!rows.length)return '';
@@ -14521,6 +14530,7 @@ async function ncScanFolder(opts={}){
   if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
   spDirHandle=h;spDirName=h.name;
   if(!await spVerifyPerm(h,!!opts.request)){ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');return;}
+  await ncPurgeStaleContracts();   // 구버전(분류 미포함) 계약 파일 제거 → 아래 스캔에서 재파싱
   ncScanBusy=true;ncUpdateDirStatus('busy');if(!opts.fromShow)ncSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);   // DB수·계약(일마감·신청자관리)·명단 자동 / CTI만 수동
   const tasks=[];
