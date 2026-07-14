@@ -14166,7 +14166,7 @@ function ncCompute(){
   if(!dbEvents.length)warns.push('뇌새김 DB가 0건입니다. 명단(담당=뇌새김영어/제2외국어)·DB수 파일을 확인하세요.');
   if(unmatched.length)warns.push(`언어 판정 불가 계약 ${unmatched.length.toLocaleString()}건 제외(DB·분류 모두 실패) <a href="#" onclick="ncShowUnmatched();return false;" style="color:#b45309;text-decoration:underline">[목록 보기]</a>`);
   if(unmatchedCall)warns.push(`전화 미매칭 콜 ${unmatchedCall.toLocaleString()}건 제외`);
-  if(gunjaNoLang)warns.push(`군자 계약 중 언어 미상 ${gunjaNoLang.toLocaleString()}건은 전체엔 포함`);
+  if(gunjaNoLang)warns.push(`군자 계약 중 언어 미상 ${gunjaNoLang.toLocaleString()}건은 전체엔 포함 <a href="#" onclick="ncShowUnmatched();return false;" style="color:#b45309;text-decoration:underline">[목록 보기]</a>`);
   ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,unmatched,minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
   return ncModel;
 }
