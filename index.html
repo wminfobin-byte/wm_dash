@@ -13987,12 +13987,17 @@ function ncFilesByType(t){return ncFiles.filter(f=>f.type===t);}
 async function ncLoadFiles(){try{await ncOpenIDB();ncFiles=await ncIdbGetAll();ncLoaded=true;ncUpdateUploadStatus();}catch(e){console.error('뇌새김콜 IDB 로드:',e);}}
 
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
-function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+// 용량 절감: CTI(수동·공용폴더에 없음)만 rows 포함. DB수·계약·명단은 sp/tb/tz와 중복이라 제외하고
+// 각 PC에서 공용폴더 재스캔으로 복원(폴더 없는 PC는 nc의 DB/계약 미표시). payload가 JS 문자열 한도를 넘어
+// JSON.stringify가 'Invalid string length'로 실패하던 문제 해결.
+function ncCollectSync(){return (ncFiles||[]).filter(f=>f.type==='cti').map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
 async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
-  await ncIdbClear();ncFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  // CTI만 교체 — 공용폴더로 받은 DB수·계약·명단은 보존
+  for(const f of ncFilesByType('cti'))await ncIdbDel(f.id);
+  ncFiles=ncFiles.filter(f=>f.type!=='cti');
+  for(const f of arr){if(f.type!=='cti')continue;const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
   ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
 }
@@ -14214,11 +14219,25 @@ function ncDiagTable(rows,title){
   return `<div class="nc-pd-h" style="margin:12px 0 6px">${title} · ${rows.length.toLocaleString()}건${rows.length>=1000?' (최대 1000)':''}</div>
     <table class="nc-tbl" style="min-width:640px"><thead><tr class="nc-sub"><th style="text-align:left">고객키</th><th>담당자(N)</th><th>신청일</th><th style="text-align:left">분류(Q)</th></tr></thead><tbody>${tr}</tbody></table>`;
 }
+function ncDiagVerdict(cls){   // 왜 언어가 안 잡혔는지
+  const c=String(cls==null?'':cls).trim();
+  if(!c)return '분류 빈값';
+  const raw=ncLang(c);
+  if(raw===null)return '톡이즈/tv_b 코드 → 뇌새김 제외';
+  const l=ncLangFromCls(c);
+  return l?`판정됨→${l}(재확인)`:'미인식 코드';
+}
+function ncGunjaDiagTable(rows,title){
+  if(!rows.length)return '';
+  const tr=rows.map(u=>`<tr><td style="text-align:left;font-family:monospace;font-size:11px">${u.k||''}</td><td>${u.mgr||''}</td><td>${u.day||''}</td><td style="text-align:left;font-family:monospace;font-size:11px">${String(u.cls||'').replace(/</g,'&lt;')||'<i style=color:#aaa>(빈값)</i>'}</td><td style="color:#b45309">${ncDiagVerdict(u.cls)}</td></tr>`).join('');
+  return `<div class="nc-pd-h" style="margin:12px 0 6px">${title} · ${rows.length.toLocaleString()}건${rows.length>=1000?' (최대 1000)':''}</div>
+    <table class="nc-tbl" style="min-width:720px"><thead><tr class="nc-sub"><th style="text-align:left">고객키</th><th>담당자(N)</th><th>신청일</th><th style="text-align:left">분류(Q)</th><th>미상 사유</th></tr></thead><tbody>${tr}</tbody></table>`;
+}
 function ncShowUnmatched(){
   const body=document.getElementById('ncDiagBody');if(!body)return;
   const list=(ncModel&&ncModel.unmatched)||[];
   const gUnknown=((ncModel&&ncModel.gunja)||[]).filter(g=>!g.lang).slice(0,1000);
-  let html=ncDiagTable(list,'일반 계약 — 언어 판정 불가')+ncDiagTable(gUnknown,'군자 계약 — 언어 미상');
+  let html=ncDiagTable(list,'일반 계약 — 언어 판정 불가')+ncGunjaDiagTable(gUnknown,'군자 계약 — 언어 미상');
   if(!html)html='<div class="nc-empty">언어 판정 불가 계약이 없습니다.</div>';
   body.innerHTML=html;
   document.getElementById('ncDiagOverlay').classList.add('open');
