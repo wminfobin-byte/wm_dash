@@ -2096,9 +2096,9 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
           <div class="upload-box" id="box-nc-attend">
             <input type="file" accept=".xlsx,.xls" data-nctype="attend" multiple>
             <div class="icon">👥</div>
-            <div class="label">명단 (그룹표기)</div>
-            <div class="desc">WM_근태보고_그룹 — 담당/그룹/센터/이름<br>담당=뇌새김영어·제2외국어 코디 판별</div>
-            <span class="upload-badge overwrite">최신 1건</span>
+            <div class="label">명단 (그룹표기) — 매월 누적</div>
+            <div class="desc">WM_근태보고_그룹 — 담당/그룹/센터/이름<br>월별 누적 합집합 → 퇴사자·과거 담당까지 판별</div>
+            <span class="upload-badge by-name">누적 저장</span>
             <div class="filename" id="fname-nc-attend"></div>
           </div>
         </div>
@@ -14038,8 +14038,7 @@ function ncParseCont(wb){
 // ── 인제스트 ──
 async function ncIngestFile(type,file){
   const fileHash=`${file.name}|${file.size}`;
-  if(type!=='attend'&&ncFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};
-  if(type==='attend'){const cur=ncFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup'};}
+  if(ncFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};   // 명단 포함 전 타입 누적(동일 파일만 스킵)
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
   let rows;
@@ -14047,37 +14046,52 @@ async function ncIngestFile(type,file){
   else if(type==='contDaily')rows=ncParseCont(wb);
   else if(type==='cti')rows=tzParseCti(wb);
   else rows=spParseAttend(wb);
-  if(type==='attend'){for(const f of ncFilesByType('attend'))await ncIdbDel(f.id);ncFiles=ncFiles.filter(f=>f.type!=='attend');}
   const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
   const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);
   return {status:'ok'};
 }
 
 // ── 집계 엔진 ──
+// 명단 = 매월 누적 전체 합집합. 어느 달이든 뇌새김/제2외국어였던 이름이면 로스터 포함(퇴사자도).
+// 팀 이동 시 대상팀(뇌새김/제2외국어)을 우선. 파일명 순으로 처리해 최신 소속(센터 등) 반영.
 function ncBuildRoster(){
-  const att=ncFilesByType('attend');const src=att.length?att[att.length-1].rows:[];
+  const files=ncFilesByType('attend').slice().sort((a,b)=>a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0);
   const full=new Map(), bare=new Map();
-  for(const p of src){const nm=p.nm;if(!nm)continue;const b=nm.replace(/^\(.*?\)/,'').trim();
-    const ent={nm,bare:b,team:p.team,ctr:p.ctr,grp:p.grp};full.set(nm,ent);
-    if(bare.has(b)){if(bare.get(b)!=='AMBIG'&&bare.get(b).nm!==nm)bare.set(b,'AMBIG');}else bare.set(b,ent);}
+  const isT=t=>NC_TARGET.has(t);
+  for(const f of files)for(const p of (f.rows||[])){
+    const nm=p.nm;if(!nm)continue;const b=nm.replace(/^\(.*?\)/,'').trim();
+    const ent={nm,bare:b,team:p.team,ctr:p.ctr,grp:p.grp};
+    const ex=full.get(nm);
+    if(!ex||(isT(p.team))||(!isT(ex.team)))full.set(nm,ent);   // 최신 우선 + 대상팀 우선(비대상은 대상으로 승격)
+    const eb=bare.get(b);
+    if(eb===undefined)bare.set(b,ent);
+    else if(eb!=='AMBIG'){
+      if(eb.nm===nm){bare.set(b,full.get(nm));}                // 동일인 → 최신 ent 유지
+      else{const exT=isT(eb.team),newT=isT(p.team);            // 동명이인
+        if(newT&&!exT)bare.set(b,ent);
+        else if(newT&&exT)bare.set(b,'AMBIG');}
+    }
+  }
   return {full,bare};
 }
 function ncCompute(){
   const roster=ncBuildRoster();
   // DB: 뇌새김/제2외국어 담당만, 고객키별 분배 이벤트(events) + (k,rc) dedup 이벤트 + 전화 인덱스
-  const keyEvents=new Map(), phoneIdx=new Map(), keyLang=new Map();
+  const keyEvents=new Map(), phoneIdx=new Map(), keyLangAll=new Map();
   const evMap=new Map();      // (k|rc) → 이벤트 1건 (누적파일 중복 제거)
   const dbFiles=ncFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0);
   for(const f of dbFiles)for(const r of (f.rows||[])){
     if(!r.k)continue;
     const lang=r.lang; if(lang==null)continue;                        // 톡이즈·tv_b 제외
-    const ent=spCanon(roster,r.ob); if(!ent||!NC_TARGET.has(ent.team))continue;   // 담당 뇌새김/제2외국어만
+    // 전체 keyLang(로스터·담당 무관) — 군자 등 비대상 담당 계약의 언어 판정용. 실언어 우선, IN/콜백은 보조.
+    if(!keyLangAll.has(r.k))keyLangAll.set(r.k,lang);
+    else if((keyLangAll.get(r.k)==='IN'||keyLangAll.get(r.k)==='콜백')&&lang!=='IN'&&lang!=='콜백')keyLangAll.set(r.k,lang);
+    const ent=spCanon(roster,r.ob); if(!ent||!NC_TARGET.has(ent.team))continue;   // 담당 뇌새김/제2외국어만(모수·이벤트)
     const rc=r.rc, ek=r.k+'|'+rc;
     let ev=evMap.get(ek);
     if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od};evMap.set(ek,ev);
       if(!keyEvents.has(r.k))keyEvents.set(r.k,[]);keyEvents.get(r.k).push(ev);}
     else{if(r.d&&(!ev.d||r.d<ev.d))ev.d=r.d;if(!ev.lang&&lang)ev.lang=lang;}
-    if(!keyLang.has(r.k)&&lang!=='IN'&&lang!=='콜백')keyLang.set(r.k,lang);
     for(const p of [r.p1,r.p2,r.p3]){if(!p)continue;if(!phoneIdx.has(p))phoneIdx.set(p,[]);const a=phoneIdx.get(p);if(!a.includes(r.k))a.push(r.k);}
   }
   for(const evs of keyEvents.values())evs.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.rc-b.rc);
@@ -14085,20 +14099,22 @@ function ncCompute(){
   function bestEvent(k,day){const evs=keyEvents.get(k);if(!evs||!evs.length)return null;let best=null;
     for(const ev of evs){if(ev.d&&day&&ev.d>day)continue;if(!best||ev.d>best.d||(ev.d===best.d&&best.rc&&!ev.rc))best=ev;}
     return best||evs[0];}
-  // 계약(신청자관리 일마감): 고객키 dedup. 군자(담당자 '군자')는 별도 집계, 실계약수 제외.
-  const contracts=[],gunja=[],contractOrder=new Map();const seenC=new Set();
-  let unmatchedCont=0,unmatchedGunja=0;
+  // 계약(신청자관리 일마감): 고객키 dedup.
+  //  군자 = 담당자 N에 '군자' 포함 → DB매칭 무관하게 전부 집계(고객키 dedup), 실계약수에서는 제외.
+  const contracts=[],gunja=[],contractOrder=new Map();const seenC=new Set(),seenGunja=new Set();
+  let unmatchedCont=0,gunjaNoLang=0;
   const cFiles=ncFilesByType('contDaily').slice().sort((a,b)=>a.fileName>b.fileName?1:-1);
   for(const f of cFiles)for(const r of (f.rows||[])){
     if(!r.k)continue;
+    if(String(r.mgr).includes('군자')){                                 // 군자 계약수(담당자 N 기준·별도)
+      if(!seenGunja.has(r.k)){seenGunja.add(r.k);const gl=keyLangAll.get(r.k)||null;if(!gl)gunjaNoLang++;gunja.push({k:r.k,day:r.d,lang:gl});}
+      continue;}
     if(!r.rt&&r.d){if(!contractOrder.has(r.k)||r.d<contractOrder.get(r.k))contractOrder.set(r.k,r.d);}  // 케어판정용 최초 신청일
     if(seenC.has(r.k))continue;seenC.add(r.k);
     const best=bestEvent(r.k,r.d);
-    const lang=best?best.lang:keyLang.get(r.k);
-    if(String(r.mgr).includes('군자')){                                 // 군자 계약수(별도)
-      if(lang)gunja.push({k:r.k,day:r.d,lang});else unmatchedGunja++;continue;}
-    const ent=spCanon(roster,r.mgr); if(!ent||!NC_TARGET.has(ent.team))continue;   // 비대상 담당 제외
-    if(!lang){unmatchedCont++;continue;}                                // DB 미매칭 계약 제외
+    const lang=best?best.lang:keyLangAll.get(r.k);
+    const ent=spCanon(roster,r.mgr); if(!ent||!NC_TARGET.has(ent.team))continue;   // 비대상 담당(군자 외) 제외
+    if(!lang){unmatchedCont++;continue;}                                // DB 미매칭 계약 제외(언어·계열 판정 불가)
     const crc=best?best.rc:0;
     const daily=!r.rc&&!!(best&&best.d===r.d&&best.rc===0);             // 당일계약 = 신청일 분배 신규 & R17 비재콜
     contracts.push({k:r.k,codi:ent.nm,team:ent.team,day:r.d,lang,rc:crc,daily,cancelled:!!r.rt});
@@ -14129,6 +14145,7 @@ function ncCompute(){
   if(!dbEvents.length)warns.push('뇌새김 DB가 0건입니다. 명단(담당=뇌새김영어/제2외국어)·DB수 파일을 확인하세요.');
   if(unmatchedCont)warns.push(`DB 미매칭 계약 ${unmatchedCont.toLocaleString()}건 제외(계열·언어 판정 불가)`);
   if(unmatchedCall)warns.push(`전화 미매칭 콜 ${unmatchedCall.toLocaleString()}건 제외`);
+  if(gunjaNoLang)warns.push(`군자 계약 중 DB 미매칭 ${gunjaNoLang.toLocaleString()}건은 전체엔 포함·언어 미상`);
   ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
   return ncModel;
 }
@@ -14151,13 +14168,14 @@ function ncAgg(s,e){
     a.cAll++;pa.cAll++;pl.cAll++;
     if(c.daily){a.cDaily++;pa.cDaily++;pl.cDaily++;}
     if(c.rc===1){a.c1++;pa.c1++;pl.c1++;}else if(c.rc===2){a.c2++;pa.c2++;pl.c2++;}else if(c.rc===3){a.c3++;pa.c3++;pl.c3++;}}
-  for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;L(g.lang).gunja++;}
+  let gunjaAll=0;
+  for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;gunjaAll++;if(g.lang)L(g.lang).gunja++;}   // 언어 미상은 전체(gunjaAll)에만
   for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;
     const a=L(c.lang),pa=P(c.codi),pl=PL(c.codi,c.lang);
     a.ntry++;pa.ntry++;pl.ntry++;
     if(c.conn){a.nconn++;pa.nconn++;pl.nconn++;}
     if(c.valid){a.nvalid++;pa.nvalid++;pl.nvalid++;}}
-  return {lang,person,personLang};
+  return {lang,person,personLang,gunjaAll};
 }
 function ncSum(list){const t=ncBlank();for(const g of list){if(!g)continue;for(let i=0;i<4;i++)t.db[i]+=g.db[i];t.cAll+=g.cAll;t.cDaily+=g.cDaily;t.c1+=g.c1;t.c2+=g.c2;t.c3+=g.c3;t.gunja+=g.gunja;t.ntry+=g.ntry;t.nconn+=g.nconn;t.nvalid+=g.nvalid;}return t;}
 function ncScopeLangs(view){return NC_LANGS.filter(l=>ncLangMatch(view,l));}
@@ -14208,10 +14226,9 @@ function ncMatrixHeader(){
       <th>시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
     </tr></thead>`;
 }
-function ncRenderMatrix(agg,view){
+function ncRenderMatrix(agg,view,tot){
   const scope=ncScopeLangs(view);
   const totLabel=view==='전체'?'전체':`전체(${view})`;
-  const tot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));
   let body=ncMatrixRow(totLabel,tot,'nc-total');
   for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
   return `<div class="nc-sec"><div class="nc-sec-h">🌐 언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
@@ -14287,9 +14304,10 @@ function ncRender(){
   const agg=ncAgg(s,e);
   const scope=ncScopeLangs(view);
   const tot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));
+  if(view==='전체')tot.gunja=agg.gunjaAll;   // 전체 군자 = 언어 미상 포함 총계
   ncRenderKpi(tot);
   const chartBox=`<div class="nc-sec"><div class="nc-sec-h">📈 일자별 추이<span class="nc-sub-s">DB수·실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
-  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,view)+chartBox+ncRenderPerson(agg,view);
+  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,view,tot)+chartBox+ncRenderPerson(agg,view);
   ncRenderChart(s,e);
   const w=document.getElementById('ncWarn');if(w)w.textContent=(ncModel.warns||[]).join(' · ');
   ncUpdateCodiBtn();
@@ -14421,8 +14439,7 @@ async function ncScanFolder(opts={}){
     }
   }
   try{await walk(h,'',0,false,null);}catch(e){console.error('뇌새김콜 폴더 스캔',e);ncScanBusy=false;ncUpdateDirStatus('error');return;}
-  const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
-  const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
+  const finalTasks=tasks;   // 명단도 전부 누적(중복은 fileHash로 스킵)
   let okCnt=0,dupCnt=0;
   for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await ncIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
   ncScanBusy=false;if(okCnt>0)ncModel=null;
@@ -14449,7 +14466,8 @@ async function ncDownloadExcel(){
   const head=['언어','DB수','실계약수','실계약률','일계약수','일계약률','이전계약수','재콜DB','재콜계약','재콜률','재재콜DB','재재콜계약','재재콜률','회수콜DB','회수콜계약','회수콜률','군자계약','시도','연결','연결률','유효','유효율'];
   const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[1],g.c1,ncPct(g.c1,g.db[1]),g.db[2],g.c2,ncPct(g.c2,g.db[2]),g.db[3],g.c3,ncPct(g.c3,g.db[3]),g.gunja,g.ntry,g.nconn,ncPct(g.nconn,g.ntry),g.nvalid,ncPct(g.nvalid,g.ntry)];};
   const aoa=[[`뇌새김 콜 현황 (${s} ~ ${e})`],head];
-  aoa.push(rowOf('전체',ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()))));
+  const etot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));if(view==='전체')etot.gunja=agg.gunjaAll;
+  aoa.push(rowOf('전체',etot));
   for(const l of scope)aoa.push(rowOf(l,agg.lang.get(l)||ncBlank()));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:head.length-1}}];
