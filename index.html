@@ -14202,6 +14202,7 @@ function ncSum(list){const t=ncBlank();for(const g of list){if(!g)continue;for(l
 function ncDbTot(g){return g.db[0]+g.db[1]+g.db[2]+g.db[3];}
 function ncEmptyG(g){return ncDbTot(g)===0&&g.cAll===0&&g.fTry===0&&g.oTry===0&&g.gunja===0;}
 function ncPct(n,d){return d?(n/d*100).toFixed(1)+'%':'-';}
+function ncAvg(n,d){return d?(n/d).toFixed(1):'-';}   // 평균 시도수 = 시도수 / DB수
 function ncC(v){return (v||0).toLocaleString();}
 function ncDayLabel(day){const d=spDateObj(day);const wd=d?['일','월','화','수','목','금','토'][d.getDay()]:'';return d?`${day.slice(5)}(${wd})`:day;}
 function ncCloseDiag(){document.getElementById('ncDiagOverlay').classList.remove('open');}
@@ -14226,7 +14227,8 @@ function ncRenderKpi(t){
   ];
   document.getElementById('ncKpi').innerHTML=cards.map(k=>`<div class="nc-kpi nc-kpi-${k.c}"><div class="nc-kpi-top"><span class="nc-kpi-ic">${k.ic}</span><span class="nc-kpi-l">${k.l}</span></div><div class="nc-kpi-v">${k.v}</div><div class="nc-kpi-s">${k.s}</div></div>`).join('');
 }
-// 매트릭스 컬럼: 전체6 · 신규3 · 재콜3 · 재재콜3 · 회수콜3 · 군자1 · 신규콜5 · 이전콜5
+// 매트릭스 컬럼: 전체6 · 신규3 · 재콜3 · 재재콜3 · 회수콜3 · 군자1 · 신규콜6 · 이전콜6
+//   콜 그룹: 시도 · 평균시도(=시도/DB수) · 연결 · 연결률 · 유효 · 유효율
 function ncMatrixRow(label,g,cls){
   const dbT=ncDbTot(g);
   const cells=[
@@ -14236,11 +14238,11 @@ function ncMatrixRow(label,g,cls){
     ncC(g.db[2]), ncC(g.c[2]), ncPct(g.c[2],g.db[2]),
     ncC(g.db[3]), ncC(g.c[3]), ncPct(g.c[3],g.db[3]),
     ncC(g.gunja),
-    ncC(g.fTry), ncC(g.fConn), ncPct(g.fConn,g.fTry), ncC(g.fValid), ncPct(g.fValid,g.fTry),
-    ncC(g.oTry), ncC(g.oConn), ncPct(g.oConn,g.oTry), ncC(g.oValid), ncPct(g.oValid,g.oTry),
+    ncC(g.fTry), ncAvg(g.fTry,dbT), ncC(g.fConn), ncPct(g.fConn,g.fTry), ncC(g.fValid), ncPct(g.fValid,g.fTry),
+    ncC(g.oTry), ncAvg(g.oTry,dbT), ncC(g.oConn), ncPct(g.oConn,g.oTry), ncC(g.oValid), ncPct(g.oValid,g.oTry),
   ];
-  const pct=[2,4,8,11,14,17,21,23,26,28];
-  return `<tr class="${cls||''}"><td class="nc-lbl">${label}</td>${cells.map((c,i)=>`<td${pct.includes(i)?' class="nc-pctcol"':''}>${c}</td>`).join('')}</tr>`;
+  const pct=[2,4,8,11,14,17,22,24,28,30];const avg=[20,26];
+  return `<tr class="${cls||''}"><td class="nc-lbl">${label}</td>${cells.map((c,i)=>`<td${pct.includes(i)?' class="nc-pctcol"':avg.includes(i)?' class="nc-avgcol"':''}>${c}</td>`).join('')}</tr>`;
 }
 function ncMatrixHeader(){
   return `<thead>
@@ -14249,8 +14251,8 @@ function ncMatrixHeader(){
       <th colspan="6">전체</th>
       <th colspan="3">신규</th><th colspan="3">재콜</th><th colspan="3">재재콜</th><th colspan="3">회수콜</th>
       <th rowspan="2">군자<br>계약수</th>
-      <th colspan="5">신규 콜 (케어 제외)</th>
-      <th colspan="5">이전 콜 (케어 제외)</th>
+      <th colspan="6">신규 콜</th>
+      <th colspan="6">이전 콜</th>
     </tr>
     <tr class="nc-sub">
       <th>DB수</th><th>실계약수</th><th>실계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th>
@@ -14258,8 +14260,8 @@ function ncMatrixHeader(){
       <th>DB수</th><th>계약수</th><th>계약률</th>
       <th>DB수</th><th>계약수</th><th>계약률</th>
       <th>DB수</th><th>계약수</th><th>계약률</th>
-      <th>시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
-      <th>시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
+      <th>시도</th><th>평균시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
+      <th>시도</th><th>평균시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
     </tr></thead>`;
 }
 function ncRenderMatrix(agg,tot){
@@ -14269,7 +14271,7 @@ function ncRenderMatrix(agg,tot){
   for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
   return `<div class="nc-sec"><div class="nc-sec-h">🌐 언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader()}<tbody>${body}</tbody></table></div>
-    <div class="nc-note">· 신규=재콜0회 · 재콜/재재콜/회수콜 = DB정보 "재콜" 출현횟수(1/2/3) · 언어 = 매체코드(T열) · 신규 콜=당일 분배 DB에 건 콜 / 이전 콜=이전 분배·재콜 DB · DB단가·광고비·취소수 제외</div></div>`;
+    <div class="nc-note">· 신규=재콜0회 · 재콜/재재콜/회수콜 = DB정보 "재콜" 출현횟수(1/2/3) · 언어 = 매체코드(T열) · 신규 콜=당일 분배 DB에 건 콜 / 이전 콜=이전 분배·재콜 DB · 평균시도=시도수÷DB수 · DB단가·광고비·취소수 제외</div></div>`;
 }
 // 개인별 컬럼: 코디 · DB수 · 실계약 · 계약률 · 일계약 · 이전계약 · 신규콜(시도·유효) · 이전콜(시도·유효)
 function ncPersonHeader(){
@@ -14509,8 +14511,8 @@ async function ncAutoScanOnShow(){
 async function ncDownloadExcel(){
   if(!ncModel){alert('데이터가 없습니다.');return;}
   const [s,e]=ncRangeDays();const agg=ncAgg(s,e);const scope=ncScopeLangs();
-  const head=['언어','DB수','실계약수','실계약률','일계약수','일계약률','이전계약수','신규DB','신규계약','신규계약률','재콜DB','재콜계약','재콜률','재재콜DB','재재콜계약','재재콜률','회수콜DB','회수콜계약','회수콜률','군자계약','신규콜시도','신규콜연결','신규콜연결률','신규콜유효','신규콜유효율','이전콜시도','이전콜연결','이전콜연결률','이전콜유효','이전콜유효율'];
-  const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[0],g.c[0],ncPct(g.c[0],g.db[0]),g.db[1],g.c[1],ncPct(g.c[1],g.db[1]),g.db[2],g.c[2],ncPct(g.c[2],g.db[2]),g.db[3],g.c[3],ncPct(g.c[3],g.db[3]),g.gunja,g.fTry,g.fConn,ncPct(g.fConn,g.fTry),g.fValid,ncPct(g.fValid,g.fTry),g.oTry,g.oConn,ncPct(g.oConn,g.oTry),g.oValid,ncPct(g.oValid,g.oTry)];};
+  const head=['언어','DB수','실계약수','실계약률','일계약수','일계약률','이전계약수','신규DB','신규계약','신규계약률','재콜DB','재콜계약','재콜률','재재콜DB','재재콜계약','재재콜률','회수콜DB','회수콜계약','회수콜률','군자계약','신규콜시도','신규콜평균시도','신규콜연결','신규콜연결률','신규콜유효','신규콜유효율','이전콜시도','이전콜평균시도','이전콜연결','이전콜연결률','이전콜유효','이전콜유효율'];
+  const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[0],g.c[0],ncPct(g.c[0],g.db[0]),g.db[1],g.c[1],ncPct(g.c[1],g.db[1]),g.db[2],g.c[2],ncPct(g.c[2],g.db[2]),g.db[3],g.c[3],ncPct(g.c[3],g.db[3]),g.gunja,g.fTry,ncAvg(g.fTry,dbT),g.fConn,ncPct(g.fConn,g.fTry),g.fValid,ncPct(g.fValid,g.fTry),g.oTry,ncAvg(g.oTry,dbT),g.oConn,ncPct(g.oConn,g.oTry),g.oValid,ncPct(g.oValid,g.oTry)];};
   const aoa=[[`뇌새김 콜 현황 (${s} ~ ${e})`],head];
   const etot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));if(ncAllLangs())etot.gunja=agg.gunjaAll;
   aoa.push(rowOf('전체',etot));
@@ -14570,12 +14572,16 @@ function ncEnsureStyle(){
   #page-naesaegim-call .nc-note{margin-top:10px;font-size:11.5px;color:#8b93a7}
   #page-naesaegim-call .nc-tblwrap{border:1px solid #e8edf3;border-radius:12px;overflow-x:auto}
   #page-naesaegim-call .nc-tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
-  #page-naesaegim-call .nc-matrix{min-width:1400px}
   #page-naesaegim-call .nc-tbl th,#page-naesaegim-call .nc-tbl td{padding:7px 6px;text-align:center;border-bottom:1px solid #eef2f7;white-space:nowrap}
   #page-naesaegim-call .nc-tbl thead th{background:#f1f5fb;color:#475569;font-weight:800;border-bottom:1px solid #dbe3ef}
   #page-naesaegim-call .nc-tbl thead tr.nc-grp th{background:#e6ecf7;border-left:1px solid #dbe3ef}
   #page-naesaegim-call .nc-tbl .nc-lbl{text-align:center;font-weight:700;color:#334155}
   #page-naesaegim-call .nc-tbl .nc-pctcol{color:#4361ee;font-weight:700}
+  #page-naesaegim-call .nc-tbl .nc-avgcol{color:#0d9488;font-weight:700}
+  /* 언어별·계약별 매트릭스: 폰트·패딩 축소로 좌우 스크롤 없이 한 화면에 */
+  #page-naesaegim-call .nc-matrix{font-size:10px}
+  #page-naesaegim-call .nc-matrix th,#page-naesaegim-call .nc-matrix td{padding:4px 3px;letter-spacing:-.2px}
+  #page-naesaegim-call .nc-matrix thead tr.nc-grp th{font-size:10.5px}
   #page-naesaegim-call .nc-tbl tr.nc-total td{background:#eef3ff;color:#1e293b;font-weight:800;border-bottom:2px solid #c7d4f5}
   #page-naesaegim-call .nc-tbl tbody tr:hover td{background:#f8fafc}
   #page-naesaegim-call .nc-tbl tr.nc-total:hover td{background:#eef3ff}
