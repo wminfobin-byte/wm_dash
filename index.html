@@ -878,6 +878,20 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn9">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-naesaegim-call" style="display:none">
+    <div class="status-dots" id="ncStatusDots" title="파일 상태: CTI / DB수 / 계약(일마감) / 명단">
+      <div class="status-dot" id="nc-dot-cti"></div>
+      <div class="status-dot" id="nc-dot-db"></div>
+      <div class="status-dot" id="nc-dot-cont"></div>
+      <div class="status-dot" id="nc-dot-attend"></div>
+    </div>
+    <span id="ncLastUpdate" style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap"></span>
+    <button class="btn-header" onclick="ncOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="ncOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn10">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
@@ -888,6 +902,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="talkis-perf" onclick="switchPage('talkis-perf')">톡이즈 콜 현황</div>
+  <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
   <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
   <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
@@ -2045,6 +2060,139 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   </div>
 </div><!-- /page-talkis-perf -->
 
+<!-- ═══ Page: 뇌새김 콜 현황 ═══ -->
+<div class="page" id="page-naesaegim-call">
+  <div class="modal-overlay" id="ncModalOverlay" onclick="if(event.target===this)ncCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="ncCloseModal()">&times;</button>
+      <div id="ncModalUpload">
+        <h2>파일 업로드 — 뇌새김 콜 현황</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:14px">DB수·계약(일마감 신청자관리)·명단은 <b>공용폴더 자동 연동</b>(계열별성과와 공유), <b>CTI(걸은전화상세)</b>만 직접 업로드합니다. 명단(담당=뇌새김영어·제2외국어)으로 코디를 판별합니다.</p>
+        <div class="upload-grid">
+          <div class="upload-box" id="box-nc-cti">
+            <input type="file" accept=".xlsx,.xls" data-nctype="cti" multiple>
+            <div class="icon">📞</div>
+            <div class="label">CTI 통화 (걸은전화상세)</div>
+            <div class="desc">그룹_걸은전화상세_yyyymmdd<br>상담원명 C · 일자 E · 통화시간 H · 수신자 K · 상태 L</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-nc-cti"></div>
+          </div>
+          <div class="upload-box" id="box-nc-cont">
+            <input type="file" accept=".xlsx,.xls" data-nctype="contDaily" multiple>
+            <div class="icon">📝</div>
+            <div class="label">계약 — 일마감 (신청자관리) · 공용폴더</div>
+            <div class="desc">신청자관리_yyyymmdd<br>고객키 D · 담당자 N · 신청일 P · 반품일 AQ</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-nc-cont"></div>
+          </div>
+          <div class="upload-box" id="box-nc-db">
+            <input type="file" accept=".xlsx,.xls" data-nctype="db" multiple>
+            <div class="icon">🗂️</div>
+            <div class="label">DB수 (고객관리) — 공용폴더</div>
+            <div class="desc">WM_고객관리_yyyy-mm-dd<br>고객키 G · OB명 H · 분배일 I · DB정보 P · 매체코드 T</div>
+            <span class="upload-badge by-name">누적 저장</span>
+            <div class="filename" id="fname-nc-db"></div>
+          </div>
+          <div class="upload-box" id="box-nc-attend">
+            <input type="file" accept=".xlsx,.xls" data-nctype="attend" multiple>
+            <div class="icon">👥</div>
+            <div class="label">명단 (그룹표기)</div>
+            <div class="desc">WM_근태보고_그룹 — 담당/그룹/센터/이름<br>담당=뇌새김영어·제2외국어 코디 판별</div>
+            <span class="upload-badge overwrite">최신 1건</span>
+            <div class="filename" id="fname-nc-attend"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:14px">📁 공용폴더 자동 연동 (DB수·계약·명단)</div>
+              <div id="ncDirStatus" style="font-size:12px;color:var(--gray);margin-top:3px">연결 안 됨</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" id="ncConnBtn" onclick="ncConnectFolder()">공용폴더 연결</button>
+              <button class="btn btn-outline btn-sm" id="ncScanBtn" onclick="ncScanFolder({request:true,announce:true})">지금 스캔</button>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--gray);margin-top:10px;line-height:1.6">
+            계열별성과와 <b>같은 공용폴더</b>를 공유합니다. DB수·계약(일마감)·명단은 자동, <b>CTI 통화만 직접 업로드</b>하세요.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="ncCloseModal()">닫기</button>
+          <button class="btn btn-primary" onclick="ncCloseModal();ncGenerate(true);">분석 실행</button>
+        </div>
+      </div>
+      <div id="ncModalManage" class="hidden">
+        <h2>파일 관리 — 뇌새김 콜 현황</h2>
+        <div class="file-history" id="ncFileHistory"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" style="color:var(--danger);border-color:#fecaca" onclick="ncResetAll()">전체 초기화</button>
+          <button class="btn btn-outline" onclick="ncCloseModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="ncDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="ncDirBannerMsg" style="font-size:13px;font-weight:600;color:#92400e">📁 공용폴더 접근 허용이 필요합니다</span>
+      <button class="btn btn-primary btn-sm" onclick="ncScanFolder({request:true})">📁 공용폴더 새로고침</button>
+    </div>
+    <div id="ncEmpty" class="sp-empty">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">📞</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">뇌새김 콜 현황 데이터를 불러오세요</div>
+      <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → CTI 업로드 + 공용폴더(DB수·계약·명단) 연결/스캔</div>
+      <div id="ncEmptyHint" style="font-size:13px;margin-top:10px;color:var(--warning)"></div>
+    </div>
+
+    <div class="hidden" id="ncDashboard">
+      <div class="sp-control-bar">
+        <label>기간</label>
+        <input type="date" id="ncDateStart" onchange="ncRender()">
+        <span style="color:var(--gray)">~</span>
+        <input type="date" id="ncDateEnd" onchange="ncRender()">
+        <span style="margin-left:6px"></span>
+        <button class="btn btn-outline btn-sm" data-ncquick="7d" onclick="ncQuickRange('7d')">최근 7일</button>
+        <button class="btn btn-outline btn-sm" data-ncquick="30d" onclick="ncQuickRange('30d')">최근 30일</button>
+        <button class="btn btn-outline btn-sm" data-ncquick="thisMonth" onclick="ncQuickRange('thisMonth')">이번 달</button>
+        <button class="btn btn-outline btn-sm" data-ncquick="all" onclick="ncQuickRange('all')">전체</button>
+        <span style="margin-left:10px"></span>
+        <label>언어</label>
+        <select id="ncLangView" onchange="ncRender()">
+          <option value="전체">전체</option>
+          <option value="영어">영어(더위크+결합+홈페이지)</option>
+          <option value="더위크">더위크</option>
+          <option value="결합">결합</option>
+          <option value="홈페이지">홈페이지</option>
+          <option value="일본어">일본어</option>
+          <option value="중국어">중국어</option>
+          <option value="스페인어">스페인어</option>
+          <option value="프랑스어">프랑스어</option>
+          <option value="제2외국어">제2외국어</option>
+          <option value="IN">IN</option>
+          <option value="콜백">콜백</option>
+        </select>
+        <span style="margin-left:10px"></span>
+        <div class="tz-codi-wrap">
+          <button class="btn btn-outline btn-sm" id="ncCodiBtn" onclick="ncToggleCodiPanel()">코디 선택 ▾</button>
+          <div class="tz-codi-panel hidden" id="ncCodiPanel">
+            <div class="tz-codi-act">
+              <button class="btn btn-outline btn-sm" onclick="ncCodiAll(true)">전체 선택</button>
+              <button class="btn btn-outline btn-sm" onclick="ncCodiAll(false)">전체 해제</button>
+              <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="ncToggleCodiPanel()">닫기</button>
+            </div>
+            <div class="tz-codi-list" id="ncCodiList"></div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="ncDownloadExcel()">📥 엑셀</button>
+        <span id="ncWarn" style="font-size:12px;color:var(--warning);margin-left:auto"></span>
+      </div>
+      <div id="ncKpi" class="sp-kpi-row" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px"></div>
+      <div id="ncContent"></div>
+    </div>
+  </div>
+</div><!-- /page-naesaegim-call -->
+
 <!-- ═══ Page: 차등성과 ═══ -->
 <div class="page active" id="page-grade-dash">
 
@@ -2252,8 +2400,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call','timeboard-perf','talkis-perf']},
-  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','series-perf','timeboard-perf','talkis-perf']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -2282,6 +2430,7 @@ function applyAuth(){
     if(authUser.tabs.includes('series-perf') && typeof spLoadFiles==='function') await spLoadFiles();
     if(authUser.tabs.includes('timeboard-perf') && typeof tbLoadFiles==='function') await tbLoadFiles();
     if(authUser.tabs.includes('talkis-perf') && typeof tzLoadFiles==='function') await tzLoadFiles();
+    if(authUser.tabs.includes('naesaegim-call') && typeof ncLoadFiles==='function') await ncLoadFiles();
     autoSyncDownload();
   })();
 }
@@ -2318,7 +2467,10 @@ async function autoSyncDownload(){
     const tbOk=!tbAccess||tbHasLocal||!payload.tb;
     const tzHasLocal=typeof tzFiles!=='undefined'&&tzFiles&&tzFiles.length>0;
     const tzOk=!tzAccess||tzHasLocal||!payload.tz;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk)return;
+    const ncAccess=authUser&&authUser.tabs.includes('naesaegim-call');
+    const ncHasLocal=typeof ncFiles!=='undefined'&&ncFiles&&ncFiles.length>0;
+    const ncOk=!ncAccess||ncHasLocal||!payload.nc;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -2397,6 +2549,9 @@ async function autoSyncDownload(){
       await tbRestoreSync(payload.tb);
     }
     // 톡이즈 성과 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.nc&&ncAccess&&(!ncHasLocal||remoteNewer)&&typeof ncRestoreSync==='function'){
+      await ncRestoreSync(payload.nc);
+    }
     if(payload.tz&&tzAccess&&(!tzHasLocal||remoteNewer)&&typeof tzRestoreSync==='function'){
       await tzRestoreSync(payload.tz);
     }
@@ -2488,8 +2643,8 @@ function showSyncActions(token){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -2534,7 +2689,7 @@ function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.in
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -2619,7 +2774,15 @@ async function doSyncUpload(token){
         tzSync=tzCollectSync();
       }
     }catch(e){console.warn('tz sync collect 실패',e);}
-    const payload=JSON.stringify({v:9,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,tz:tzSync,ls:lsData});
+    // 뇌새김 콜 현황 데이터 (ncFiles 미로드 시 IDB에서 직접 읽어 누락 방지)
+    let ncSync=[];
+    try{
+      if(typeof ncCollectSync==='function'){
+        if((!ncFiles||!ncFiles.length)&&typeof ncLoadFiles==='function'){ if(!ncLoaded) await ncLoadFiles(); }
+        ncSync=ncCollectSync();
+      }
+    }catch(e){console.warn('nc sync collect 실패',e);}
+    const payload=JSON.stringify({v:10,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
@@ -2794,6 +2957,9 @@ async function doSyncDownloadManual(){
     if(payload.tb&&authUser&&authUser.tabs.includes('timeboard-perf')&&typeof tbRestoreSync==='function'){
       await tbRestoreSync(payload.tb);
     }
+    if(payload.nc&&authUser&&authUser.tabs.includes('naesaegim-call')&&typeof ncRestoreSync==='function'){
+      await ncRestoreSync(payload.nc);
+    }
     if(payload.tz&&authUser&&authUser.tabs.includes('talkis-perf')&&typeof tzRestoreSync==='function'){
       await tzRestoreSync(payload.tz);
     }
@@ -2939,6 +3105,9 @@ function switchPage(pageId){
   if(hrTb) hrTb.style.display = pageId==='timeboard-perf' ? 'flex' : 'none';
   const hrTz=document.getElementById('headerRight-talkis-perf');
   if(hrTz) hrTz.style.display = pageId==='talkis-perf' ? 'flex' : 'none';
+  const hrNc=document.getElementById('headerRight-naesaegim-call');
+  if(hrNc) hrNc.style.display = pageId==='naesaegim-call' ? 'flex' : 'none';
+  if(pageId==='naesaegim-call' && typeof ncOnShow==='function') ncOnShow();
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
   if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
   if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
@@ -13784,6 +13953,580 @@ function tzEnsureStyle(){
   #page-talkis-perf .tz-codi-list{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
   #page-talkis-perf .tz-ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#334155;cursor:pointer;padding:2px 0}
   #page-talkis-perf .tz-ck input{cursor:pointer}`;
+  document.head.appendChild(st);
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  뇌새김 콜 현황 (nc*) — CTI(케어 제외) 콜 지표 + 언어별·계약별 breakdown
+//  입력: DB수(공용폴더)·계약 일마감(수동)·CTI 걸은전화(수동)·명단
+//  언어(매체코드 T열)×계약유형 매트릭스 + 개인별 성과. 클라우드 싱크 payload.nc.
+// ════════════════════════════════════════════════════════════
+const NC_DB_NAME='naesaegimCallDashboard', NC_DB_VER=1;
+const NC_TYPES=['db','contDaily','attend','cti'];
+const NC_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단',cti:'CTI 통화(걸은전화)'};
+const NC_VALID_SEC=90;                 // 유효통화 기준: 통화시간 ≥ 90초
+const NC_LANGS=['더위크','결합','홈페이지','일본어','중국어','스페인어','프랑스어','IN','콜백'];
+const NC_ENG=new Set(['더위크','결합','홈페이지']);
+const NC_FOREIGN=new Set(['일본어','중국어','스페인어','프랑스어']);
+const NC_TARGET=(typeof SP_TARGET_TEAMS!=='undefined')?SP_TARGET_TEAMS:new Set(['뇌새김영어','제2외국어']);
+let ncIdb=null, ncFiles=[], ncLoaded=false, ncModel=null, ncScanBusy=false, ncChart=null, ncSel=null;
+
+// ── IndexedDB ──
+function ncOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(NC_DB_NAME,NC_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{ncIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
+function ncIdbAdd(rec){return new Promise((res,rej)=>{const tx=ncIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
+function ncIdbGetAll(){return new Promise((res,rej)=>{const tx=ncIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function ncIdbDel(id){return new Promise((res,rej)=>{const tx=ncIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
+async function ncIdbClear(){const all=await ncIdbGetAll();for(const r of all)await ncIdbDel(r.id);}
+function ncFilesByType(t){return ncFiles.filter(f=>f.type===t);}
+async function ncLoadFiles(){try{await ncOpenIDB();ncFiles=await ncIdbGetAll();ncLoaded=true;ncUpdateUploadStatus();}catch(e){console.error('뇌새김콜 IDB 로드:',e);}}
+
+// ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
+function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+async function ncRestoreSync(arr){
+  if(!Array.isArray(arr))return;
+  if(!ncIdb)await ncOpenIDB();
+  await ncIdbClear();ncFiles=[];
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
+  if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
+}
+
+// ── 정규화 헬퍼 (tz/sp 공용 헬퍼 재사용) ──
+function ncRecallLevel(dbinfo){const n=(String(dbinfo==null?'':dbinfo).match(/재콜/g)||[]).length;return n>3?3:n;}  // 0신규/1재콜/2재재콜/3회수콜
+// 언어 판정 (매체코드 T열) — 제2외국어(홈페이지 코드 포함) 먼저, 그 다음 tw2·hp_in
+function ncLang(mc){
+  const c=String(mc==null?'':mc).toLowerCase();
+  if(!c.trim())return 'IN';                         // 무매체 IN
+  if(c.includes('talkis'))return null;              // 톡이즈 제외
+  if(c.includes('callback'))return '콜백';
+  if(c.includes('tv_b'))return null;                // tv_b 제외
+  if(c.includes('japer')||c.includes('jhp_in'))return '일본어';
+  if(c.includes('cnper')||c.includes('chp_in')||c.includes('chn'))return '중국어';
+  if(c.includes('esper')||c.includes('shp_in'))return '스페인어';
+  if(c.includes('frper')||c.includes('fhp_in'))return '프랑스어';
+  if(c.includes('tw2'))return '더위크';
+  if(c.includes('hp_in')||c.includes('hp2_in'))return '홈페이지';
+  return '결합';
+}
+
+// ── 파서 ──
+// DB(고객관리): 계열 C(2)·고객키 G(6)·OB명 H(7)·분배일 I(8)·연령대 L(11)·DB정보 P(15)·매체코드 T(19)·오더일 X(23)·전화 M/N/O(12/13/14)
+function ncParseDb(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
+    const k=String(r[6]==null?'':r[6]).trim();if(!k)continue;
+    const se=parseInt(String(r[2]==null?'':r[2]).trim(),10);
+    rows.push({k, ob:String(r[7]==null?'':r[7]).trim(), d:spNormDay(r[8]), od:spNormDay(r[23]),
+      ag:String(r[11]==null?'':r[11]).trim(), se:isNaN(se)?-1:se,
+      rc:ncRecallLevel(r[15]), lang:ncLang(r[19]),
+      p1:tzNormPhone(r[12]),p2:tzNormPhone(r[13]),p3:tzNormPhone(r[14])});
+  }
+  return rows;
+}
+// 계약(신청자관리 일마감): 고객키 D(3)·담당자 N(13)·신청일 P(15)·코드 R(17,재콜)·반품일 AQ(42)
+function ncParseCont(wb){
+  const aoa=spReadAOA(wb),rows=[];
+  for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
+    const mgr=String(r[13]==null?'':r[13]).trim();if(!mgr)continue;
+    rows.push({k:String(r[3]==null?'':r[3]).trim(), mgr, d:spNormDay(r[15]),
+      rc:String(r[17]==null?'':r[17]).includes('재콜')?1:0, rt:spNormDay(r[42])});
+  }
+  return rows;
+}
+
+// ── 인제스트 ──
+async function ncIngestFile(type,file){
+  const fileHash=`${file.name}|${file.size}`;
+  if(type!=='attend'&&ncFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};
+  if(type==='attend'){const cur=ncFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup'};}
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+  let rows;
+  if(type==='db')rows=ncParseDb(wb);
+  else if(type==='contDaily')rows=ncParseCont(wb);
+  else if(type==='cti')rows=tzParseCti(wb);
+  else rows=spParseAttend(wb);
+  if(type==='attend'){for(const f of ncFilesByType('attend'))await ncIdbDel(f.id);ncFiles=ncFiles.filter(f=>f.type!=='attend');}
+  const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
+  const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);
+  return {status:'ok'};
+}
+
+// ── 집계 엔진 ──
+function ncBuildRoster(){
+  const att=ncFilesByType('attend');const src=att.length?att[att.length-1].rows:[];
+  const full=new Map(), bare=new Map();
+  for(const p of src){const nm=p.nm;if(!nm)continue;const b=nm.replace(/^\(.*?\)/,'').trim();
+    const ent={nm,bare:b,team:p.team,ctr:p.ctr,grp:p.grp};full.set(nm,ent);
+    if(bare.has(b)){if(bare.get(b)!=='AMBIG'&&bare.get(b).nm!==nm)bare.set(b,'AMBIG');}else bare.set(b,ent);}
+  return {full,bare};
+}
+function ncCompute(){
+  const roster=ncBuildRoster();
+  // DB: 뇌새김/제2외국어 담당만, 고객키별 분배 이벤트(events) + (k,rc) dedup 이벤트 + 전화 인덱스
+  const keyEvents=new Map(), phoneIdx=new Map(), keyLang=new Map();
+  const evMap=new Map();      // (k|rc) → 이벤트 1건 (누적파일 중복 제거)
+  const dbFiles=ncFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0);
+  for(const f of dbFiles)for(const r of (f.rows||[])){
+    if(!r.k)continue;
+    const lang=r.lang; if(lang==null)continue;                        // 톡이즈·tv_b 제외
+    const ent=spCanon(roster,r.ob); if(!ent||!NC_TARGET.has(ent.team))continue;   // 담당 뇌새김/제2외국어만
+    const rc=r.rc, ek=r.k+'|'+rc;
+    let ev=evMap.get(ek);
+    if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od};evMap.set(ek,ev);
+      if(!keyEvents.has(r.k))keyEvents.set(r.k,[]);keyEvents.get(r.k).push(ev);}
+    else{if(r.d&&(!ev.d||r.d<ev.d))ev.d=r.d;if(!ev.lang&&lang)ev.lang=lang;}
+    if(!keyLang.has(r.k)&&lang!=='IN'&&lang!=='콜백')keyLang.set(r.k,lang);
+    for(const p of [r.p1,r.p2,r.p3]){if(!p)continue;if(!phoneIdx.has(p))phoneIdx.set(p,[]);const a=phoneIdx.get(p);if(!a.includes(r.k))a.push(r.k);}
+  }
+  for(const evs of keyEvents.values())evs.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.rc-b.rc);
+  const dbEvents=Array.from(evMap.values());
+  function bestEvent(k,day){const evs=keyEvents.get(k);if(!evs||!evs.length)return null;let best=null;
+    for(const ev of evs){if(ev.d&&day&&ev.d>day)continue;if(!best||ev.d>best.d||(ev.d===best.d&&best.rc&&!ev.rc))best=ev;}
+    return best||evs[0];}
+  // 계약(신청자관리 일마감): 고객키 dedup. 군자(담당자 '군자')는 별도 집계, 실계약수 제외.
+  const contracts=[],gunja=[],contractOrder=new Map();const seenC=new Set();
+  let unmatchedCont=0,unmatchedGunja=0;
+  const cFiles=ncFilesByType('contDaily').slice().sort((a,b)=>a.fileName>b.fileName?1:-1);
+  for(const f of cFiles)for(const r of (f.rows||[])){
+    if(!r.k)continue;
+    if(!r.rt&&r.d){if(!contractOrder.has(r.k)||r.d<contractOrder.get(r.k))contractOrder.set(r.k,r.d);}  // 케어판정용 최초 신청일
+    if(seenC.has(r.k))continue;seenC.add(r.k);
+    const best=bestEvent(r.k,r.d);
+    const lang=best?best.lang:keyLang.get(r.k);
+    if(String(r.mgr).includes('군자')){                                 // 군자 계약수(별도)
+      if(lang)gunja.push({k:r.k,day:r.d,lang});else unmatchedGunja++;continue;}
+    const ent=spCanon(roster,r.mgr); if(!ent||!NC_TARGET.has(ent.team))continue;   // 비대상 담당 제외
+    if(!lang){unmatchedCont++;continue;}                                // DB 미매칭 계약 제외
+    const crc=best?best.rc:0;
+    const daily=!r.rc&&!!(best&&best.d===r.d&&best.rc===0);             // 당일계약 = 신청일 분배 신규 & R17 비재콜
+    contracts.push({k:r.k,codi:ent.nm,team:ent.team,day:r.d,lang,rc:crc,daily,cancelled:!!r.rt});
+  }
+  // CTI 콜: 뇌새김 roster 상담원만. fresh/care/old 분류(케어 제외 → 신규=fresh+old).
+  const calls=[];let unmatchedCall=0;
+  for(const f of ncFilesByType('cti'))for(const c0 of (f.rows||[])){
+    const c=Object.assign({},c0);const nm=tzBare(c.name);const ent=spCanon(roster,c.name);
+    if(!ent||!NC_TARGET.has(ent.team)){continue;}                       // 뇌새김 상담원만
+    const keys=phoneIdx.get(c.phone);
+    if(!keys||!keys.length){unmatchedCall++;continue;}
+    let best=null;for(const k of keys){const evs=keyEvents.get(k);if(!evs)continue;for(const ev of evs){if(ev.d>c.day)continue;if(!best||ev.d>best.d||(ev.d===best.d&&best.rc&&!ev.rc))best=ev;}}
+    if(!best)for(const k of keys){const evs=keyEvents.get(k);if(evs&&evs.length){best=evs[0];break;}}
+    let cat;
+    if(best&&best.d===c.day&&!best.rc)cat='fresh';
+    else{let care=false;for(const k of keys){const od=contractOrder.get(k);if(od&&c.day>=od){care=true;break;}}
+      cat=care?'care':(best?'old':'none');}
+    if(cat==='care'||cat==='none')continue;                             // 케어·미매칭 제외
+    calls.push({day:c.day,codi:ent.nm,team:ent.team,lang:best?best.lang:'결합',rc:best?best.rc:0,conn:c.conn,valid:c.valid});
+  }
+  // 활동 인물 = 계약/콜이 있는 뇌새김 코디
+  const active=new Set();contracts.forEach(c=>active.add(c.codi));calls.forEach(c=>active.add(c.codi));
+  dbEvents.forEach(e=>active.add(e.codi));
+  const persons=Array.from(active).filter(Boolean).sort((a,b)=>a.localeCompare(b,'ko'));
+  const days=[];dbEvents.forEach(e=>{if(e.d)days.push(e.d);});contracts.forEach(c=>{if(c.day)days.push(c.day);});calls.forEach(c=>{if(c.day)days.push(c.day);});days.sort();
+  const warns=[];
+  if(!ncFilesByType('db').length)warns.push('DB수 파일이 없습니다. 공용폴더를 연결/스캔하세요.');
+  if(!dbEvents.length)warns.push('뇌새김 DB가 0건입니다. 명단(담당=뇌새김영어/제2외국어)·DB수 파일을 확인하세요.');
+  if(unmatchedCont)warns.push(`DB 미매칭 계약 ${unmatchedCont.toLocaleString()}건 제외(계열·언어 판정 불가)`);
+  if(unmatchedCall)warns.push(`전화 미매칭 콜 ${unmatchedCall.toLocaleString()}건 제외`);
+  ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
+  return ncModel;
+}
+
+// ── 필터/집계 ──
+function ncRangeDays(){const s=document.getElementById('ncDateStart').value,e=document.getElementById('ncDateEnd').value;return [s||'0000-00-00',e||'9999-99-99'];}
+function ncLangView(){const el=document.getElementById('ncLangView');return el?el.value:'전체';}
+function ncLangMatch(view,lang){if(view==='전체')return true;if(view==='영어')return NC_ENG.has(lang);if(view==='제2외국어')return NC_FOREIGN.has(lang);return lang===view;}
+function ncSelSet(){return (ncSel&&ncSel.size)?ncSel:null;}
+function ncBlank(){return {db:[0,0,0,0],cAll:0,cDaily:0,c1:0,c2:0,c3:0,gunja:0,ntry:0,nconn:0,nvalid:0};}
+function ncAgg(s,e){
+  const sel=ncSelSet();const lang=new Map(),person=new Map(),personLang=new Map();
+  const L=k=>{if(!lang.has(k))lang.set(k,ncBlank());return lang.get(k);};
+  const P=k=>{if(!person.has(k))person.set(k,ncBlank());return person.get(k);};
+  const PL=(p,l)=>{if(!personLang.has(p))personLang.set(p,new Map());const m=personLang.get(p);if(!m.has(l))m.set(l,ncBlank());return m.get(l);};
+  for(const ev of ncModel.dbEvents){if(!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;
+    L(ev.lang).db[ev.rc]++;P(ev.codi).db[ev.rc]++;PL(ev.codi,ev.lang).db[ev.rc]++;}
+  for(const c of ncModel.contracts){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;
+    const a=L(c.lang),pa=P(c.codi),pl=PL(c.codi,c.lang);
+    a.cAll++;pa.cAll++;pl.cAll++;
+    if(c.daily){a.cDaily++;pa.cDaily++;pl.cDaily++;}
+    if(c.rc===1){a.c1++;pa.c1++;pl.c1++;}else if(c.rc===2){a.c2++;pa.c2++;pl.c2++;}else if(c.rc===3){a.c3++;pa.c3++;pl.c3++;}}
+  for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;L(g.lang).gunja++;}
+  for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;
+    const a=L(c.lang),pa=P(c.codi),pl=PL(c.codi,c.lang);
+    a.ntry++;pa.ntry++;pl.ntry++;
+    if(c.conn){a.nconn++;pa.nconn++;pl.nconn++;}
+    if(c.valid){a.nvalid++;pa.nvalid++;pl.nvalid++;}}
+  return {lang,person,personLang};
+}
+function ncSum(list){const t=ncBlank();for(const g of list){if(!g)continue;for(let i=0;i<4;i++)t.db[i]+=g.db[i];t.cAll+=g.cAll;t.cDaily+=g.cDaily;t.c1+=g.c1;t.c2+=g.c2;t.c3+=g.c3;t.gunja+=g.gunja;t.ntry+=g.ntry;t.nconn+=g.nconn;t.nvalid+=g.nvalid;}return t;}
+function ncScopeLangs(view){return NC_LANGS.filter(l=>ncLangMatch(view,l));}
+function ncDbTot(g){return g.db[0]+g.db[1]+g.db[2]+g.db[3];}
+function ncPct(n,d){return d?(n/d*100).toFixed(1)+'%':'-';}
+function ncC(v){return (v||0).toLocaleString();}
+function ncDayLabel(day){const d=spDateObj(day);const wd=d?['일','월','화','수','목','금','토'][d.getDay()]:'';return d?`${day.slice(5)}(${wd})`:day;}
+
+// ── 렌더 ──
+function ncRenderKpi(t){
+  const dbT=ncDbTot(t);
+  const cards=[
+    {ic:'🗂️',l:'DB수',v:ncC(dbT),s:`신규 ${ncC(t.db[0])} · 재콜계 ${ncC(t.db[1]+t.db[2]+t.db[3])}`,c:'violet'},
+    {ic:'✅',l:'실계약수',v:ncC(t.cAll),s:`계약률 ${ncPct(t.cAll,dbT)}`,c:'green'},
+    {ic:'📅',l:'일계약수',v:ncC(t.cDaily),s:`일계약률 ${ncPct(t.cDaily,dbT)} · 이전 ${ncC(t.cAll-t.cDaily)}`,c:'teal'},
+    {ic:'📞',l:'신규 시도',v:ncC(t.ntry),s:`연결 ${ncC(t.nconn)} (${ncPct(t.nconn,t.ntry)})`,c:'violet2'},
+    {ic:'⭐',l:'신규 유효통화',v:ncC(t.nvalid),s:`유효율 ${ncPct(t.nvalid,t.ntry)}`,c:'amber'},
+    {ic:'🧑‍💼',l:'군자 계약수',v:ncC(t.gunja),s:'담당자에 &quot;군자&quot; 포함',c:'red'},
+  ];
+  document.getElementById('ncKpi').innerHTML=cards.map(k=>`<div class="nc-kpi nc-kpi-${k.c}"><div class="nc-kpi-top"><span class="nc-kpi-ic">${k.ic}</span><span class="nc-kpi-l">${k.l}</span></div><div class="nc-kpi-v">${k.v}</div><div class="nc-kpi-s">${k.s}</div></div>`).join('');
+}
+function ncMatrixRow(label,g,cls){
+  const dbT=ncDbTot(g);
+  const cells=[
+    ncC(dbT), ncC(g.cAll), ncPct(g.cAll,dbT), ncC(g.cDaily), ncPct(g.cDaily,dbT), ncC(g.cAll-g.cDaily),
+    ncC(g.db[1]), ncC(g.c1), ncPct(g.c1,g.db[1]),
+    ncC(g.db[2]), ncC(g.c2), ncPct(g.c2,g.db[2]),
+    ncC(g.db[3]), ncC(g.c3), ncPct(g.c3,g.db[3]),
+    ncC(g.gunja),
+    ncC(g.ntry), ncC(g.nconn), ncPct(g.nconn,g.ntry), ncC(g.nvalid), ncPct(g.nvalid,g.ntry),
+  ];
+  return `<tr class="${cls||''}"><td class="nc-lbl">${label}</td>${cells.map((c,i)=>`<td${[2,4,8,11,14,18,20].includes(i)?' class="nc-pctcol"':''}>${c}</td>`).join('')}</tr>`;
+}
+function ncMatrixHeader(){
+  return `<thead>
+    <tr class="nc-grp">
+      <th rowspan="2">언어</th>
+      <th colspan="6">계약 (전체)</th>
+      <th colspan="3">재콜</th><th colspan="3">재재콜</th><th colspan="3">회수콜</th>
+      <th rowspan="2">군자<br>계약수</th>
+      <th colspan="5">신규 콜 (케어 제외)</th>
+    </tr>
+    <tr class="nc-sub">
+      <th>DB수</th><th>실계약수</th><th>실계약률</th><th>일계약수</th><th>일계약률</th><th>이전계약수</th>
+      <th>DB수</th><th>계약수</th><th>계약률</th>
+      <th>DB수</th><th>계약수</th><th>계약률</th>
+      <th>DB수</th><th>계약수</th><th>계약률</th>
+      <th>시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th>
+    </tr></thead>`;
+}
+function ncRenderMatrix(agg,view){
+  const scope=ncScopeLangs(view);
+  const totLabel=view==='전체'?'전체':`전체(${view})`;
+  const tot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));
+  let body=ncMatrixRow(totLabel,tot,'nc-total');
+  for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
+  return `<div class="nc-sec"><div class="nc-sec-h">🌐 언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader()}<tbody>${body}</tbody></table></div>
+    <div class="nc-note">· 재콜 판정 = DB정보 "재콜" 출현횟수(1재콜·2재재콜·3회수콜) · 언어 = 매체코드(T열) · DB단가·광고비·취소수는 제외됨</div></div>`;
+}
+function ncPersonHeader(){
+  return `<thead><tr class="nc-sub">
+    <th style="text-align:left">코디</th><th>DB수</th><th>실계약</th><th>계약률</th><th>일계약</th><th>이전계약</th>
+    <th>시도</th><th>연결</th><th>연결률</th><th>유효</th><th>유효율</th></tr></thead>`;
+}
+function ncPersonCells(g){const dbT=ncDbTot(g);return [ncC(dbT),ncC(g.cAll),ncPct(g.cAll,dbT),ncC(g.cDaily),ncC(g.cAll-g.cDaily),ncC(g.ntry),ncC(g.nconn),ncPct(g.nconn,g.ntry),ncC(g.nvalid),ncPct(g.nvalid,g.ntry)];}
+function ncPersonDetail(idx,plMap,view){
+  const scope=ncScopeLangs(view);
+  let rows='';
+  for(const l of scope){const g=plMap&&plMap.get(l);if(!g||( ncDbTot(g)===0&&g.cAll===0&&g.ntry===0))continue;
+    rows+=`<tr><td class="nc-lbl">${l}</td>${ncPersonCells(g).map((c,i)=>`<td${[2,7,9].includes(i)?' class="nc-pctcol"':''}>${c}</td>`).join('')}</tr>`;}
+  if(!rows)rows=`<tr><td colspan="11" class="nc-empty">데이터 없음</td></tr>`;
+  return `<tr class="nc-pd" id="nc-pd-${idx}"><td colspan="11"><div class="nc-pd-wrap"><div class="nc-pd-h">언어별 분해</div><table class="nc-tbl">${ncPersonHeader()}<tbody>${rows}</tbody></table></div></td></tr>`;
+}
+function ncTogglePerson(idx){const tr=document.getElementById('nc-pd-'+idx);if(!tr)return;tr.classList.toggle('hidden');}
+function ncRenderPerson(agg,view){
+  const scope=new Set(ncScopeLangs(view));
+  // 코디별 = personLang에서 scope 언어만 합산
+  const rows=[];
+  for(const codi of ncModel.persons){
+    const plMap=agg.personLang.get(codi);if(!plMap)continue;
+    const g=ncSum(Array.from(plMap.entries()).filter(([l])=>scope.has(l)).map(([,v])=>v));
+    if(ncDbTot(g)===0&&g.cAll===0&&g.ntry===0)continue;
+    rows.push({codi,g,plMap});
+  }
+  rows.sort((a,b)=>{const ra=ncDbTot(a.g)?a.g.cAll/ncDbTot(a.g):0,rb=ncDbTot(b.g)?b.g.cAll/ncDbTot(b.g):0;return rb-ra||b.g.cAll-a.g.cAll;});
+  if(!rows.length)return `<div class="nc-sec"><div class="nc-sec-h">🧑‍💼 개인별 성과</div><div class="nc-empty">데이터 없음</div></div>`;
+  const tot=ncSum(rows.map(r=>r.g));
+  let body=`<tr class="nc-total"><td class="nc-lbl">합계 (${rows.length}명)</td>${ncPersonCells(tot).map((c,i)=>`<td${[2,7,9].includes(i)?' class="nc-pctcol"':''}>${c}</td>`).join('')}</tr>`;
+  rows.forEach((r,idx)=>{
+    body+=`<tr><td class="nc-lbl" style="text-align:left"><button class="nc-expand" onclick="ncTogglePerson(${idx})">▶</button>${r.codi}</td>${ncPersonCells(r.g).map((c,i)=>`<td${[2,7,9].includes(i)?' class="nc-pctcol"':''}>${c}</td>`).join('')}</tr>`;
+    body+=ncPersonDetail(idx,r.plMap,view).replace('class="nc-pd"','class="nc-pd hidden"');
+  });
+  return `<div class="nc-sec"><div class="nc-sec-h">🧑‍💼 개인별 성과<span class="nc-sub-s">계약률 내림차순 · ▶ 펼치면 언어별 분해</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl">${ncPersonHeader()}<tbody>${body}</tbody></table></div></div>`;
+}
+function ncRenderChart(s,e){
+  const cv=document.getElementById('ncChartCanvas');if(!cv||typeof Chart==='undefined')return;
+  const sel=ncSelSet();const view=ncLangView();const byDay=new Map();
+  for(const c of ncModel.contracts){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(view,c.lang))continue;
+    if(!byDay.has(c.day))byDay.set(c.day,{c:0,db:0});byDay.get(c.day).c++;}
+  for(const ev of ncModel.dbEvents){if(!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(view,ev.lang))continue;
+    if(!byDay.has(ev.d))byDay.set(ev.d,{c:0,db:0});byDay.get(ev.d).db++;}
+  const days=Array.from(byDay.keys()).sort();
+  const cData=days.map(d=>byDay.get(d).c),dbData=days.map(d=>byDay.get(d).db);
+  const rate=days.map(d=>{const o=byDay.get(d);return o.db?+(o.c/o.db*100).toFixed(1):0;});
+  if(ncChart)ncChart.destroy();
+  ncChart=new Chart(cv,{data:{labels:days.map(ncDayLabel),datasets:[
+    {type:'bar',label:'DB수',data:dbData,backgroundColor:'#c7d2fe',yAxisID:'y',order:3},
+    {type:'bar',label:'실계약수',data:cData,backgroundColor:'#4361ee',yAxisID:'y',order:2},
+    {type:'line',label:'계약률(%)',data:rate,borderColor:'#f0920e',backgroundColor:'#f0920e',yAxisID:'y1',tension:.3,order:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>v+'%'}}},
+    plugins:{legend:{position:'bottom'}}}});
+}
+function ncRenderCodiPanel(){
+  const el=document.getElementById('ncCodiList');if(!el||!ncModel)return;
+  el.innerHTML=ncModel.persons.map(n=>{const on=!ncSel||ncSel.has(n);return `<label class="tz-ck"><input type="checkbox" ${on?'checked':''} onchange="ncToggleCodi('${n.replace(/'/g,"\\'")}',this.checked)">${n}</label>`;}).join('');
+}
+function ncUpdateCodiBtn(){const b=document.getElementById('ncCodiBtn');if(!b||!ncModel)return;const n=(!ncSel)?ncModel.persons.length:ncSel.size;b.textContent=`코디 선택 (${n}/${ncModel.persons.length}) ▾`;}
+function ncToggleCodi(name,on){if(!ncSel)ncSel=new Set(ncModel.persons);if(on)ncSel.add(name);else ncSel.delete(name);ncUpdateCodiBtn();ncRender();}
+function ncCodiAll(on){ncSel=on?new Set(ncModel.persons):new Set();ncRenderCodiPanel();ncUpdateCodiBtn();ncRender();}
+function ncToggleCodiPanel(){const p=document.getElementById('ncCodiPanel');if(p)p.classList.toggle('hidden');}
+function ncRender(){
+  if(!ncModel)return;
+  const [s,e]=ncRangeDays();const view=ncLangView();
+  const agg=ncAgg(s,e);
+  const scope=ncScopeLangs(view);
+  const tot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));
+  ncRenderKpi(tot);
+  const chartBox=`<div class="nc-sec"><div class="nc-sec-h">📈 일자별 추이<span class="nc-sub-s">DB수·실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
+  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,view)+chartBox+ncRenderPerson(agg,view);
+  ncRenderChart(s,e);
+  const w=document.getElementById('ncWarn');if(w)w.textContent=(ncModel.warns||[]).join(' · ');
+  ncUpdateCodiBtn();
+}
+
+// ── 기간/표시 ──
+function ncInitDateRange(reset){
+  const sEl=document.getElementById('ncDateStart'),eEl=document.getElementById('ncDateEnd');
+  if(!ncModel)return;
+  if(reset||!sEl.value)sEl.value=ncModel.minDay||'';
+  if(reset||!eEl.value)eEl.value=ncModel.maxDay||'';
+}
+function ncQuickRange(kind){
+  if(!ncModel)return;const eEl=document.getElementById('ncDateEnd'),sEl=document.getElementById('ncDateStart');
+  const max=ncModel.maxDay;if(!max)return;const md=spDateObj(max);
+  if(kind==='all'){sEl.value=ncModel.minDay;eEl.value=ncModel.maxDay;}
+  else if(kind==='thisMonth'){sEl.value=max.slice(0,7)+'-01';eEl.value=max;}
+  else{const n=kind==='7d'?6:29;const d=new Date(md);d.setDate(d.getDate()-n);const p=x=>String(x).padStart(2,'0');sEl.value=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;eEl.value=max;}
+  document.querySelectorAll('[data-ncquick]').forEach(b=>b.classList.toggle('active',b.dataset.ncquick===kind));
+  ncRender();
+}
+function ncReady(){return ncFilesByType('db').length>0;}
+function ncGenerate(force){
+  if(!ncReady()){document.getElementById('ncEmpty').classList.remove('hidden');document.getElementById('ncDashboard').classList.add('hidden');ncUpdateEmptyHint();return;}
+  ncEnsureStyle();
+  ncModel=ncCompute();
+  document.getElementById('ncEmpty').classList.add('hidden');
+  document.getElementById('ncDashboard').classList.remove('hidden');
+  ncRenderCodiPanel();ncInitDateRange(force);ncRender();
+}
+async function ncOnShow(){
+  ncEnsureStyle();
+  if(!ncLoaded)await ncLoadFiles();
+  await ncAutoScanOnShow();
+  if(ncReady())ncGenerate(false);
+  else{document.getElementById('ncEmpty').classList.remove('hidden');document.getElementById('ncDashboard').classList.add('hidden');ncUpdateEmptyHint();}
+}
+
+// ── 모달/업로드 UI ──
+function ncOpenModal(view){
+  document.getElementById('ncModalOverlay').classList.add('open');
+  document.getElementById('ncModalUpload').classList.toggle('hidden',view==='manage');
+  document.getElementById('ncModalManage').classList.toggle('hidden',view!=='manage');
+  ncBindUploadBoxes();ncUpdateUploadStatus();ncRenderFileHistory();ncUpdateDirStatus();
+}
+function ncCloseModal(){document.getElementById('ncModalOverlay').classList.remove('open');}
+function ncUpdateStatusDots(){NC_TYPES.forEach(k=>{const el=document.getElementById('nc-dot-'+(k==='contDaily'?'cont':k));if(el)el.classList.toggle('ok',ncFilesByType(k).length>0);});}
+function ncUpdateUploadStatus(){
+  const idmap={db:'db',contDaily:'cont',attend:'attend',cti:'cti'};
+  NC_TYPES.forEach(k=>{const box=document.getElementById('box-nc-'+idmap[k]);const fn=document.getElementById('fname-nc-'+idmap[k]);const list=ncFilesByType(k);
+    if(box)box.classList.toggle('loaded',list.length>0);
+    if(fn){if(!list.length)fn.textContent='';else if(list.length===1)fn.textContent=list[0].fileName;else fn.textContent=`${list.length}개 파일 누적`;}});
+  ncUpdateStatusDots();
+  const lu=document.getElementById('ncLastUpdate');
+  if(lu){let mx='';for(const f of ncFilesByType('db'))for(const r of (f.rows||[]))if(r.d&&r.d>mx)mx=r.d;lu.textContent=mx?`최종 분배일 : ${mx}`:'';}
+}
+function ncUpdateEmptyHint(){const need=[];if(!ncFilesByType('db').length)need.push('DB수');if(!ncFilesByType('cti').length)need.push('CTI 통화');const el=document.getElementById('ncEmptyHint');if(el)el.textContent=need.length?`필요 파일: ${need.join(' · ')}`:'';}
+function ncRenderFileHistory(){
+  const el=document.getElementById('ncFileHistory');if(!el)return;
+  if(!ncFiles.length){el.innerHTML='<div class="fh-empty" style="padding:20px;text-align:center">업로드된 파일이 없습니다.</div>';return;}
+  const tcls={db:'db',contDaily:'cont',attend:'attend',cti:'gc'};
+  el.innerHTML=NC_TYPES.map(t=>{const list=ncFilesByType(t).slice().sort((a,b)=>(a.fileName>b.fileName?1:-1));if(!list.length)return '';
+    const items=list.map(f=>`<div class="fh-item"><span class="fh-name">${f.fileName}</span><span class="fh-date">${(f.rowsCount||(f.rows?f.rows.length:0)).toLocaleString()}행 · ${new Date(f.uploadTime).toLocaleDateString('ko-KR')}</span><button class="btn-del" onclick="ncDeleteFile(${f.id})">×</button></div>`).join('');
+    return `<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${tcls[t]}">${NC_TYPE_LABEL[t]}</span> ${list.length}개</div>${items}</div>`;}).join('');
+}
+async function ncDeleteFile(id){await ncIdbDel(id);ncFiles=ncFiles.filter(f=>f.id!==id);ncModel=null;ncUpdateUploadStatus();ncRenderFileHistory();}
+async function ncResetAll(){if(!confirm('뇌새김 콜 현황의 모든 파일을 삭제합니다. 계속할까요?'))return;await ncIdbClear();ncFiles=[];ncModel=null;ncUpdateUploadStatus();ncRenderFileHistory();document.getElementById('ncDashboard').classList.add('hidden');document.getElementById('ncEmpty').classList.remove('hidden');ncCloseModal();}
+let ncBound=false;
+function ncBindUploadBoxes(){
+  if(ncBound)return;ncBound=true;
+  document.querySelectorAll('#ncModalUpload input[type=file]').forEach(input=>{
+    input.addEventListener('change',async e=>{
+      const type=input.dataset.nctype;const files=Array.from(e.target.files||[]);if(!files.length)return;
+      if(!ncLoaded)await ncLoadFiles();
+      let ok=0;for(const file of files){try{const r=await ncIngestFile(type,file);if(r.status==='ok')ok++;}catch(err){console.error(err);}}
+      input.value='';ncModel=null;ncUpdateUploadStatus();ncRenderFileHistory();});});
+}
+
+// ── 공용폴더 (계열별성과와 핸들 공유; 계약·CTI는 수동) ──
+function ncUpdateDirStatus(state){
+  const el=document.getElementById('ncDirStatus'),scanBtn=document.getElementById('ncScanBtn'),connBtn=document.getElementById('ncConnBtn');
+  const supported=!!window.showDirectoryPicker;
+  if(connBtn)connBtn.disabled=!supported;
+  if(scanBtn)scanBtn.disabled=!supported||!spDirHandle;
+  if(!el)return;
+  if(!supported){el.textContent='이 브라우저는 폴더 자동연동 미지원 (Chrome·Edge 권장)';el.style.color='var(--danger)';return;}
+  if(state==='busy'){el.textContent='폴더 스캔 중…';el.style.color='var(--gray)';return;}
+  if(state==='need-perm'){el.innerHTML='🔒 연결됨 · 권한 필요 — <b>[지금 스캔]</b>을 눌러 접근을 허용하세요';el.style.color='#b45309';return;}
+  if(state==='ok'){el.textContent='✓ 스캔 완료';el.style.color='var(--success,#16a34a)';return;}
+  if(spDirHandle){el.innerHTML=`✓ 연결됨${spDirName?` · <b>${spDirName}</b>`:''} (계열별성과와 공유)`;el.style.color='var(--success,#16a34a)';}
+  else{el.textContent='연결 안 됨 — [공용폴더 연결]로 지정하세요';el.style.color='var(--gray)';}
+}
+function ncSetBanner(mode,info){
+  const b=document.getElementById('ncDirBanner');if(!b)return;const msg=document.getElementById('ncDirBannerMsg');
+  if(mode==='need-perm'){b.classList.remove('hidden');b.style.background='#fffbeb';b.style.borderColor='#fde68a';msg.style.color='#92400e';msg.innerHTML='📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요';return;}
+  if(mode==='busy'){b.classList.remove('hidden');b.style.background='#f8fafc';b.style.borderColor='#e2e8f0';msg.style.color='var(--gray)';msg.textContent='⏳ 공용폴더 스캔 중…';return;}
+  if(mode==='ok'){b.classList.remove('hidden');b.style.background='#f0fdf4';b.style.borderColor='#bbf7d0';msg.style.color='#166534';msg.innerHTML=`✓ 공용폴더 동기화 완료 — 신규 ${info.okCnt}개${info.dupCnt?` · 중복 ${info.dupCnt}`:''}`;return;}
+  b.classList.add('hidden');
+}
+async function ncConnectFolder(){
+  if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.');return;}
+  try{const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});if(!spIdb)await spOpenIDB();await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;ncUpdateDirStatus();await ncScanFolder({request:true,announce:true});}
+  catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
+}
+async function ncScanFolder(opts={}){
+  if(ncScanBusy)return;
+  if(!ncLoaded)await ncLoadFiles();
+  if(!window.showDirectoryPicker){if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.');return;}
+  if(!spIdb)await spOpenIDB();
+  const h=spDirHandle||await spIdbGetHandle();
+  if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
+  spDirHandle=h;spDirName=h.name;
+  if(!await spVerifyPerm(h,!!opts.request)){ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');return;}
+  ncScanBusy=true;ncUpdateDirStatus('busy');if(!opts.fromShow)ncSetBanner('busy');
+  const WANT=new Set(['db','contDaily','attend']);   // DB수·계약(일마감·신청자관리)·명단 자동 / CTI만 수동
+  const tasks=[];
+  async function walk(dir,folderName,depth,inside,hint){
+    for await(const entry of dir.values()){
+      if(entry.kind==='file'){
+        if(/^~\$/.test(entry.name)||!/\.(xlsx|xls)$/i.test(entry.name))continue;
+        let type=spDetectType(folderName,entry.name);
+        if(!WANT.has(type)&&hint&&WANT.has(hint))type=hint;
+        if(WANT.has(type))tasks.push({type,entry});
+      }else if(entry.kind==='directory'&&depth<3){
+        const dt=spDetectType(entry.name,'');
+        const nextHint=(dt==='db'||dt==='contDaily'||dt==='contCum'||dt==='attend')?dt:hint;
+        if(inside||WANT.has(dt))try{await walk(entry,entry.name,depth+1,true,nextHint);}catch(e){}
+      }
+    }
+  }
+  try{await walk(h,'',0,false,null);}catch(e){console.error('뇌새김콜 폴더 스캔',e);ncScanBusy=false;ncUpdateDirStatus('error');return;}
+  const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
+  const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
+  let okCnt=0,dupCnt=0;
+  for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await ncIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
+  ncScanBusy=false;if(okCnt>0)ncModel=null;
+  ncUpdateUploadStatus();ncRenderFileHistory();ncUpdateDirStatus('ok');
+  if(!opts.fromShow||okCnt>0)ncSetBanner('ok',{okCnt,dupCnt});else ncSetBanner('hide');
+  if(okCnt>0&&!opts.fromShow&&currentPage==='naesaegim-call')ncGenerate(false);
+  return {okCnt,dupCnt};
+}
+async function ncAutoScanOnShow(){
+  if(!window.showDirectoryPicker){ncSetBanner('hide');return;}
+  try{
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=spDirHandle||await spIdbGetHandle();spDirName=spDirHandle?spDirHandle.name:'';
+    if(!spDirHandle){ncSetBanner('hide');ncUpdateDirStatus();return;}
+    if(await spVerifyPerm(spDirHandle,true))await ncScanFolder({request:false,announce:false,fromShow:true});
+    else{ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');}
+  }catch(e){console.error('뇌새김콜 자동 스캔',e);}
+}
+
+// ── 엑셀 다운로드 ──
+async function ncDownloadExcel(){
+  if(!ncModel){alert('데이터가 없습니다.');return;}
+  const [s,e]=ncRangeDays();const view=ncLangView();const agg=ncAgg(s,e);const scope=ncScopeLangs(view);
+  const head=['언어','DB수','실계약수','실계약률','일계약수','일계약률','이전계약수','재콜DB','재콜계약','재콜률','재재콜DB','재재콜계약','재재콜률','회수콜DB','회수콜계약','회수콜률','군자계약','시도','연결','연결률','유효','유효율'];
+  const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[1],g.c1,ncPct(g.c1,g.db[1]),g.db[2],g.c2,ncPct(g.c2,g.db[2]),g.db[3],g.c3,ncPct(g.c3,g.db[3]),g.gunja,g.ntry,g.nconn,ncPct(g.nconn,g.ntry),g.nvalid,ncPct(g.nvalid,g.ntry)];};
+  const aoa=[[`뇌새김 콜 현황 (${s} ~ ${e})`],head];
+  aoa.push(rowOf('전체',ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()))));
+  for(const l of scope)aoa.push(rowOf(l,agg.lang.get(l)||ncBlank()));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:head.length-1}}];
+  ws['!cols']=head.map((h,i)=>({wch:i===0?10:9}));
+  const hdrStyle={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'}};
+  for(let c=0;c<head.length;c++){const cell=ws[XLSX.utils.encode_cell({r:1,c})];if(cell)cell.s=hdrStyle;}
+  const tcell=ws[XLSX.utils.encode_cell({r:0,c:0})];if(tcell)tcell.s={font:{bold:true,sz:13},alignment:{horizontal:'center'}};
+  // 개인별 시트
+  const scopeSet=new Set(scope);
+  const phead=['코디','DB수','실계약','계약률','일계약','이전계약','시도','연결','연결률','유효','유효율'];
+  const paoa=[phead];
+  for(const codi of ncModel.persons){const pl=agg.personLang.get(codi);if(!pl)continue;
+    const g=ncSum(Array.from(pl.entries()).filter(([l])=>scopeSet.has(l)).map(([,v])=>v));const dbT=ncDbTot(g);
+    if(dbT===0&&g.cAll===0&&g.ntry===0)continue;
+    paoa.push([codi,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,g.cAll-g.cDaily,g.ntry,g.nconn,ncPct(g.nconn,g.ntry),g.nvalid,ncPct(g.nvalid,g.ntry)]);}
+  const pws=XLSX.utils.aoa_to_sheet(paoa);pws['!cols']=phead.map((h,i)=>({wch:i===0?12:9}));
+  for(let c=0;c<phead.length;c++){const cell=pws[XLSX.utils.encode_cell({r:0,c})];if(cell)cell.s=hdrStyle;}
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'언어별종합');
+  XLSX.utils.book_append_sheet(wb,pws,'개인별');
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+    const blob=await zip.generateAsync({type:'blob'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`뇌새김_콜현황_${s}_${e}.xlsx`;a.click();URL.revokeObjectURL(url);
+  }catch(err){XLSX.writeFile(wb,`뇌새김_콜현황_${s}_${e}.xlsx`);}
+}
+
+// ── 스타일 (1회 주입) ──
+function ncEnsureStyle(){
+  if(document.getElementById('ncStyle'))return;
+  const st=document.createElement('style');st.id='ncStyle';
+  st.textContent=`
+  #page-naesaegim-call .container{background:#f6f8fb;max-width:100%;padding:24px 20px}
+  #page-naesaegim-call .sp-control-bar{background:#fff;border:1px solid #e8edf3;border-radius:14px;padding:12px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04);position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+  #page-naesaegim-call .sp-control-bar label{font-size:12.5px;font-weight:700;color:#475569}
+  #page-naesaegim-call .sp-control-bar select,#page-naesaegim-call .sp-control-bar input[type=date]{border:1px solid #d7dee8;border-radius:8px;padding:5px 8px;font-size:12.5px}
+  #page-naesaegim-call .btn-sm.active{background:#4361ee;color:#fff;border-color:#4361ee}
+  #page-naesaegim-call .nc-kpi{position:relative;background:#fff;border:1px solid #e8edf3;border-radius:16px;padding:15px 17px 14px;box-shadow:0 1px 3px rgba(15,23,42,.05);overflow:hidden}
+  #page-naesaegim-call .nc-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+  #page-naesaegim-call .nc-kpi-violet::before{background:#8b5cf6}
+  #page-naesaegim-call .nc-kpi-violet2::before{background:#a78bfa}
+  #page-naesaegim-call .nc-kpi-green::before{background:#22c55e}
+  #page-naesaegim-call .nc-kpi-teal::before{background:#14b8a6}
+  #page-naesaegim-call .nc-kpi-amber::before{background:#f59e0b}
+  #page-naesaegim-call .nc-kpi-red::before{background:#ef4444}
+  #page-naesaegim-call .nc-kpi-top{display:flex;align-items:center;gap:7px}
+  #page-naesaegim-call .nc-kpi-ic{font-size:15px}
+  #page-naesaegim-call .nc-kpi-l{font-size:12px;color:#64748b;font-weight:700}
+  #page-naesaegim-call .nc-kpi-v{font-size:24px;font-weight:800;color:#0f172a;margin-top:8px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  #page-naesaegim-call .nc-kpi-s{font-size:11px;color:#94a3b8;margin-top:4px}
+  #page-naesaegim-call .nc-sec{background:#fff;border:1px solid #e8edf3;border-radius:16px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  #page-naesaegim-call .nc-sec-h{display:flex;align-items:center;gap:9px;font-size:15.5px;font-weight:800;color:#0f172a;margin:0 0 14px;letter-spacing:-.01em}
+  #page-naesaegim-call .nc-sub-s{font-weight:500;color:#a0aec0;font-size:11.5px}
+  #page-naesaegim-call .nc-note{margin-top:10px;font-size:11.5px;color:#8b93a7}
+  #page-naesaegim-call .nc-tblwrap{border:1px solid #e8edf3;border-radius:12px;overflow-x:auto}
+  #page-naesaegim-call .nc-tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+  #page-naesaegim-call .nc-matrix{min-width:1400px}
+  #page-naesaegim-call .nc-tbl th,#page-naesaegim-call .nc-tbl td{padding:7px 6px;text-align:center;border-bottom:1px solid #eef2f7;white-space:nowrap}
+  #page-naesaegim-call .nc-tbl thead th{background:#f1f5fb;color:#475569;font-weight:800;border-bottom:1px solid #dbe3ef}
+  #page-naesaegim-call .nc-tbl thead tr.nc-grp th{background:#e6ecf7;border-left:1px solid #dbe3ef}
+  #page-naesaegim-call .nc-tbl .nc-lbl{text-align:center;font-weight:700;color:#334155}
+  #page-naesaegim-call .nc-tbl .nc-pctcol{color:#4361ee;font-weight:700}
+  #page-naesaegim-call .nc-tbl tr.nc-total td{background:#eef3ff;color:#1e293b;font-weight:800;border-bottom:2px solid #c7d4f5}
+  #page-naesaegim-call .nc-tbl tbody tr:hover td{background:#f8fafc}
+  #page-naesaegim-call .nc-tbl tr.nc-total:hover td{background:#eef3ff}
+  #page-naesaegim-call .nc-empty{padding:26px;text-align:center;color:#94a3b8;font-size:13px}
+  #page-naesaegim-call .nc-expand{margin-right:5px;padding:0 6px;font-size:11px;font-weight:700;color:#4361ee;background:#eef2ff;border:1px solid #dbe3ff;border-radius:6px;cursor:pointer}
+  #page-naesaegim-call .nc-expand:hover{background:#e0e7ff}
+  #page-naesaegim-call tr.nc-pd>td{padding:0!important;background:#f8fafc!important}
+  #page-naesaegim-call .nc-pd-wrap{padding:12px 14px 14px;border-left:3px solid #c7d4f5}
+  #page-naesaegim-call .nc-pd-h{font-size:12px;font-weight:800;color:#475569;margin-bottom:8px}
+  #page-naesaegim-call .tz-codi-wrap{position:relative;display:inline-block}
+  #page-naesaegim-call .tz-codi-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:30;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.16);padding:12px;width:340px;max-height:320px;overflow:auto}
+  #page-naesaegim-call .tz-codi-panel .tz-codi-act{display:flex;gap:6px;margin-bottom:8px}
+  #page-naesaegim-call .tz-codi-list{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+  #page-naesaegim-call .tz-ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#334155;cursor:pointer;padding:2px 0}
+  #page-naesaegim-call .tz-ck input{cursor:pointer}`;
   document.head.appendChild(st);
 }
 
