@@ -903,8 +903,6 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
   <div class="tab-item" data-page="talkis-perf" onclick="switchPage('talkis-perf')">톡이즈 콜 현황</div>
-  <div class="tab-item dimmed" data-page="inflow" onclick="switchPage('inflow')">유입분석</div>
-  <div class="tab-item dimmed" data-page="daily-perf" onclick="switchPage('daily-perf')">일자별 성과</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
@@ -2405,7 +2403,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','inflow','daily-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
@@ -2712,20 +2710,7 @@ async function doSyncUpload(token){
     // IDB results 데이터 (수동 그룹 수정 포함)
     const ngResults=await getAllResults();
 
-    // 유입분석 IDB 데이터 수집 (db/cont는 누적 배열, attend는 원본)
-    const IA_COLS=[6,7,8,9,15,19,21,23,29];
-    const iaSyncFiles=[];
-    for(const f of iaFiles.db){
-      const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
-      iaSyncFiles.push({type:'db',fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
-    }
-    for(const f of iaFiles.cont){
-      const slim=f.data.map((row,i)=>i===0?row:IA_COLS.map(c=>row[c]!=null?row[c]:''));
-      iaSyncFiles.push({type:'cont',fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols:IA_COLS});
-    }
-    for(const f of iaFiles.attend){
-      iaSyncFiles.push({type:'attend',fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
-    }
+    // (유입분석 탭 삭제됨 — 싱크 제외로 메모리·용량 절감)
 
     // 차등성과 IDB 데이터 수집 (db/cont/cancel은 필요 컬럼만, attend는 원본)
     const GD_DBCONT_COLS=[6,7,8,15,19,21,23,29];   // 고객키/OB명/분배일/DB정보/매체코드/최종통화/오더일/고객상태
@@ -2744,9 +2729,7 @@ async function doSyncUpload(token){
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
-    // 일자별 성과: 광고비 + 스냅샷 (localStorage에서 최신 값 확보)
-    dpLoadPrefs();
-    const dpPrefs={adCost:dpAdCost||{},snapshot:dpSnapshot||{}};
+    // (일자별 성과 탭 삭제됨 — 싱크 제외)
     // 부재인입 데이터 (mcFiles가 아직 로드 안 됐으면 IDB에서 직접 읽어 동기화 누락 방지)
     let mcSync=[];
     try{
@@ -2787,7 +2770,7 @@ async function doSyncUpload(token){
         ncSync=ncCollectSync();
       }
     }catch(e){console.warn('nc sync collect 실패',e);}
-    const payload=JSON.stringify({v:10,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,ia:iaSyncFiles,dp:dpPrefs,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData});
+    const payload=JSON.stringify({v:10,ts:Date.now(),ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData});
     syncLog(`<span class="sync-spin">↻</span> 압축 중... (원본 ${(payload.length/1024/1024).toFixed(1)}MB)`);
 
     // JSZip으로 gzip 압축 → base64
