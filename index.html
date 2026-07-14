@@ -14014,6 +14014,8 @@ function ncLang(mc){
   if(c.includes('hp_in')||c.includes('hp2_in'))return '홈페이지';
   return '결합';
 }
+// 두 언어 후보 중 '실언어(IN·콜백 아님)' 우선 선택 — 군자 등에서 DB가 IN이라도 분류(Q)의 실제 언어를 살림.
+function ncPickLang(a,b){const real=x=>x&&x!=='IN'&&x!=='콜백';if(real(a))return a;if(real(b))return b;return a||b||null;}
 // 계약 분류(Q열) 기반 언어 보조판정 — DB조인 실패 시. ncLang 우선, '결합' 오분류는 cdClassifyProduct로 교차보정.
 function ncLangFromCls(cls){
   const c=String(cls==null?'':cls).trim();
@@ -14126,12 +14128,12 @@ function ncCompute(){
     if(!r.k)continue;
     const clsLang=ncLangFromCls(r.cls);                               // 분류(Q) 기반 언어(보조)
     if(String(r.mgr).includes('군자')){                                 // 군자 계약수(담당자 N 기준·별도)
-      if(!seenGunja.has(r.k)){seenGunja.add(r.k);const gl=keyLangAll.get(r.k)||clsLang||null;if(!gl)gunjaNoLang++;gunja.push({k:r.k,day:r.d,lang:gl});}
+      if(!seenGunja.has(r.k)){seenGunja.add(r.k);const gl=ncPickLang(clsLang,keyLangAll.get(r.k));if(!gl)gunjaNoLang++;gunja.push({k:r.k,day:r.d,lang:gl,cls:r.cls,mgr:r.mgr});}   // 분류(Q) 실언어 우선 → DB가 IN이어도 언어 살림
       continue;}
     if(!r.rt&&r.d){if(!contractOrder.has(r.k)||r.d<contractOrder.get(r.k))contractOrder.set(r.k,r.d);}  // 케어판정용 최초 신청일
     if(seenC.has(r.k))continue;seenC.add(r.k);
     const best=bestEvent(r.k,r.d);
-    const lang=best?best.lang:(keyLangAll.get(r.k)||clsLang);
+    const lang=best?best.lang:ncPickLang(clsLang,keyLangAll.get(r.k));
     const ent=spCanon(roster,r.mgr); if(!ent||!NC_TARGET.has(ent.team))continue;   // 비대상 담당(군자 외) 제외
     if(!lang){if(unmatched.length<1000)unmatched.push({k:r.k,mgr:r.mgr,day:r.d,cls:r.cls});continue;}   // 언어 판정 불가(DB·분류 모두 실패)
     const crc=best?best.rc:(r.rc?1:0);                                 // DB 없으면 R17 재콜여부로 신규/재콜 근사
@@ -14206,11 +14208,19 @@ function ncAvg(n,d){return d?(n/d).toFixed(1):'-';}   // 평균 시도수 = 시�
 function ncC(v){return (v||0).toLocaleString();}
 function ncDayLabel(day){const d=spDateObj(day);const wd=d?['일','월','화','수','목','금','토'][d.getDay()]:'';return d?`${day.slice(5)}(${wd})`:day;}
 function ncCloseDiag(){document.getElementById('ncDiagOverlay').classList.remove('open');}
+function ncDiagTable(rows,title){
+  if(!rows.length)return '';
+  const tr=rows.map(u=>`<tr><td style="text-align:left;font-family:monospace;font-size:11px">${u.k||''}</td><td>${u.mgr||''}</td><td>${u.day||''}</td><td style="text-align:left">${String(u.cls||'').replace(/</g,'&lt;')||'<i style=color:#aaa>(빈값)</i>'}</td></tr>`).join('');
+  return `<div class="nc-pd-h" style="margin:12px 0 6px">${title} · ${rows.length.toLocaleString()}건${rows.length>=1000?' (최대 1000)':''}</div>
+    <table class="nc-tbl" style="min-width:640px"><thead><tr class="nc-sub"><th style="text-align:left">고객키</th><th>담당자(N)</th><th>신청일</th><th style="text-align:left">분류(Q)</th></tr></thead><tbody>${tr}</tbody></table>`;
+}
 function ncShowUnmatched(){
-  const list=(ncModel&&ncModel.unmatched)||[];const body=document.getElementById('ncDiagBody');if(!body)return;
-  if(!list.length){body.innerHTML='<div class="nc-empty">해당 계약이 없습니다.</div>';}
-  else{const rows=list.map(u=>`<tr><td style="text-align:left;font-family:monospace;font-size:11px">${u.k||''}</td><td>${u.mgr||''}</td><td>${u.day||''}</td><td style="text-align:left">${(u.cls||'').replace(/</g,'&lt;')||'<i style=color:#aaa>(빈값)</i>'}</td></tr>`).join('');
-    body.innerHTML=`<table class="nc-tbl" style="min-width:640px"><thead><tr class="nc-sub"><th style="text-align:left">고객키</th><th>담당자(N)</th><th>신청일</th><th style="text-align:left">분류(Q)</th></tr></thead><tbody>${rows}</tbody></table><div class="nc-note" style="margin-top:8px">총 ${list.length.toLocaleString()}건${list.length>=1000?' (최대 1000건까지 표시)':''}</div>`;}
+  const body=document.getElementById('ncDiagBody');if(!body)return;
+  const list=(ncModel&&ncModel.unmatched)||[];
+  const gUnknown=((ncModel&&ncModel.gunja)||[]).filter(g=>!g.lang).slice(0,1000);
+  let html=ncDiagTable(list,'일반 계약 — 언어 판정 불가')+ncDiagTable(gUnknown,'군자 계약 — 언어 미상');
+  if(!html)html='<div class="nc-empty">언어 판정 불가 계약이 없습니다.</div>';
+  body.innerHTML=html;
   document.getElementById('ncDiagOverlay').classList.add('open');
 }
 
@@ -14238,16 +14248,16 @@ function ncMatrixRow(label,g,cls){
     ncC(g.db[2]), ncC(g.c[2]), ncPct(g.c[2],g.db[2]),
     ncC(g.db[3]), ncC(g.c[3]), ncPct(g.c[3],g.db[3]),
     ncC(g.gunja),
-    ncC(g.fTry), ncAvg(g.fTry,dbT), ncC(g.fConn), ncPct(g.fConn,g.fTry), ncC(g.fValid), ncPct(g.fValid,g.fTry),
-    ncC(g.oTry), ncAvg(g.oTry,dbT), ncC(g.oConn), ncPct(g.oConn,g.oTry), ncC(g.oValid), ncPct(g.oValid,g.oTry),
+    ncC(g.fTry), ncAvg(g.fTry,g.db[0]), ncC(g.fConn), ncPct(g.fConn,g.fTry), ncC(g.fValid), ncPct(g.fValid,g.fTry),
+    ncC(g.oTry), ncAvg(g.oTry,g.db[1]+g.db[2]+g.db[3]), ncC(g.oConn), ncPct(g.oConn,g.oTry), ncC(g.oValid), ncPct(g.oValid,g.oTry),
   ];
   const pct=[2,4,8,11,14,17,22,24,28,30];const avg=[20,26];
   return `<tr class="${cls||''}"><td class="nc-lbl">${label}</td>${cells.map((c,i)=>`<td${pct.includes(i)?' class="nc-pctcol"':avg.includes(i)?' class="nc-avgcol"':''}>${c}</td>`).join('')}</tr>`;
 }
-function ncMatrixHeader(){
+function ncMatrixHeader(firstCol){
   return `<thead>
     <tr class="nc-grp">
-      <th rowspan="2">언어</th>
+      <th rowspan="2">${firstCol||'언어'}</th>
       <th colspan="6">전체</th>
       <th colspan="3">신규</th><th colspan="3">재콜</th><th colspan="3">재재콜</th><th colspan="3">회수콜</th>
       <th rowspan="2">군자<br>계약수</th>
@@ -14271,7 +14281,30 @@ function ncRenderMatrix(agg,tot){
   for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
   return `<div class="nc-sec"><div class="nc-sec-h">🌐 언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader()}<tbody>${body}</tbody></table></div>
-    <div class="nc-note">· 신규=재콜0회 · 재콜/재재콜/회수콜 = DB정보 "재콜" 출현횟수(1/2/3) · 언어 = 매체코드(T열) · 신규 콜=당일 분배 DB에 건 콜 / 이전 콜=이전 분배·재콜 DB · 평균시도=시도수÷DB수 · DB단가·광고비·취소수 제외</div></div>`;
+    <div class="nc-note">· 신규=재콜0회 · 재콜/재재콜/회수콜 = DB정보 "재콜" 출현횟수(1/2/3) · 언어 = 매체코드(T열) · 신규 콜=당일 분배 DB에 건 콜 / 이전 콜=이전 분배·재콜 DB · 평균시도=신규콜÷신규DB수, 이전콜÷이전DB수(=전체−신규) · DB단가·광고비·취소수 제외</div></div>`;
+}
+// 일자별(분배일) 집계 — 선택 언어 합산, 같은 컬럼 구조
+function ncAggByDate(s,e){
+  const sel=ncSelSet();const byDay=new Map();
+  const D=d=>{if(!byDay.has(d))byDay.set(d,ncBlank());return byDay.get(d);};
+  for(const ev of ncModel.dbEvents){if(!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;D(ev.d).db[ev.rc]++;}
+  for(const c of ncModel.contracts){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;const a=D(c.day);a.cAll++;a.c[c.rc]++;if(c.daily)a.cDaily++;}
+  for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;if(!ncLangMatch(g.lang))continue;D(g.day).gunja++;}
+  for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;
+    const a=D(c.day);const fresh=c.kind==='fresh',T=fresh?'fTry':'oTry',C=fresh?'fConn':'oConn',V=fresh?'fValid':'oValid';
+    a[T]++;if(c.conn)a[C]++;if(c.valid)a[V]++;}
+  return byDay;
+}
+function ncRenderDaily(s,e){
+  const byDay=ncAggByDate(s,e);
+  const days=Array.from(byDay.keys()).sort();
+  if(!days.length)return `<div class="nc-sec"><div class="nc-sec-h">📅 언어별 · 계약별 · 일자별 성과</div><div class="nc-empty">데이터 없음</div></div>`;
+  const tot=ncSum(days.map(d=>byDay.get(d)));
+  let body=ncMatrixRow('합계',tot,'nc-total');
+  for(const d of days)body+=ncMatrixRow(ncDayLabel(d),byDay.get(d));
+  const langLbl=ncAllLangs()?'전체 언어':`선택 ${ncScopeLangs().length}개 언어`;
+  return `<div class="nc-sec"><div class="nc-sec-h">📅 언어별 · 계약별 · 일자별 성과<span class="nc-sub-s">${langLbl} 합산 · 분배일 기준 · 오래된→최신</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader('일자')}<tbody>${body}</tbody></table></div></div>`;
 }
 // 개인별 컬럼: 코디 · DB수 · 실계약 · 계약률 · 일계약 · 이전계약 · 신규콜(시도·유효) · 이전콜(시도·유효)
 function ncPersonHeader(){
@@ -14355,7 +14388,7 @@ function ncRender(){
   if(ncAllLangs())tot.gunja=agg.gunjaAll;   // 전체(모든 언어) 군자 = 언어 미상 포함 총계
   ncRenderKpi(tot);
   const chartBox=`<div class="nc-sec"><div class="nc-sec-h">📈 일자별 추이<span class="nc-sub-s">DB수·실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
-  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,tot)+chartBox+ncRenderPerson(agg);
+  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,tot)+ncRenderDaily(s,e)+chartBox+ncRenderPerson(agg);
   ncRenderChart(s,e);
   const w=document.getElementById('ncWarn');if(w)w.innerHTML=(ncModel.warns||[]).join(' · ');
   ncUpdateCodiBtn();
@@ -14512,7 +14545,7 @@ async function ncDownloadExcel(){
   if(!ncModel){alert('데이터가 없습니다.');return;}
   const [s,e]=ncRangeDays();const agg=ncAgg(s,e);const scope=ncScopeLangs();
   const head=['언어','DB수','실계약수','실계약률','일계약수','일계약률','이전계약수','신규DB','신규계약','신규계약률','재콜DB','재콜계약','재콜률','재재콜DB','재재콜계약','재재콜률','회수콜DB','회수콜계약','회수콜률','군자계약','신규콜시도','신규콜평균시도','신규콜연결','신규콜연결률','신규콜유효','신규콜유효율','이전콜시도','이전콜평균시도','이전콜연결','이전콜연결률','이전콜유효','이전콜유효율'];
-  const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[0],g.c[0],ncPct(g.c[0],g.db[0]),g.db[1],g.c[1],ncPct(g.c[1],g.db[1]),g.db[2],g.c[2],ncPct(g.c[2],g.db[2]),g.db[3],g.c[3],ncPct(g.c[3],g.db[3]),g.gunja,g.fTry,ncAvg(g.fTry,dbT),g.fConn,ncPct(g.fConn,g.fTry),g.fValid,ncPct(g.fValid,g.fTry),g.oTry,ncAvg(g.oTry,dbT),g.oConn,ncPct(g.oConn,g.oTry),g.oValid,ncPct(g.oValid,g.oTry)];};
+  const rowOf=(label,g)=>{const dbT=ncDbTot(g);return [label,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,ncPct(g.cDaily,dbT),g.cAll-g.cDaily,g.db[0],g.c[0],ncPct(g.c[0],g.db[0]),g.db[1],g.c[1],ncPct(g.c[1],g.db[1]),g.db[2],g.c[2],ncPct(g.c[2],g.db[2]),g.db[3],g.c[3],ncPct(g.c[3],g.db[3]),g.gunja,g.fTry,ncAvg(g.fTry,g.db[0]),g.fConn,ncPct(g.fConn,g.fTry),g.fValid,ncPct(g.fValid,g.fTry),g.oTry,ncAvg(g.oTry,g.db[1]+g.db[2]+g.db[3]),g.oConn,ncPct(g.oConn,g.oTry),g.oValid,ncPct(g.oValid,g.oTry)];};
   const aoa=[[`뇌새김 콜 현황 (${s} ~ ${e})`],head];
   const etot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));if(ncAllLangs())etot.gunja=agg.gunjaAll;
   aoa.push(rowOf('전체',etot));
