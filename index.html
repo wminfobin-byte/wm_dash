@@ -6881,7 +6881,7 @@ let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고
 let gdMemberCenters={};     // {name: '센터명'}
 let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
-const GD_CANCEL_COL={customerKey:3, custName:7, custPhone:8, manager:13, classification:16, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), H=7(고객명), I=8(연락처), N=13(담당자), Q=16(분류/매체코드), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
+const GD_CANCEL_COL={customerKey:3, custName:7, custPhone:8, orderDate:12, manager:13, classification:16, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), H=7(고객명), I=8(연락처), M=12(구매확정일=오더일), N=13(담당자), Q=16(분류/매체코드), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
@@ -7852,9 +7852,10 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
-    if(memberSet.has(cancelManager)){ counts[cancelManager]++; counted++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), dist:gdFmtD(distDate)}); continue; }
+    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 구매확정일=오더일 (반품일은 사후취소라 알 수 없음)
+    if(memberSet.has(cancelManager)){ counts[cancelManager]++; counted++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)}); continue; }
     const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
-    if(memberSet.has(stripped)){ counts[stripped]++; counted++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), dist:gdFmtD(distDate)}); }
+    if(memberSet.has(stripped)){ counts[stripped]++; counted++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)}); }
     else unmatched++;
   }
   console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / cutoff drop ${cutoffDrop}건 제외 / 분배일 주말·공휴일 ${holidaySkip}건 제외 / 담당자 미매칭 ${unmatched}건`);
@@ -7895,9 +7896,10 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     if(!cancelManager) continue;
     const cxKey=str(row[GD_CANCEL_COL.customerKey]);
     const cxName=str(row[GD_CANCEL_COL.custName]), cxPhone=str(row[GD_CANCEL_COL.custPhone]);
-    if(set.has(cancelManager)){ counts[cancelManager]++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:cxKey, name:cxName, phone:cxPhone, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); continue; }
+    const cxOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 구매확정일=오더일
+    if(set.has(cancelManager)){ counts[cancelManager]++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:cxKey, name:cxName, phone:cxPhone, order:cxOrder, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); continue; }
     const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
-    if(set.has(stripped)){ counts[stripped]++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:cxKey, name:cxName, phone:cxPhone, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); }
+    if(set.has(stripped)){ counts[stripped]++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:cxKey, name:cxName, phone:cxPhone, order:cxOrder, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); }
     else unmatched++;
   }
   if(unmatched>0||holidaySkip>0||inCodeSkip>0){
@@ -8923,10 +8925,10 @@ function gdShowKeyDetail(name){
   const contract=d.contract||[], banpum=d.banpum||[], huPre=d.huPre||[];
   const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  // 취소수 = 반품 + 사후 (각 행에 출처 표기)
+  // 취소수 = 반품 + 사후 (각 행에 출처·오더일·반품일 표기). 사후배송전취소는 반품일을 알 수 없어 공란.
   const cancelRows=[
-    ...banpum.map(x=>({key:x.key, name:x.name, phone:x.phone, src:'반품', sub:`반품일 ${x.ret||'-'} · 분배일 ${x.dist||'-'}`})),
-    ...huPre.map(x=>({key:x.key, name:x.name, phone:x.phone, src:'사후 배송전취소', sub:`분배일 ${x.dist||'-'}`}))
+    ...banpum.map(x=>({key:x.key, name:x.name, phone:x.phone, src:'반품', order:x.order||'-', ret:x.ret||'-', dist:x.dist||'-'})),
+    ...huPre.map(x=>({key:x.key, name:x.name, phone:x.phone, src:'사후 배송전취소', order:x.order||'-', ret:'-', dist:x.dist||'-'}))
   ];
 
   const cnt=(label,n,color)=>`<span style="display:inline-block;background:${color};color:#fff;border-radius:10px;padding:1px 9px;font-size:12px;font-weight:700;margin-left:6px">${n}</span>`;
@@ -8964,7 +8966,9 @@ function gdShowKeyDetail(name){
         {h:'고객명', f:r=>r.name},
         {h:'연락처', f:r=>r.phone},
         {h:'판정', f:r=>r.src},
-        {h:'상세', f:r=>r.sub}
+        {h:'오더일', f:r=>r.order},
+        {h:'반품일', f:r=>r.ret},
+        {h:'분배일', f:r=>r.dist}
       ]))}
     <div style="display:flex;gap:18px;flex-wrap:wrap">
       <div style="flex:1;min-width:300px">${section('└ 반품 (반품일 기재)', cnt('반품', banpum.length, '#ea580c'), banpum,
@@ -8972,6 +8976,7 @@ function gdShowKeyDetail(name){
           {h:'고객키', f:r=>r.key},
           {h:'고객명', f:r=>r.name},
           {h:'연락처', f:r=>r.phone},
+          {h:'오더일', f:r=>r.order},
           {h:'반품일', f:r=>r.ret},
           {h:'분배일', f:r=>r.dist}
         ]))}</div>
@@ -8980,6 +8985,8 @@ function gdShowKeyDetail(name){
           {h:'고객키', f:r=>r.key},
           {h:'고객명', f:r=>r.name},
           {h:'연락처', f:r=>r.phone},
+          {h:'오더일', f:r=>r.order},
+          {h:'반품일', f:r=>'-'},
           {h:'분배일', f:r=>r.dist}
         ]))}</div>
     </div>`;
