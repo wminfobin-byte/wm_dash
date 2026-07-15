@@ -6881,7 +6881,7 @@ let gdMemberCmsGroups={};   // {name: 'W'|'E'|'A'} — CMS 그룹 표기 (참고
 let gdMemberCenters={};     // {name: '센터명'}
 let gdAprilInitLast=null;   // 방식2 마지막 산정 결과 (엑셀 다운로드용)
 
-const GD_CANCEL_COL={customerKey:3, custName:7, custPhone:8, orderDate:12, manager:13, classification:16, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), H=7(고객명), I=8(연락처), M=12(구매확정일=오더일), N=13(담당자), Q=16(분류/매체코드), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
+const GD_CANCEL_COL={customerKey:3, custName:7, custPhone:8, orderDate:15, manager:13, classification:16, code:17, distributeDate:41, returnDate:42};   // 신청자관리 D=3(고객키), H=7(고객명), I=8(연락처), P=15(신청일=오더일 — 배송전도 채워짐), N=13(담당자), Q=16(분류/매체코드), R=17(코드번호), AP=41(분배일), AQ=42(반품일)
 const GD_INIT_KEY='gd_init_uploaded';
 const GD_STREAK_ADJ_KEY='gd_streak_adj';
 const GD_PROMO_KEY='gd_promotion_enabled';
@@ -7858,7 +7858,7 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
-    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 구매확정일=오더일
+    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 신청일=오더일
     const target=memberSet.has(cancelManager)?cancelManager:(memberSet.has(cancelManager.replace(/\(R_[^)]+\)/,'').trim())?cancelManager.replace(/\(R_[^)]+\)/,'').trim():null);
     // 맞교환 제외: 같은 (전화|오더일)로 현재 활성계약이 있으면 취소 아님(제품 맞교환 = 옛 계약 삭제 + 동일 오더일 새 계약)
     const vcPhone=normPh(row[GD_CANCEL_COL.custPhone]);
@@ -7909,7 +7909,7 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     if(!cancelManager) continue;
     const cxKey=str(row[GD_CANCEL_COL.customerKey]);
     const cxName=str(row[GD_CANCEL_COL.custName]), cxPhone=str(row[GD_CANCEL_COL.custPhone]);
-    const cxOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 구매확정일=오더일
+    const cxOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 신청일=오더일
     if(set.has(cancelManager)){ counts[cancelManager]++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:cxKey, name:cxName, phone:cxPhone, order:cxOrder, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); continue; }
     const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
     if(set.has(stripped)){ counts[stripped]++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:cxKey, name:cxName, phone:cxPhone, order:cxOrder, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); }
