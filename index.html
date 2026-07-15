@@ -12592,11 +12592,10 @@ async function tbIdbClear(){const all=await tbIdbGetAll();for(const r of all)awa
 function tbFilesByType(t){return tbFiles.filter(f=>f.type===t);}
 async function tbLoadFiles(){try{await tbOpenIDB();tbFiles=await tbIdbGetAll();tbLoaded=true;tbUpdateUploadStatus();}catch(e){console.error('타임보드 IDB 로드:',e);}}
 // 클라우드 싱크 (payload.tb 독립 슬라이스)
-// 용량 절감: tb는 전량 공용폴더 유래(계열별성과와 동일 DB수·계약·명단)라 싱크에서 제외.
-// 각 PC에서 공용폴더 재스캔으로 복원. (payload가 JS 문자열/JSON.parse 한도를 넘어 동기화가 실패하던 문제 해결)
-function tbCollectSync(){return [];}
+// 전체 파일(DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 표시. (탭별 개별 파일 동기화 v2로 대용량 처리)
+function tbCollectSync(){return (tbFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
 async function tbRestoreSync(arr){
-  if(!Array.isArray(arr)||!arr.length)return;   // 빈/미포함이면 로컬(폴더 스캔) 데이터 보존
+  if(!Array.isArray(arr))return;
   if(!tbIdb)await tbOpenIDB();
   await tbIdbClear();tbFiles=[];
   for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tbIdbAdd(rec);rec.id=id;tbFiles.push(rec);}
@@ -13273,14 +13272,13 @@ async function tzIdbClear(){const all=await tzIdbGetAll();for(const r of all)awa
 function tzFilesByType(t){return tzFiles.filter(f=>f.type===t);}
 async function tzLoadFiles(){try{await tzOpenIDB();tzFiles=await tzIdbGetAll();tzLoaded=true;tzUpdateUploadStatus();}catch(e){console.error('톡이즈 IDB 로드:',e);}}
 // 클라우드 싱크 (payload.tz 독립 슬라이스)
-// 용량 절감: CTI(수동·공용폴더에 없음)만 싱크. DB수·계약·명단은 계열별성과와 중복이라 제외하고 폴더 재스캔으로 복원.
-function tzCollectSync(){return (tzFiles||[]).filter(f=>f.type==='cti').map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+// 전체 파일(CTI·DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 표시. (탭별 개별 파일 동기화 v2로 대용량 처리)
+function tzCollectSync(){return (tzFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
 async function tzRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!tzIdb)await tzOpenIDB();
-  for(const f of tzFilesByType('cti'))await tzIdbDel(f.id);   // CTI만 교체, 폴더로 받은 DB·계약·명단 보존
-  tzFiles=tzFiles.filter(f=>f.type!=='cti');
-  for(const f of arr){if(f.type!=='cti')continue;const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tzIdbAdd(rec);rec.id=id;tzFiles.push(rec);}
+  await tzIdbClear();tzFiles=[];
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tzIdbAdd(rec);rec.id=id;tzFiles.push(rec);}
   tzLoaded=true;tzModel=null;tzUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='talkis-perf')tzOnShow();
 }
