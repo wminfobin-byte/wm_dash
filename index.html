@@ -5386,8 +5386,43 @@ function cdComputeEstimation(){
   return true;
 }
 
-// ── Excel (placeholder) ──
-async function cdDownloadExcel(){if(!cdResult)return;alert('Excel 다운로드는 다음 업데이트에서 구현됩니다.');}
+// ── Excel 다운로드 (현재 뷰·필터 그대로: 월별/주차별/센터별/종류별/개인별 5시트) ──
+function cdStyleWs(ws,tbl){
+  const range=XLSX.utils.decode_range(ws['!ref']||'A1');
+  const headRows=Math.max(1,(tbl.querySelectorAll('thead tr')||[]).length);
+  const hdr={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'CBD5E1'}}}};
+  for(let r=0;r<headRows&&r<=range.e.r;r++)for(let c=range.s.c;c<=range.e.c;c++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell)cell.s=hdr;}
+  const cols=[];
+  for(let c=range.s.c;c<=range.e.c;c++){let w=5;for(let r=range.s.r;r<=range.e.r;r++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell&&cell.v!=null){const len=String(cell.v).length;if(len>w)w=len;}}cols.push({wch:Math.min(w+2,30)});}
+  ws['!cols']=cols;
+}
+async function cdDownloadExcel(){
+  if(!cdResult){alert('먼저 신청자·명단 파일을 업로드하세요.');return;}
+  const v=cdCurrentView;
+  const sub=document.querySelector(`.cd-subtab[data-view="${v}"]`);
+  const viewLabel=(sub?sub.textContent:v).replace(/"/g,'').trim();
+  const idOf=dim=> v==='all'?`cd${dim}Table`:`cd${dim}-${v}`;
+  const dims=[['Monthly','월별 취소율'],['Weekly','주차별 취소율'],['Center','센터별 취소율'],['Product','종류별 취소율'],['Person','개인별 취소율']];
+  const wb=XLSX.utils.book_new();let added=0;
+  for(const [dim,label] of dims){
+    const cont=document.getElementById(idOf(dim));
+    const tbl=cont&&cont.querySelector('table');
+    if(!tbl||!tbl.rows||!tbl.rows.length)continue;
+    const ws=XLSX.utils.table_to_sheet(tbl);
+    cdStyleWs(ws,tbl);
+    XLSX.utils.book_append_sheet(wb,ws,label);added++;
+  }
+  if(!added){alert('다운로드할 표가 없습니다. (현재 뷰의 표가 비어있습니다)');return;}
+  const period=((document.getElementById('cdDateDisplay')||{}).textContent||'전체기간').replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,24)||'전체기간';
+  const fname=`취소율_${viewLabel}_${period}.xlsx`;
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;a.click();URL.revokeObjectURL(url);
+  }catch(e){console.error(e);XLSX.writeFile(wb,fname);}
+}
 
 // ── 네비게이션바 & TOP 버튼 ──
 // 네비게이션 — 현재 뷰에 맞는 섹션 ID 매핑
