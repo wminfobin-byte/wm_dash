@@ -7822,19 +7822,25 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
 // 직전 회차 cancel D열에는 있었는데 이번 cancel D열에는 없는 고객키 = 시스템에서 행 삭제 = 배송전 취소 사후 발생
 // cutoff drop 가드: 직전 cancel 행의 distributeDate가 이번 cancel cutoff 이전이면 자연 만료로 간주 → 무시
 // 같은 고객키 중복 방지(prev cancel에 같은 키가 여러 행이어도 한 번만 카운트)
-function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart, keyCollect){
+function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart, keyCollect, swapCollect){
   const memberSet=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
   if(!prevCancelData||!curCancelData) return counts;
 
+  const normPh=x=>str(x).replace(/[^0-9]/g,'');
   const curKeys=new Set();
+  const activeSwap=new Set();   // 맞교환 판정용: 현재 취소파일의 활성계약(반품일 공란) (전화|오더일)
   for(let i=1;i<curCancelData.length;i++){
-    const ck=str(curCancelData[i]?.[GD_CANCEL_COL.customerKey]);
-    if(ck) curKeys.add(ck);
+    const r=curCancelData[i]; if(!r) continue;
+    const ck=str(r[GD_CANCEL_COL.customerKey]); if(ck) curKeys.add(ck);
+    if(str(r[GD_CANCEL_COL.returnDate])) continue;                 // 반품일 있으면 활성 아님
+    const ph=normPh(r[GD_CANCEL_COL.custPhone]);
+    const od=gdFmtD(parseDate(r[GD_CANCEL_COL.orderDate]));
+    if(ph&&od) activeSwap.add(ph+'|'+od);
   }
 
   const seen=new Set();
-  let cutoffDrop=0, unmatched=0, counted=0, holidaySkip=0;
+  let cutoffDrop=0, unmatched=0, counted=0, holidaySkip=0, swapSkip=0;
   for(let i=1;i<prevCancelData.length;i++){
     const row=prevCancelData[i];
     if(!row) continue;
@@ -7852,13 +7858,20 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
-    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 구매확정일=오더일 (반품일은 사후취소라 알 수 없음)
-    if(memberSet.has(cancelManager)){ counts[cancelManager]++; counted++; if(keyCollect)(keyCollect[cancelManager]=keyCollect[cancelManager]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)}); continue; }
-    const stripped=cancelManager.replace(/\(R_[^)]+\)/,'').trim();
-    if(memberSet.has(stripped)){ counts[stripped]++; counted++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)}); }
-    else unmatched++;
+    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 구매확정일=오더일
+    const target=memberSet.has(cancelManager)?cancelManager:(memberSet.has(cancelManager.replace(/\(R_[^)]+\)/,'').trim())?cancelManager.replace(/\(R_[^)]+\)/,'').trim():null);
+    // 맞교환 제외: 같은 (전화|오더일)로 현재 활성계약이 있으면 취소 아님(제품 맞교환 = 옛 계약 삭제 + 동일 오더일 새 계약)
+    const vcPhone=normPh(row[GD_CANCEL_COL.custPhone]);
+    if(vcPhone && vcOrder && activeSwap.has(vcPhone+'|'+vcOrder)){
+      swapSkip++;
+      if(swapCollect && target)(swapCollect[target]=swapCollect[target]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)});
+      continue;
+    }
+    if(!target){ unmatched++; continue; }
+    counts[target]++; counted++;
+    if(keyCollect)(keyCollect[target]=keyCollect[target]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)});
   }
-  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / cutoff drop ${cutoffDrop}건 제외 / 분배일 주말·공휴일 ${holidaySkip}건 제외 / 담당자 미매칭 ${unmatched}건`);
+  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / 맞교환 제외 ${swapSkip}건 / cutoff drop ${cutoffDrop}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 담당자 미매칭 ${unmatched}건`);
   return counts;
 }
 
@@ -8329,7 +8342,7 @@ async function gdGenerate(dbFileId, opts={}){
     }
 
     // 키 상세 수집기 (수정 모드 이름 클릭 시 표시 — 집계 대상 고객키)
-    const _contractKeys={}, _banpumKeys={}, _huPreKeys={};
+    const _contractKeys={}, _banpumKeys={}, _huPreKeys={}, _swapKeys={};
     const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate);
     const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
     const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
@@ -8355,7 +8368,7 @@ async function gdGenerate(dbFileId, opts={}){
     // 이번 cancel cutoff start ≈ cancel 업로드 시점 - 30일(1개월) — cutoff drop 가드용
     // (취소 파일이 오더일 최근 1개월치만 담기므로, 1개월 지나 자연 만료된 행을 사후취소로 오인하지 않게 가드도 1개월로 맞춤)
     const _cancelCutoffStart=new Date(cancelFile.uploadTime - 30*24*60*60*1000);
-    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys);
+    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys, _swapKeys);
     members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(vanishedCounts[name]||0); });
 
     // 회차별 수동 실계약수/취소수 조정 (해당 회차에만 적용 — sheetName 키)
@@ -8634,7 +8647,8 @@ async function gdGenerate(dbFileId, opts={}){
       _detailKeys[name]={
         contract:_contractKeys[name]||[],
         banpum:_banpumKeys[name]||[],
-        huPre:_huPreKeys[name]||[]
+        huPre:_huPreKeys[name]||[],
+        swap:_swapKeys[name]||[]
       };
     });
 
@@ -8922,7 +8936,7 @@ function gdShowKeyDetail(name){
   const d=gdResult.detailKeys[name];
   if(!d){ alert('해당 코디의 상세 데이터가 없습니다.'); return; }
   const s=gdResult.stats[name]||{};
-  const contract=d.contract||[], banpum=d.banpum||[], huPre=d.huPre||[];
+  const contract=d.contract||[], banpum=d.banpum||[], huPre=d.huPre||[], swap=d.swap||[];
   const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   // 취소수 = 반품 + 사후 (각 행에 출처·오더일·반품일 표기). 사후배송전취소는 반품일을 알 수 없어 공란.
@@ -8989,7 +9003,16 @@ function gdShowKeyDetail(name){
           {h:'반품일', f:r=>'-'},
           {h:'분배일', f:r=>r.dist}
         ]))}</div>
-    </div>`;
+    </div>
+    ${section('맞교환 제외 (취소로 안 잡음)', cnt('맞교환', swap.length, '#0d9488'), swap,
+      keyList(swap, [
+        {h:'고객키', f:r=>r.key},
+        {h:'고객명', f:r=>r.name},
+        {h:'연락처', f:r=>r.phone},
+        {h:'오더일', f:r=>r.order},
+        {h:'분배일', f:r=>r.dist}
+      ]))}
+    <div style="font-size:11.5px;color:#64748b;margin-top:-8px">※ 맞교환 = 사후배송전취소로 사라진 옛 계약과 <b>같은 전화번호+오더일</b>의 새 활성계약이 있는 건 → 제품 교환이라 취소에서 제외됩니다.</div>`;
 
   document.getElementById('gdKeyModalBody').innerHTML=html;
   document.getElementById('gdKeyModalOverlay').classList.add('open');
