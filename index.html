@@ -13989,17 +13989,14 @@ async function ncPurgeStaleContracts(){
 }
 
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
-// 용량 절감: CTI(수동·공용폴더에 없음)만 rows 포함. DB수·계약·명단은 sp/tb/tz와 중복이라 제외하고
-// 각 PC에서 공용폴더 재스캔으로 복원(폴더 없는 PC는 nc의 DB/계약 미표시). payload가 JS 문자열 한도를 넘어
-// JSON.stringify가 'Invalid string length'로 실패하던 문제 해결.
-function ncCollectSync(){return (ncFiles||[]).filter(f=>f.type==='cti').map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+// 전체 파일(CTI·DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 nc가 표시됨.
+// (탭별 개별 파일 동기화 v2로 대용량도 OOM·문자열 한도 없이 처리)
+function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
 async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
-  // CTI만 교체 — 공용폴더로 받은 DB수·계약·명단은 보존
-  for(const f of ncFilesByType('cti'))await ncIdbDel(f.id);
-  ncFiles=ncFiles.filter(f=>f.type!=='cti');
-  for(const f of arr){if(f.type!=='cti')continue;const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  await ncIdbClear();ncFiles=[];
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
   ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
 }
