@@ -2730,14 +2730,7 @@ async function doSyncUpload(token){
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // (일자별 성과 탭 삭제됨 — 싱크 제외)
-    // 부재인입 데이터 (mcFiles가 아직 로드 안 됐으면 IDB에서 직접 읽어 동기화 누락 방지)
-    let mcSync=[];
-    try{
-      if(typeof mcCollectSync==='function'){
-        if((!mcFiles||!mcFiles.length)&&typeof mcLoadFiles==='function'){ if(!mcLoaded) await mcLoadFiles(); }
-        mcSync=mcCollectSync();
-      }
-    }catch(e){console.warn('mc sync collect 실패',e);}
+    // (부재인입 mc — 동기화 용량 1위라 클라우드 싱크 제외. 탭·로컬 데이터는 유지, 그 PC에서만 사용)
     // 계열별성과 데이터 (spFiles 미로드 시 IDB에서 직접 읽어 누락 방지)
     let spSync=[];
     try{
@@ -2777,8 +2770,8 @@ async function doSyncUpload(token){
 
     // 탭별 개별 파일 동기화 (매니페스트 v2): 슬라이스마다 따로 stringify→gzip→청크 업로드.
     // 전체를 한 문자열/버퍼로 만들지 않아 JSON.stringify 문자열 한도·압축 시 Out of Memory를 회피한다.
-    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,mc:mcSync,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData};
-    const SLICE_ORDER=['ng','ngResults','cd','gd','mc','sp','tb','tz','nc','ls'];
+    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData};
+    const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ls'];
     const treeItems=[];const sliceMeta=[];const nowTs=Date.now();
     for(const key of SLICE_ORDER){
       const val=payloadObj[key];
