@@ -14046,6 +14046,11 @@ const NC_ENG=new Set(['더위크','결합','홈페이지']);
 const NC_FOREIGN=new Set(['일본어','중국어','스페인어','프랑스어']);
 const NC_TARGET=(typeof SP_TARGET_TEAMS!=='undefined')?SP_TARGET_TEAMS:new Set(['뇌새김영어','제2외국어']);
 const NC_DI_MAX=400;                   // DB정보 원문 히스토그램 최대 distinct 수(파일당)
+// DB 파서 버전. ncParseDb는 언어(lang)를 파싱 시점에 확정해 저장하므로, 판정 규칙을 바꾸면
+// 기존 저장분에는 반영되지 않는다. 이 값을 올리면 공용폴더 스캔 때 구버전 파일을 자동 재파싱한다.
+//  v2: 유입일(inf) 추가 + DB정보 히스토그램(diHist)
+//  v3: 콜백 판정에 tv_b 포함 (기존엔 tv_b가 null로 제외돼 DB수에서 빠져 있었음)
+const NC_PARSER_VER=3;
 // 콜 5분류 — 콜이 어느 단계의 DB 때문에 발생했는지. d0/d1은 같은 신규 DB(rc0)를 분배당일/이후로 가른다.
 const NC_CATS=['d0','d1','r1','r2','r3'];
 const NC_CAT_LABEL={d0:'당일 DB 콜',d1:'이전 DB 콜',r1:'재콜 DB 콜',r2:'재재콜 DB 콜',r3:'회수콜 DB 콜'};
@@ -14072,9 +14077,9 @@ async function ncPurgeStaleContracts(){
   ncFiles=ncFiles.filter(f=>!ids.has(f.id));ncModel=null;
   return stale.length;
 }
-// 구버전 파싱된 DB 파일(유입일 inf 없음) 감지 후 삭제 → 폴더 재스캔 시 재파싱(리드 추적·DB정보 검증에 필요).
+// 구버전 파서로 읽힌 DB 파일 감지 후 삭제 → 폴더 재스캔 시 재파싱.
 // 공용폴더가 확인된 뒤(ncScanFolder 내부)에만 호출 — 폴더 없는 PC에서 원본을 잃지 않도록.
-function ncStaleDbFiles(){return ncFilesByType('db').filter(f=>f.rows&&f.rows.length&&!('inf' in f.rows[0]));}
+function ncStaleDbFiles(){return ncFilesByType('db').filter(f=>f.rows&&f.rows.length&&(f.pv||0)<NC_PARSER_VER);}
 async function ncPurgeStaleDb(){
   const stale=ncStaleDbFiles();
   if(!stale.length)return 0;
@@ -14087,12 +14092,12 @@ async function ncPurgeStaleDb(){
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
 // 전체 파일(CTI·DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 nc가 표시됨.
 // (탭별 개별 파일 동기화 v2로 대용량도 OOM·문자열 한도 없이 처리)
-function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount,diHist:f.diHist}));}
+function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount,diHist:f.diHist,pv:f.pv}));}
 async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
   await ncIdbClear();ncFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};if(f.diHist)rec.diHist=f.diHist;const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};if(f.diHist)rec.diHist=f.diHist;if(f.pv)rec.pv=f.pv;const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
   ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
 }
@@ -14104,8 +14109,7 @@ function ncLang(mc){
   const c=String(mc==null?'':mc).toLowerCase();
   if(!c.trim())return 'IN';                         // 무매체 IN
   if(c.includes('talkis'))return null;              // 톡이즈 제외
-  if(c.includes('callback'))return '콜백';
-  if(c.includes('tv_b'))return null;                // tv_b 제외
+  if(c.includes('callback')||c.includes('tv_b'))return '콜백';   // 콜백 = callback 또는 tv_b(TV 인입) 매체
   if(c.includes('japer')||c.includes('jhp_in'))return '일본어';
   if(c.includes('cnper')||c.includes('chp_in')||c.includes('chn'))return '중국어';
   if(c.includes('esper')||c.includes('shp_in'))return '스페인어';
@@ -14172,7 +14176,7 @@ async function ncIngestFile(type,file){
   else if(type==='cti')rows=tzParseCti(wb);
   else rows=spParseAttend(wb);
   const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
-  if(diHist)rec.diHist=diHist;
+  if(diHist){rec.diHist=diHist;rec.pv=NC_PARSER_VER;}
   const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);
   return {status:'ok'};
 }
@@ -14224,7 +14228,7 @@ function ncCompute(){
   const dbFiles=ncFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0);
   for(const f of dbFiles)for(const r of (f.rows||[])){
     if(!r.k)continue;
-    const lang=r.lang; if(lang==null)continue;                        // 톡이즈·tv_b 제외
+    const lang=r.lang; if(lang==null)continue;                        // 톡이즈 제외
     // 전체 keyLang(로스터·담당 무관) — 군자 등 비대상 담당 계약의 언어 판정용. 실언어 우선, IN/콜백은 보조.
     if(!keyLangAll.has(r.k))keyLangAll.set(r.k,lang);
     else if((keyLangAll.get(r.k)==='IN'||keyLangAll.get(r.k)==='콜백')&&lang!=='IN'&&lang!=='콜백')keyLangAll.set(r.k,lang);
@@ -14298,7 +14302,7 @@ function ncCompute(){
   const staleDb=ncStaleDbFiles().length;
   if(!ncFilesByType('db').length)warns.push('DB수 파일이 없습니다. 공용폴더를 연결/스캔하세요.');
   if(!dbEvents.length)warns.push('뇌새김 DB가 0건입니다. 명단(담당=뇌새김영어/제2외국어)·DB수 파일을 확인하세요.');
-  if(staleDb)warns.push(`구버전 파싱 DB 파일 ${staleDb}개(유입일 없음) — <b>공용폴더 새로고침</b> 권장`);
+  if(staleDb)warns.push(`구버전 파싱 DB 파일 ${staleDb}개 — 콜백(tv_b)·유입일이 반영 안 됩니다. <b>공용폴더 새로고침</b> 필요`);
   if(roster.moved&&roster.moved.size)warns.push(`역할 전환 ${roster.moved.size}명 제외(최신 명단 담당 없음): ${Array.from(roster.moved).slice(0,5).join(', ')}${roster.moved.size>5?' 외':''}`);
   if(unmatched.length)warns.push(`언어 판정 불가 계약 ${unmatched.length.toLocaleString()}건 제외(DB·분류 모두 실패) <a href="#" onclick="ncShowUnmatched();return false;" style="color:#b45309;text-decoration:underline">[목록 보기]</a>`);
   if(unmatchedCall)warns.push(`전화 미매칭 콜 ${unmatchedCall.toLocaleString()}건 제외`);
@@ -14407,7 +14411,7 @@ function ncDiagVerdict(cls){   // 왜 언어가 안 잡혔는지
   const c=String(cls==null?'':cls).trim();
   if(!c)return '분류 빈값(구버전 파싱일 수 있음 → 공용폴더 새로고침)';
   const raw=ncLang(c);
-  if(raw===null)return '톡이즈/tv_b 코드 → 뇌새김 제외';
+  if(raw===null)return '톡이즈 코드 → 뇌새김 제외';
   const l=ncLangFromCls(c);
   return l?`판정 가능(${l}) — 공용폴더 새로고침 필요`:'미인식 코드';
 }
