@@ -14553,7 +14553,7 @@ function ncRenderEff(agg){
   return `<div class="nc-sec"><div class="nc-sec-h">단계별 시도 효율 &amp; 기회비용<span class="nc-sub-s">통화일 기준 · 콜 1건이 만드는 계약</span></div>
     <div style="display:grid;grid-template-columns:minmax(420px,1fr) minmax(320px,420px);gap:18px;align-items:start">
       <div class="nc-tblwrap"><table class="nc-tbl"><thead><tr class="nc-sub"><th>구분</th><th>시도수</th><th>시도 비중</th><th>계약수</th><th>계약 비중</th><th>시도1천건당 계약</th><th>당일 대비 효율</th></tr></thead>
-        <tbody>${rows}<tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(t.tr)}</td><td class="nc-pctcol">100.0%</td><td>${ncC(t.ct)}</td><td class="nc-pctcol">100.0%</td><td class="nc-avgcol">${ncPer1k(t.ct,t.tr)}</td><td class="nc-avgcol">-</td></tr></tbody></table></div>
+        <tbody><tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(t.tr)}</td><td class="nc-pctcol">100.0%</td><td>${ncC(t.ct)}</td><td class="nc-pctcol">100.0%</td><td class="nc-avgcol">${ncPer1k(t.ct,t.tr)}</td><td class="nc-avgcol">-</td></tr>${rows}</tbody></table></div>
       <div style="height:250px"><canvas id="ncEffCanvas"></canvas></div>
     </div>${callout}</div>`;
 }
