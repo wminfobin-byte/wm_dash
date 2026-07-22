@@ -14471,7 +14471,7 @@ function ncStageTotal(set){
   return t;
 }
 function ncPer1k(ct,tr){return tr?(ct/tr*1000).toFixed(1):'-';}   // 시도 1,000건당 계약 = 단계별 콜 효율
-function ncStageCols(cohort){return cohort?14:11;}
+function ncStageCols(cohort){return cohort?15:12;}
 function ncStageHead(first,cohort){
   const c=[];
   if(cohort)c.push('분배DB');
@@ -14479,10 +14479,11 @@ function ncStageHead(first,cohort){
   if(cohort)c.push('컨택률');
   c.push('시도수','평균시도','연결','연결률','유효','유효율','계약');
   if(cohort)c.push('계약률<br><span class="nc-th-s">(분배DB)</span>');
-  c.push('계약률<br><span class="nc-th-s">(시도DB)</span>','시도1천건당<br><span class="nc-th-s">계약</span>');
+  c.push('계약률<br><span class="nc-th-s">(시도DB)</span>','계약 비중<br><span class="nc-th-s">(합계 대비)</span>','시도1천건당<br><span class="nc-th-s">계약</span>');
   return `<thead><tr class="nc-sub"><th>${first}</th>${c.map(x=>`<th>${x}</th>`).join('')}</tr></thead>`;
 }
-function ncStageCells(b,cohort,dupDb){
+// ctTot = 계약 비중의 분모(표 전체의 계약수 합계)
+function ncStageCells(b,cohort,dupDb,ctTot){
   const td=b.tryDb.size;let h='';
   if(cohort)h+=dupDb
     ? `<td class="nc-dup" title="신규 DB 코호트와 동일한 모수입니다(합계에서 중복 제외)">(${ncC(b.db)})</td>`
@@ -14492,7 +14493,7 @@ function ncStageCells(b,cohort,dupDb){
   h+=`<td>${ncC(b.tr)}</td><td class="nc-avgcol">${ncAvg(b.tr,td)}</td><td>${ncC(b.co)}</td><td class="nc-pctcol">${ncPct(b.co,b.tr)}</td>`
    + `<td>${ncC(b.va)}</td><td class="nc-pctcol">${ncPct(b.va,b.tr)}</td><td>${ncC(b.ct)}</td>`;
   if(cohort)h+=`<td class="nc-pctcol">${ncPct(b.ct,b.db)}</td>`;
-  h+=`<td class="nc-pctcol">${ncPct(b.ct,td)}</td><td class="nc-avgcol">${ncPer1k(b.ct,b.tr)}</td>`;
+  h+=`<td class="nc-pctcol">${ncPct(b.ct,td)}</td><td class="nc-sharecol">${ncPct(b.ct,ctTot)}</td><td class="nc-avgcol">${ncPer1k(b.ct,b.tr)}</td>`;
   return h;
 }
 function ncSetStageAxis(a){ncStageAxis=a;ncRender();}
@@ -14501,19 +14502,24 @@ function ncSetStageCat(c){ncStageCat=c;ncRender();}
 function ncRenderStage(agg){
   const cohort=agg.cohort, tot=ncStageTotal(agg.tot), nCol=ncStageCols(cohort);
   const tb=(on,fn,lbl)=>`<button class="btn btn-outline btn-sm${on?' active':''}" onclick="${fn}">${lbl}</button>`;
-  let rows=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(tot,cohort,false)}</tr>`;
+  let rows=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(tot,cohort,false,tot.ct)}</tr>`;
   for(const c of NC_CATS)
-    rows+=`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${NC_CAT_COLOR[c]}"></span>${NC_CAT_LABEL[c]}</td>${ncStageCells(agg.tot[c],cohort,c==='d1')}</tr>`;
+    rows+=`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${NC_CAT_COLOR[c]}"></span>${NC_CAT_LABEL[c]}</td>${ncStageCells(agg.tot[c],cohort,c==='d1',tot.ct)}</tr>`;
   // 하위 분해 — 선택한 단계 1개를 일자별 또는 코디별로
   const byCodi=ncStageView==='codi';
   const src=byCodi?agg.byCodi:agg.byDay;
   let keys=Array.from(src.keys()).filter(k=>{const b=src.get(k)[ncStageCat];return b.tr||b.ct||b.db;});
   if(byCodi)keys.sort((a,b)=>{const x=src.get(a)[ncStageCat],y=src.get(b)[ncStageCat];return (y.db-x.db)||(y.tr-x.tr)||a.localeCompare(b,'ko');});
   else keys.sort();
-  let sub=keys.map(k=>`<tr><td class="nc-lbl nc-l">${byCodi?k:ncDayLabel(k)}</td>${ncStageCells(src.get(k)[ncStageCat],cohort,false)}</tr>`).join('');
-  if(!sub)sub=`<tr><td colspan="${nCol}" class="nc-empty">데이터 없음</td></tr>`;
-  else{const sum=ncStageBlank();for(const k of keys){const b=src.get(k)[ncStageCat];sum.db+=b.db;sum.tr+=b.tr;sum.co+=b.co;sum.va+=b.va;sum.ct+=b.ct;b.tryDb.forEach(x=>sum.tryDb.add(x));b.connDb.forEach(x=>sum.connDb.add(x));}
-    sub=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(sum,cohort,false)}</tr>`+sub;}
+  let sub;
+  if(!keys.length)sub=`<tr><td colspan="${nCol}" class="nc-empty">데이터 없음</td></tr>`;
+  else{
+    // 계약 비중 분모(=이 표의 계약수 합계)가 필요하므로 합계를 먼저 구한다
+    const sum=ncStageBlank();
+    for(const k of keys){const b=src.get(k)[ncStageCat];sum.db+=b.db;sum.tr+=b.tr;sum.co+=b.co;sum.va+=b.va;sum.ct+=b.ct;b.tryDb.forEach(x=>sum.tryDb.add(x));b.connDb.forEach(x=>sum.connDb.add(x));}
+    sub=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(sum,cohort,false,sum.ct)}</tr>`
+      +keys.map(k=>`<tr><td class="nc-lbl nc-l">${byCodi?k:ncDayLabel(k)}</td>${ncStageCells(src.get(k)[ncStageCat],cohort,false,sum.ct)}</tr>`).join('');
+  }
   const catTabs=NC_CATS.map(c=>`<button class="nc-cat-tab${ncStageCat===c?' on':''}" style="--cc:${NC_CAT_COLOR[c]}" onclick="ncSetStageCat('${c}')">${NC_CAT_LABEL[c]}</button>`).join('');
   const axisNote=cohort
     ? '분배일 기준 — 그날 <b>분배된 DB</b>를 이후 통화까지 끝까지 추적합니다. 최근 며칠은 아직 추적이 덜 끝나 낮게 보일 수 있습니다.'
@@ -14524,7 +14530,8 @@ function ncRenderStage(agg){
     <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead('구분',cohort)}<tbody>${rows}</tbody></table></div>
     <div class="nc-note">· <b>당일 DB 콜</b>=분배 당일 건 신규 DB 콜 · <b>이전 DB 콜</b>=같은 신규 DB에 분배 다음날 이후(재콜로 넘어가기 전까지) 건 콜 · <b>재콜/재재콜/회수콜</b>=DB정보(P열)에 "재콜"이 1·2·3회 나타나는 DB
       <a href="#" onclick="ncShowDiCodes();return false;" style="color:#4361ee;text-decoration:underline">[DB정보 코드 검증]</a><br>
-      · 매칭 키 = <b>담당자 + 고객연락처 + 통화일자 ≤ 분배일자(최신)</b>. 담당자가 다른 DB(재분배 후)에 건 콜은 제외했습니다.<br>· ${axisNote}</div>
+      · 매칭 키 = <b>담당자 + 고객연락처 + 통화일자 ≤ 분배일자(최신)</b>. 담당자가 다른 DB(재분배 후)에 건 콜은 제외했습니다.<br>
+      · <b>계약 비중</b> = 그 행의 계약수 ÷ <b>표의 합계 계약수</b>(위 표는 5단계 합계 기준, 아래 분해표는 선택한 단계의 기간 합계 기준). 계약이 어느 단계에서 나오는지 보는 값입니다.<br>· ${axisNote}</div>
     <div class="nc-sub-h">단계별 분해<span style="margin-left:auto;display:flex;gap:6px">${tb(!byCodi,"ncSetStageView('day')",'일자별')}${tb(byCodi,"ncSetStageView('codi')",'코디별')}</span></div>
     <div class="nc-cat-tabs">${catTabs}</div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead(byCodi?'코디':(cohort?'분배일':'통화일'),cohort)}<tbody>${sub}</tbody></table></div></div>`;
@@ -15007,16 +15014,17 @@ async function ncDownloadExcel(){
   for(let c=0;c<phead.length;c++){const cell=pws[XLSX.utils.encode_cell({r:0,c})];if(cell)cell.s=hdrStyle;}
   // 단계별 콜 시트 — 분배일 코호트 기준(합계 + 단계별 + 코디×단계)
   const st=ncStageAgg(s,e,'cohort');
-  const shead=['구분','분배DB','시도DB','컨택률','시도수','평균시도','연결','연결률','유효','유효율','계약','계약률(분배DB)','계약률(시도DB)','시도1천건당계약'];
-  const srow=(label,b)=>{const td=b.tryDb.size;return [label,b.db,td,ncPct(td,b.db),b.tr,ncAvg(b.tr,td),b.co,ncPct(b.co,b.tr),b.va,ncPct(b.va,b.tr),b.ct,ncPct(b.ct,b.db),ncPct(b.ct,td),ncPer1k(b.ct,b.tr)];};
+  const shead=['구분','분배DB','시도DB','컨택률','시도수','평균시도','연결','연결률','유효','유효율','계약','계약률(분배DB)','계약률(시도DB)','계약 비중','시도1천건당계약'];
+  const srow=(label,b,ctTot)=>{const td=b.tryDb.size;return [label,b.db,td,ncPct(td,b.db),b.tr,ncAvg(b.tr,td),b.co,ncPct(b.co,b.tr),b.va,ncPct(b.va,b.tr),b.ct,ncPct(b.ct,b.db),ncPct(b.ct,td),ncPct(b.ct,ctTot),ncPer1k(b.ct,b.tr)];};
+  const stot=ncStageTotal(st.tot);
   const saoa=[[`뇌새김 DB 단계별 콜 현황 (${s} ~ ${e}) · 분배일 코호트 기준`],shead];
-  saoa.push(srow('합계',ncStageTotal(st.tot)));
-  for(const c of NC_CATS)saoa.push(srow(NC_CAT_LABEL[c],st.tot[c]));
+  saoa.push(srow('합계',stot,stot.ct));
+  for(const c of NC_CATS)saoa.push(srow(NC_CAT_LABEL[c],st.tot[c],stot.ct));
   saoa.push([]);saoa.push(['코디별 × 단계']);saoa.push(shead);
   const scodis=Array.from(st.byCodi.keys()).sort((a,b)=>a.localeCompare(b,'ko'));
-  for(const codi of scodis){const set=st.byCodi.get(codi);
-    saoa.push(srow(codi,ncStageTotal(set)));
-    for(const c of NC_CATS){const b=set[c];if(!b.db&&!b.tr&&!b.ct)continue;saoa.push(srow('   └ '+NC_CAT_LABEL[c],b));}}
+  for(const codi of scodis){const set=st.byCodi.get(codi);const ptot=ncStageTotal(set);
+    saoa.push(srow(codi,ptot,ptot.ct));
+    for(const c of NC_CATS){const b=set[c];if(!b.db&&!b.tr&&!b.ct)continue;saoa.push(srow('   └ '+NC_CAT_LABEL[c],b,ptot.ct));}}
   const sws=XLSX.utils.aoa_to_sheet(saoa);
   sws['!merges']=[{s:{r:0,c:0},e:{r:0,c:shead.length-1}}];
   sws['!cols']=shead.map((h,i)=>({wch:i===0?22:12}));
@@ -15071,6 +15079,7 @@ function ncEnsureStyle(){
   #page-naesaegim-call .nc-tbl .nc-lbl{text-align:center;font-weight:700;color:#334155}
   #page-naesaegim-call .nc-tbl .nc-pctcol{color:#4361ee;font-weight:700}
   #page-naesaegim-call .nc-tbl .nc-avgcol{color:#0d9488;font-weight:700}
+  #page-naesaegim-call .nc-tbl .nc-sharecol{color:#7c3aed;font-weight:700}
   /* 언어별·계약별 매트릭스: 폰트·패딩 축소로 좌우 스크롤 없이 한 화면에 */
   #page-naesaegim-call .nc-matrix{font-size:10px}
   #page-naesaegim-call .nc-matrix th,#page-naesaegim-call .nc-matrix td{padding:4px 3px;letter-spacing:-.2px}
