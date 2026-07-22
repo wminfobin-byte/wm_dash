@@ -2616,6 +2616,7 @@ const SYNC_REPO='wminfobin-byte/wm_dash';
 const SYNC_FILE='sync_data.json.gz';
 const SYNC_MANIFEST='sync_manifest.json';   // 청크 분할 매니페스트 (대용량 대비)
 const SYNC_PART_BYTES=20*1024*1024;          // 청크당 압축 바이트 한도(20MB) — base64≈27MB로 GitHub blob 요청 한도 이내
+const SLICE_GROUP_BYTES=16*1024*1024;        // 그룹당 JSON 문자열 예상 상한 — 한 번에 만드는 문자열을 작게 유지(OOM 방지)
 const SYNC_TOKEN_KEY='wm_sync_token';
 
 function syncData(){
@@ -2789,31 +2790,61 @@ async function doSyncUpload(token){
     const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
     const apiBase=`https://api.github.com/repos/${SYNC_REPO}`;
 
-    // 탭별 개별 파일 동기화 (매니페스트 v2): 슬라이스마다 따로 stringify→gzip→청크 업로드.
-    // 전체를 한 문자열/버퍼로 만들지 않아 JSON.stringify 문자열 한도·압축 시 Out of Memory를 회피한다.
+    // 탭별 개별 파일 동기화 (매니페스트 v3): 슬라이스를 다시 '그룹'으로 쪼개 stringify→gzip→청크 업로드.
+    //  v2는 슬라이스 하나를 통째로 JSON.stringify 했는데, nc(CTI 150만행+DB 50만행)가 192MB까지 커지면서
+    //  문자열 하나만으로 UTF-16 기준 ~384MB를 잡아 Out of Memory가 났다.
+    //  → 배열 슬라이스는 SLICE_GROUP_BYTES 예상치를 넘지 않게 나눠 담아, 한 번에 만드는 문자열을 작게 유지한다.
     const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData};
     const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ls'];
+    // 슬라이스별 행 인코더(있으면 그룹 stringify 직전에 적용) — nc는 CTI/DB를 사전 인터닝으로 압축한다
+    const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null};
+    // 파일 1건의 JSON 크기 추정(정확할 필요 없음 — stringify를 미리 돌리면 그 자체로 메모리를 먹는다)
+    const estBytes=(it,key)=>{
+      if(!it||typeof it!=='object')return 64;
+      const rows=it.rows;
+      if(!Array.isArray(rows))return 4096;
+      const per=(key==='nc'&&typeof ncSyncRowBytes==='function')?ncSyncRowBytes(it):150;
+      return rows.length*per+512;
+    };
+    // 배열 슬라이스를 예산 이내 그룹으로 분할. 단일 항목이 예산을 넘으면 그 항목만 단독 그룹.
+    const groupSlice=(val,key)=>{
+      if(!Array.isArray(val))return [val];
+      const out=[];let cur=[],size=0;
+      for(const it of val){
+        const n=estBytes(it,key);
+        if(cur.length&&size+n>SLICE_GROUP_BYTES){out.push(cur);cur=[];size=0;}
+        cur.push(it);size+=n;
+      }
+      if(cur.length)out.push(cur);
+      return out.length?out:[[]];
+    };
     const treeItems=[];const sliceMeta=[];const nowTs=Date.now();
     for(const key of SLICE_ORDER){
       const val=payloadObj[key];
       if(val===undefined||val===null)continue;
-      syncLog(`<span class="sync-spin">↻</span> 압축 중... [${key}]`);
-      let str=JSON.stringify(val);
-      const zip=new JSZip();zip.file('d',str);str=null;
-      const comp=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
-      const parts=Math.max(1,Math.ceil(comp.length/SYNC_PART_BYTES));
-      for(let p=0;p<parts;p++){
-        const chunk=comp.subarray(p*SYNC_PART_BYTES,(p+1)*SYNC_PART_BYTES);
-        syncLog(`<span class="sync-spin">↻</span> 업로드 중... [${key}] ${p+1}/${parts}`);
-        const br=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(chunk),encoding:'base64'})});
-        if(!br.ok){const e=await br.json();throw new Error(e.message||`[${key}] 청크 ${p+1} blob 실패`);}
-        treeItems.push({path:`sync_${key}.part${p}`,mode:'100644',type:'blob',sha:(await br.json()).sha});
+      const groups=groupSlice(val,key);
+      const encFn=SLICE_ENCODE[key];
+      for(let g=0;g<groups.length;g++){
+        syncLog(`<span class="sync-spin">↻</span> 압축 중... [${key}]${groups.length>1?` ${g+1}/${groups.length}`:''}`);
+        let enc=(encFn&&Array.isArray(groups[g]))?groups[g].map(encFn):groups[g];
+        groups[g]=null;                                   // 원본 참조 해제(인코딩본만 유지)
+        let str=JSON.stringify(enc);enc=null;
+        const zip=new JSZip();zip.file('d',str);str=null;
+        const comp=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
+        const parts=Math.max(1,Math.ceil(comp.length/SYNC_PART_BYTES));
+        for(let p=0;p<parts;p++){
+          const chunk=comp.subarray(p*SYNC_PART_BYTES,(p+1)*SYNC_PART_BYTES);
+          syncLog(`<span class="sync-spin">↻</span> 업로드 중... [${key}]${groups.length>1?` ${g+1}/${groups.length}`:''} ${p+1}/${parts}`);
+          const br=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(chunk),encoding:'base64'})});
+          if(!br.ok){const e=await br.json();throw new Error(e.message||`[${key}] 그룹 ${g+1} 청크 ${p+1} blob 실패`);}
+          treeItems.push({path:`sync_${key}.g${g}.part${p}`,mode:'100644',type:'blob',sha:(await br.json()).sha});
+        }
+        sliceMeta.push({key,seq:g,parts,arr:Array.isArray(val)});
       }
-      sliceMeta.push({key,parts});
     }
 
-    // 매니페스트 v2 (슬라이스 목록 + 내부 v/ts)
-    const manifest={v:2,ts:nowTs,payloadMeta:{v:10,ts:nowTs},slices:sliceMeta};
+    // 매니페스트 v3 (슬라이스×그룹 목록 + 내부 v/ts)
+    const manifest={v:3,ts:nowTs,payloadMeta:{v:10,ts:nowTs},slices:sliceMeta};
     const mr=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(new TextEncoder().encode(JSON.stringify(manifest))),encoding:'base64'})});
     if(!mr.ok){const e=await mr.json();throw new Error(e.message||'매니페스트 생성 실패');}
     treeItems.push({path:SYNC_MANIFEST,mode:'100644',type:'blob',sha:(await mr.json()).sha});
@@ -2868,6 +2899,20 @@ async function fetchSyncPayload(){
   const mRes=await fetch(bust(`${base}/${SYNC_MANIFEST}`),{cache:'no-store'});
   if(mRes.ok){
     const manifest=await mRes.json();
+    // v3: 슬라이스를 그룹으로 분할(배열 슬라이스는 이어붙임) → 한 번에 파싱하는 문자열을 작게 유지
+    if(manifest.v===3&&Array.isArray(manifest.slices)){
+      const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
+      const seen=new Set();
+      for(const s of manifest.slices){
+        const buf=await readParts(`sync_${s.key}.g${s.seq||0}.part`,s.parts);
+        const zip=await JSZip.loadAsync(buf);
+        const part=JSON.parse(await zip.file('d').async('string'));
+        if(!seen.has(s.key)){payload[s.key]=part;seen.add(s.key);}
+        else if(Array.isArray(payload[s.key])&&Array.isArray(part))payload[s.key]=payload[s.key].concat(part);
+      }
+      if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
+      return payload;
+    }
     if(manifest.v===2&&Array.isArray(manifest.slices)){
       const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
       for(const s of manifest.slices){
@@ -2875,6 +2920,7 @@ async function fetchSyncPayload(){
         const zip=await JSZip.loadAsync(buf);
         payload[s.key]=JSON.parse(await zip.file('d').async('string'));   // 슬라이스 단위 파싱 → 메모리 피크 억제
       }
+      if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
       return payload;
     }
     // 구 포맷 v1: 단일 data.json 청크
@@ -14092,7 +14138,41 @@ async function ncPurgeStaleDb(){
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
 // 전체 파일(CTI·DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 nc가 표시됨.
 // (탭별 개별 파일 동기화 v2로 대용량도 OOM·문자열 한도 없이 처리)
-function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount,diHist:f.diHist,pv:f.pv}));}
+// 싱크 경계 압축 인코딩 — IDB·메모리는 기존 객체 행 그대로 두고, 업로드 직전에만 압축 형태로 바꾼다.
+//  CTI 150만행·DB 50만행이 객체 그대로면 JSON 192MB(문자열 UTF-16 기준 ~384MB)라 stringify에서 OOM.
+//  반복되는 문자열(상담원명·날짜·OB명·언어·연령대)을 파일 단위 사전으로 인터닝하고 행을 배열로 눕힌다.
+//  CTI의 dur(통화시간)은 nc에서 쓰지 않으므로 싱크에서 제외(케어 통화시간은 tz 탭이 자체 사본으로 계산).
+function ncEncFile(f){
+  const rows=f.rows||[];
+  const base={type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rowsCount:rows.length};
+  if(f.diHist)base.diHist=f.diHist;
+  if(f.pv)base.pv=f.pv;
+  if(f.type!=='cti'&&f.type!=='db'){base.rows=rows;return base;}      // 계약·명단은 작아서 그대로
+  const dict=[],idx=new Map();
+  const S=v=>{const s=(v==null?'':String(v));let i=idx.get(s);if(i===undefined){i=dict.length;dict.push(s);idx.set(s,i);}return i;};
+  let out;
+  if(f.type==='cti')out=rows.map(r=>[S(r.name),S(r.day),r.phone||'',(r.conn?1:0)|(r.valid?2:0)]);
+  else out=rows.map(r=>[r.k||'',S(r.ob),S(r.d),S(r.od),S(r.inf),S(r.ag),(r.se==null?-1:r.se),(r.rc||0),S(r.lang),r.p1||'',r.p2||'',r.p3||'']);
+  base.enc=1;base.dict=dict;base.rows=out;
+  return base;
+}
+function ncDecFile(f){
+  if(!f||f.enc!==1)return f;
+  const d=f.dict||[],rows=f.rows||[];
+  const out=(f.type==='cti')
+    ? rows.map(r=>({name:d[r[0]]||'',day:d[r[1]]||'',phone:r[2]||'',dur:0,conn:(r[3]&1)?1:0,valid:(r[3]&2)?1:0}))
+    : rows.map(r=>({k:r[0]||'',ob:d[r[1]]||'',d:d[r[2]]||'',od:d[r[3]]||'',inf:d[r[4]]||'',ag:d[r[5]]||'',
+                    se:(r[6]==null?-1:r[6]),rc:r[7]||0,lang:(d[r[8]]===''?null:d[r[8]]),p1:r[9]||'',p2:r[10]||'',p3:r[11]||''}));
+  const o={type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:out,rowsCount:out.length};
+  if(f.diHist)o.diHist=f.diHist;
+  if(f.pv)o.pv=f.pv;
+  return o;
+}
+function ncDecodeSync(arr){return Array.isArray(arr)?arr.map(ncDecFile):arr;}
+// 원본 참조만 넘긴다 — 실제 압축 인코딩(ncEncFile)은 업로드 루프가 그룹 단위로 호출해
+// 인코딩 결과가 한 그룹 분량만 살아 있게 한다(전체를 미리 인코딩하면 그것만으로 수백 MB).
+function ncCollectSync(){return (ncFiles||[]).slice();}
+function ncSyncRowBytes(f){return f&&f.type==='cti'?34:(f&&f.type==='db'?86:150);}   // 인코딩 후 1행 예상 바이트
 async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
