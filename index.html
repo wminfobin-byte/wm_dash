@@ -2617,6 +2617,117 @@ const SYNC_FILE='sync_data.json.gz';
 const SYNC_MANIFEST='sync_manifest.json';   // 청크 분할 매니페스트 (대용량 대비)
 const SYNC_PART_BYTES=20*1024*1024;          // 청크당 압축 바이트 한도(20MB) — base64≈27MB로 GitHub blob 요청 한도 이내
 const SLICE_GROUP_BYTES=16*1024*1024;        // 그룹당 JSON 문자열 예상 상한 — 한 번에 만드는 문자열을 작게 유지(OOM 방지)
+
+// ── 싱크 공용 행 압축 (슬라이스 종류 무관) ────────────────────────────────
+//  {rows:[{...평탄 객체...}]} 형태의 파일 레코드를 '열 지향 + 문자열 인터닝'으로 줄인다.
+//  DB/CTI 행은 OB명·날짜·언어처럼 같은 문자열이 수십만 번 반복돼 사전 인터닝 효과가 크다.
+//  IDB·메모리는 원본 객체 그대로 두고 업로드 직전에만 적용 → 마이그레이션 불필요.
+//  값 구분: 문자열 열은 사전 인덱스, null=-1, 없는 키=-2. 그 외 열(숫자/불리언)은 원값 그대로.
+function wmEncRows(rows){
+  if(!Array.isArray(rows)||!rows.length)return null;
+  const keys=[],seen=new Set();
+  for(const r of rows){
+    if(!r||typeof r!=='object'||Array.isArray(r))return null;      // 평탄 객체가 아니면 압축 포기
+    for(const k in r){if(!seen.has(k)){seen.add(k);keys.push(k);}}
+  }
+  const strCol=keys.map(()=>true);
+  for(const r of rows)for(let i=0;i<keys.length;i++){
+    if(!strCol[i])continue;
+    const v=r[keys[i]];
+    if(v===undefined||v===null)continue;
+    if(typeof v!=='string')strCol[i]=false;
+    else if(v.length>64)strCol[i]=false;                            // 긴 고유 문자열은 인터닝 이득 없음
+  }
+  const dict=[],idx=new Map();
+  const S=v=>{let i=idx.get(v);if(i===undefined){i=dict.length;dict.push(v);idx.set(v,i);}return i;};
+  const out=new Array(rows.length);
+  for(let n=0;n<rows.length;n++){
+    const r=rows[n],row=new Array(keys.length);
+    for(let i=0;i<keys.length;i++){
+      const v=r[keys[i]];
+      if(!strCol[i]){row[i]=(v===undefined?null:v);continue;}
+      row[i]=(v===undefined)?-2:(v===null?-1:S(v));
+    }
+    out[n]=row;
+  }
+  return {k:keys,s:strCol,d:dict,r:out};
+}
+function wmDecRows(enc){
+  if(!enc||!enc.k)return [];
+  const {k:keys,s:strCol,d:dict,r:rows}=enc;
+  const out=new Array(rows.length);
+  for(let n=0;n<rows.length;n++){
+    const row=rows[n],o={};
+    for(let i=0;i<keys.length;i++){
+      if(!strCol[i]){o[keys[i]]=row[i];continue;}
+      const v=row[i];
+      if(v===-2)continue;                                           // 원래 없던 키는 복원하지 않음
+      o[keys[i]]=(v===-1)?null:dict[v];
+    }
+    out[n]=o;
+  }
+  return out;
+}
+// AOA(배열의 배열, 엑셀 원본 그대로 보관하는 cd/ng의 data) 인터닝.
+//  셀은 거의 전부 문자열이라 사전 인덱스(숫자)로 바꾸고, 문자열이 아닌 값·비배열 행은 {x:원값}으로 감싼다.
+function wmEncAoa(aoa){
+  if(!Array.isArray(aoa)||!aoa.length)return null;
+  const dict=[],idx=new Map();
+  const S=v=>{let i=idx.get(v);if(i===undefined){i=dict.length;dict.push(v);idx.set(v,i);}return i;};
+  const out=new Array(aoa.length);
+  for(let n=0;n<aoa.length;n++){
+    const row=aoa[n];
+    if(!Array.isArray(row)){out[n]={x:row};continue;}
+    const er=new Array(row.length);
+    for(let i=0;i<row.length;i++){const v=row[i];er[i]=(typeof v==='string')?S(v):{x:v};}
+    out[n]=er;
+  }
+  return {d:dict,r:out};
+}
+function wmDecAoa(enc){
+  if(!enc||!enc.r)return [];
+  const d=enc.d||[],rows=enc.r,out=new Array(rows.length);
+  for(let n=0;n<rows.length;n++){
+    const row=rows[n];
+    if(!Array.isArray(row)){out[n]=row?row.x:row;continue;}
+    const dr=new Array(row.length);
+    for(let i=0;i<row.length;i++){const v=row[i];dr[i]=(typeof v==='number')?d[v]:(v&&typeof v==='object'?v.x:v);}
+    out[n]=dr;
+  }
+  return out;
+}
+// 파일 레코드 단위 인코딩 — rows(객체 배열) 또는 data(AOA)를 압축하고 나머지 메타는 그대로 둔다.
+function wmEncFile(f){
+  if(!f||typeof f!=='object'||Array.isArray(f))return f;
+  if(Array.isArray(f.rows)&&f.rows.length){
+    const enc=wmEncRows(f.rows);
+    if(!enc)return f;
+    const o={};for(const k in f)if(k!=='rows')o[k]=f[k];
+    o._e=1;o._r=enc;return o;
+  }
+  if(Array.isArray(f.data)&&f.data.length){
+    const enc=wmEncAoa(f.data);
+    if(!enc)return f;
+    const o={};for(const k in f)if(k!=='data')o[k]=f[k];
+    o._e=2;o._a=enc;return o;
+  }
+  return f;
+}
+function wmDecFile(f){
+  if(!f||typeof f!=='object')return f;
+  if(f._e===1){
+    const o={};for(const k in f)if(k!=='_e'&&k!=='_r')o[k]=f[k];
+    o.rows=wmDecRows(f._r);        // 원본에 없던 키는 만들지 않는다(왕복 동일성 보장)
+    return o;
+  }
+  if(f._e===2){
+    const o={};for(const k in f)if(k!=='_e'&&k!=='_a')o[k]=f[k];
+    o.data=wmDecAoa(f._a);
+    return o;
+  }
+  return f;
+}
+function wmDecSlice(v){return Array.isArray(v)?v.map(wmDecFile):v;}
 const SYNC_TOKEN_KEY='wm_sync_token';
 
 function syncData(){
@@ -2745,7 +2856,8 @@ async function doSyncUpload(token){
       gdSyncFiles.push({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols});
     }
     let gdResultsSync=[];try{gdResultsSync=await gdGetAllResults();}catch(e){}
-    const gdData={files:gdSyncFiles,results:gdResultsSync};
+    // gd는 {files,results} 객체라 그룹 분할 대상이 아니다 → files 배열만 미리 압축 인코딩해 문자열 크기를 낮춘다
+    const gdData={files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
 
     // localStorage 이력 데이터
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj'];
@@ -2797,7 +2909,8 @@ async function doSyncUpload(token){
     const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData};
     const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ls'];
     // 슬라이스별 행 인코더(있으면 그룹 stringify 직전에 적용) — nc는 CTI/DB를 사전 인터닝으로 압축한다
-    const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null};
+    // nc는 CTI의 dur(미사용)까지 떨어내는 전용 인코더, 나머지는 공용 인코더(wmEncFile)
+    const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null,tz:wmEncFile,tb:wmEncFile,sp:wmEncFile,cd:wmEncFile,ng:wmEncFile};
     // 파일 1건의 JSON 크기 추정(정확할 필요 없음 — stringify를 미리 돌리면 그 자체로 메모리를 먹는다)
     const estBytes=(it,key)=>{
       if(!it||typeof it!=='object')return 64;
@@ -2910,6 +3023,8 @@ async function fetchSyncPayload(){
         if(!seen.has(s.key)){payload[s.key]=part;seen.add(s.key);}
         else if(Array.isArray(payload[s.key])&&Array.isArray(part))payload[s.key]=payload[s.key].concat(part);
       }
+      for(const k of ['tz','tb','sp','cd','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
+      if(payload.gd&&Array.isArray(payload.gd.files))payload.gd.files=payload.gd.files.map(wmDecFile);
       if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
       return payload;
     }
@@ -2920,6 +3035,8 @@ async function fetchSyncPayload(){
         const zip=await JSZip.loadAsync(buf);
         payload[s.key]=JSON.parse(await zip.file('d').async('string'));   // 슬라이스 단위 파싱 → 메모리 피크 억제
       }
+      for(const k of ['tz','tb','sp','cd','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
+      if(payload.gd&&Array.isArray(payload.gd.files))payload.gd.files=payload.gd.files.map(wmDecFile);
       if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
       return payload;
     }
