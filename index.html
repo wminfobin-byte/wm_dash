@@ -14189,8 +14189,6 @@ function ncBuildRoster(){
 }
 // 콜/계약이 어느 단계 DB에서 비롯됐는지 — 신규(rc0)는 분배당일(d0)/이후(d1)로 분리.
 function ncCatOf(ev,day){return ev.rc===0?(ev.d===day?'d0':'d1'):(ev.rc===1?'r1':ev.rc===2?'r2':'r3');}
-// 리드 키 = 대표전화 + 유입일. 단계마다 고객키가 새로 발급되므로 이걸로 같은 DB의 생애주기를 묶는다.
-function ncLeadKey(r){const p=r.p1||r.p2||r.p3;return p?p+'|'+(r.inf||''):'K'+r.k;}
 function ncCompute(){
   const roster=ncBuildRoster();
   // DB: 뇌새김/제2외국어 담당만, 고객키별 분배 이벤트(events) + (k,rc) dedup 이벤트 + 전화 인덱스
@@ -14209,8 +14207,7 @@ function ncCompute(){
     if(!('inf' in r))noInfRows++;
     const rc=r.rc, ek=r.k+'|'+rc;
     let ev=evMap.get(ek);
-    if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od,inf:r.inf||'',lead:ncLeadKey(r),
-                tr:0,co:0,va:0,d0tr:0,d0va:0,ct:0};                    // tr/co/va=이 DB에 건 시도·연결·유효, d0*=분배당일분, ct=계약수
+    if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od,tr:0};   // tr=이 DB에 건 시도수(미시도 판정용)
       evMap.set(ek,ev);
       if(!keyEvents.has(r.k))keyEvents.set(r.k,[]);keyEvents.get(r.k).push(ev);
       for(const p of [r.p1,r.p2,r.p3]){if(!p)continue;const pk=p+'|'+ent.nm;if(!pcIdx.has(pk))pcIdx.set(pk,[]);pcIdx.get(pk).push(ev);}
@@ -14243,9 +14240,8 @@ function ncCompute(){
     if(!lang){if(unmatched.length<1000)unmatched.push({k:r.k,mgr:r.mgr,day:r.d,cls:r.cls});continue;}   // 언어 판정 불가(DB·분류 모두 실패)
     const crc=best?best.rc:(r.rc?1:0);                                 // DB 없으면 R17 재콜여부로 신규/재콜 근사
     const daily=!r.rc&&!!(best&&best.d===r.d&&best.rc===0);             // 당일계약 = 신청일 분배 신규 & R17 비재콜
-    if(best)best.ct++;                                                  // 이 DB에서 나온 계약(미시도·퍼널 분석용)
     contracts.push({k:r.k,codi:ent.nm,team:ent.team,day:r.d,lang,rc:crc,daily,cancelled:!!r.rt,dbMatched:!!best,
-      cat:best?ncCatOf(best,r.d):null, evD:best?best.d:'', evCodi:best?best.codi:ent.nm, lead:best?best.lead:null});
+      cat:best?ncCatOf(best,r.d):null, evD:best?best.d:'', evCodi:best?best.codi:ent.nm});
   }
   // CTI 콜 → DB 이벤트 매칭. 키 = 담당자 + 고객연락처 + (분배일 ≤ 통화일) 중 분배일 최신.
   //  단계 전환 시 담당자가 바뀌는 리드가 98%라, 담당자를 안 보면 내가 건 신규 DB 콜이
@@ -14265,14 +14261,9 @@ function ncCompute(){
       let care=false;for(const k of (phoneIdx.get(c0.phone)||[])){const od=contractOrder.get(k);if(od&&c0.day>=od){care=true;break;}}
       if(care){careCall++;continue;}
     }
-    ev.tr++;if(c0.conn)ev.co++;if(c0.valid)ev.va++;
-    if(ev.d===c0.day){ev.d0tr++;if(c0.valid)ev.d0va++;}
+    ev.tr++;
     calls.push({day:c0.day,codi:ent.nm,team:ent.team,lang:ev.lang,cat:ncCatOf(ev,c0.day),ev,conn:c0.conn,valid:c0.valid});
   }
-  // 리드(전화+유입일) 단위 묶기 — 신규→재콜→재재콜→회수콜 생애주기 추적용
-  const leads=new Map();
-  for(const ev of dbEvents){let L=leads.get(ev.lead);if(!L){L={lead:ev.lead,evs:[]};leads.set(ev.lead,L);}L.evs.push(ev);}
-  for(const L of leads.values())L.evs.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.rc-b.rc);
   // 활동 인물 = 계약/콜이 있는 뇌새김 코디
   const active=new Set();contracts.forEach(c=>active.add(c.codi));calls.forEach(c=>active.add(c.codi));
   dbEvents.forEach(e=>active.add(e.codi));
@@ -14291,7 +14282,7 @@ function ncCompute(){
   // CTI 통화 기록이 1건이라도 있는 코디 — 이 코디의 DB만 '미시도/당일컨택' 판정에 쓴다.
   //  (기록이 0건인 코디는 실제 미시도인지 CTI 수집 누락인지 구분할 수 없어 오판 위험)
   const callCodis=new Set();calls.forEach(c=>callCodis.add(c.codi));
-  ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,leads,unmatched,callCodis,
+  ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,unmatched,callCodis,
     diag:{unmatchedCall,xcodiCall,preDistCall,careCall,noInfRows,staleDb},
     minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
   return ncModel;
@@ -14501,73 +14492,6 @@ function ncRenderEffChart(agg){
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}},y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false}}},
     plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
-}
-// ── 당일 컨택 유무별 계약률 (신규 DB 코호트 · 리드 최종 결과까지 추적) ──
-function ncRenderD0(s,e){
-  const sel=ncSelSet(),cov=ncModel.callCodis;
-  const G=()=>({db:0,ct:0,leads:new Set()});
-  const g={none:G(),tried:G(),valid:G()};
-  let skipDb=0;const skipCodi=new Set();
-  for(const ev of ncModel.dbEvents){
-    if(ev.rc!==0||!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
-    if(!cov.has(ev.codi)){skipDb++;skipCodi.add(ev.codi);continue;}   // CTI 기록 없는 코디 제외
-    const o=ev.d0va>0?g.valid:(ev.d0tr>0?g.tried:g.none);
-    o.db++;o.ct+=ev.ct;o.leads.add(ev.lead);
-  }
-  const leadCt=lk=>{const L=ncModel.leads.get(lk);if(!L)return 0;let n=0;for(const ev of L.evs)n+=ev.ct;return n;};
-  const defs=[['none','당일 컨택 없음','#ef4444'],['tried','당일 시도(유효통화 없음)','#f0920e'],['valid','당일 유효통화(90초+)','#22c55e']];
-  const tot={db:0,ct:0,lead:0,won:0};
-  const calc=defs.map(([k,lbl,col])=>{const o=g[k];let won=0;o.leads.forEach(lk=>{if(leadCt(lk)>0)won++;});
-    tot.db+=o.db;tot.ct+=o.ct;tot.lead+=o.leads.size;tot.won+=won;return {o,lbl,col,won};});
-  const out=calc.map(({o,lbl,col,won})=>`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${col}"></span>${lbl}</td>
-      <td>${ncC(o.db)}</td><td class="nc-pctcol">${ncPct(o.db,tot.db)}</td><td>${ncC(o.ct)}</td><td class="nc-pctcol">${ncPct(o.ct,o.db)}</td>
-      <td>${ncC(o.leads.size)}</td><td>${ncC(won)}</td><td class="nc-pctcol">${ncPct(won,o.leads.size)}</td></tr>`).join('');
-  // 리프트는 '당일 유효통화' vs '당일 시도했지만 유효통화 없음'으로 계산 — 둘 다 CTI로 확인된 모수라 비교가 깨끗하다.
-  const rv=g.valid.db?g.valid.ct/g.valid.db:0, rt=g.tried.db?g.tried.ct/g.tried.db:0;
-  const lift=rt?(rv/rt).toFixed(1):null;
-  return `<div class="nc-sec"><div class="nc-sec-h">⏱️ 당일 컨택 유무별 계약률<span class="nc-sub-s">기간 내 분배된 신규 DB · 리드 최종 결과까지 추적</span></div>
-    <div class="nc-tblwrap"><table class="nc-tbl"><thead>
-      <tr class="nc-grp"><th rowspan="2" style="text-align:left">분배 당일 컨택 상태</th><th colspan="4">신규 DB 기준</th><th colspan="3">리드 최종(재콜 단계 포함)</th></tr>
-      <tr class="nc-sub"><th>DB수</th><th>비중</th><th>계약수</th><th>계약률</th><th>리드수</th><th>계약 리드</th><th>리드 계약률</th></tr></thead>
-      <tbody>${out}<tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(tot.db)}</td><td class="nc-pctcol">100.0%</td><td>${ncC(tot.ct)}</td><td class="nc-pctcol">${ncPct(tot.ct,tot.db)}</td><td>${ncC(tot.lead)}</td><td>${ncC(tot.won)}</td><td class="nc-pctcol">${ncPct(tot.won,tot.lead)}</td></tr></tbody></table></div>
-    ${lift?`<div class="nc-callout"><div class="nc-callout-h">📌 분배 당일 &quot;유효통화까지&quot; 가면 계약률이 ${lift}배가 됩니다</div>
-      <div>당일 90초 이상 통화한 DB의 계약률 <b>${ncPct(g.valid.ct,g.valid.db)}</b> vs 당일 걸긴 했지만 유효통화가 없던 DB <b>${ncPct(g.tried.ct,g.tried.db)}</b>.
-      당일 시도는 했는데 유효통화로 못 이어진 DB가 <b>${ncC(g.tried.db)}건(${ncPct(g.tried.db,tot.db)})</b> — 여기가 가장 큰 개선 여지입니다.</div></div>`:''}
-    <div class="nc-note">· 리드 최종 = 전화+유입일로 같은 DB를 묶어, 이후 재콜·재재콜·회수콜 단계에서 난 계약까지 포함한 결과입니다.
-    <br>· 비교 배수는 CTI로 확인된 두 모수(<b>당일 유효통화</b> vs <b>당일 시도·유효통화 없음</b>)로만 계산합니다. 「당일 컨택 없음」 구간은 CTI 미수집 건이 섞일 수 있어 배수 계산에서 제외했습니다.
-    ${skipDb?`<br>· CTI 통화 기록이 전혀 없는 코디 ${skipCodi.size}명(DB ${ncC(skipDb)}건)은 미시도인지 수집 누락인지 구분할 수 없어 <b>집계에서 제외</b>했습니다.`:''}</div></div>`;
-}
-// ── 리드 생애주기 퍼널 ──
-function ncRenderFunnel(s,e){
-  const sel=ncSelSet(),cov=ncModel.callCodis;
-  const seed=new Set();
-  for(const ev of ncModel.dbEvents){
-    if(ev.rc!==0||!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
-    if(!cov.has(ev.codi))continue;                                 // CTI 미수집 코디 제외(리드당 시도수 왜곡 방지)
-    seed.add(ev.lead);}
-  const st=[0,1,2,3].map(()=>({leads:0,ct:0,tr:0}));
-  let won=0;
-  for(const lk of seed){const L=ncModel.leads.get(lk);if(!L)continue;
-    const seen=[false,false,false,false];let ct=0;
-    for(const ev of L.evs){const r=ev.rc;if(r<0||r>3)continue;if(!seen[r]){seen[r]=true;st[r].leads++;}st[r].ct+=ev.ct;st[r].tr+=ev.tr;ct+=ev.ct;}
-    if(ct>0)won++;}
-  if(!seed.size)return `<div class="nc-sec"><div class="nc-sec-h">🔄 리드 생애주기 퍼널</div><div class="nc-empty">데이터 없음</div></div>`;
-  const names=['신규','재콜','재재콜','회수콜'],cols=['#4361ee','#f0920e','#ef4444','#64748b'];
-  const base=st[0].leads||1;
-  let rows='',trTot=0,ctTot=0;
-  for(let i=0;i<4;i++){const o=st[i];trTot+=o.tr;ctTot+=o.ct;
-    rows+=`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${cols[i]}"></span>${names[i]}</td>
-      <td>${ncC(o.leads)}</td><td class="nc-pctcol">${ncPct(o.leads,base)}</td>
-      <td class="nc-pctcol">${i?ncPct(o.leads,st[i-1].leads):'-'}</td>
-      <td>${ncC(o.tr)}</td><td class="nc-avgcol">${ncAvg(o.tr,o.leads)}</td>
-      <td>${ncC(o.ct)}</td><td class="nc-pctcol">${ncPct(o.ct,o.leads)}</td><td class="nc-avgcol">${ncPer1k(o.ct,o.tr)}</td></tr>`;
-    rows+=`<tr class="nc-bar-row"><td colspan="9"><div class="nc-bar"><span style="width:${(o.leads/base*100).toFixed(1)}%;background:${cols[i]}"></span></div></td></tr>`;}
-  return `<div class="nc-sec"><div class="nc-sec-h">🔄 리드 생애주기 퍼널<span class="nc-sub-s">전화+유입일로 묶은 같은 DB의 단계 진행</span></div>
-    <div class="nc-tblwrap"><table class="nc-tbl"><thead><tr class="nc-sub"><th style="text-align:left">단계</th><th>도달 리드</th><th>신규 대비</th><th>직전 단계 대비</th><th>시도수</th><th>리드당 시도</th><th>계약수</th><th>계약률</th><th>시도1천건당 계약</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="nc-callout"><div class="nc-callout-h">📌 리드 1개의 최종 성적</div>
-      <div>기간 내 신규 분배된 리드 <b>${ncC(seed.size)}개</b> 중 최종 계약 <b>${ncC(won)}개 (${ncPct(won,seed.size)})</b>.
-      리드 1개당 누적 시도 <b>${ncAvg(trTot,seed.size)}회</b>, 계약 1건을 만드는 데 평균 <b>${ctTot?ncC(Math.round(trTot/ctTot)):'—'}회</b> 시도합니다.</div></div>
-    <div class="nc-note">· 기간 필터는 <b>신규 분배일</b>에만 적용하고, 이후 재콜·재재콜·회수콜은 기간 밖이라도 끝까지 추적합니다. · 최근 분배분은 아직 사이클이 안 끝나 진행률이 낮게 보입니다.</div></div>`;
 }
 // ── 미시도 / 저시도 DB ──
 function ncRenderIdle(s,e){
@@ -14797,7 +14721,7 @@ function ncRender(){
   ncRenderKpi(tot,stageCall);
   const chartBox=`<div class="nc-sec"><div class="nc-sec-h">📈 일자별 추이<span class="nc-sub-s">DB수·실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
   document.getElementById('ncContent').innerHTML=
-    ncRenderStage(stageSel)+ncRenderEff(stageCall)+ncRenderD0(s,e)+ncRenderFunnel(s,e)+ncRenderIdle(s,e)
+    ncRenderStage(stageSel)+ncRenderEff(stageCall)+ncRenderIdle(s,e)
     +ncRenderMatrix(agg,tot)+ncRenderDaily(s,e)+chartBox+ncRenderPerson(agg);
   ncRenderChart(s,e);ncRenderEffChart(stageCall);
   const w=document.getElementById('ncWarn');if(w)w.innerHTML=(ncModel.warns||[]).join(' · ');
@@ -15076,9 +15000,6 @@ function ncEnsureStyle(){
   #page-naesaegim-call .nc-cat-tab.on{color:#fff;background:var(--cc);border-color:var(--cc)}
   #page-naesaegim-call .nc-callout{margin-top:14px;padding:13px 15px;border:1px solid #dbe3ff;border-left:4px solid #4361ee;border-radius:10px;background:#f5f8ff;font-size:12.5px;color:#334155;line-height:1.7}
   #page-naesaegim-call .nc-callout-h{font-weight:800;color:#1e293b;margin-bottom:4px;font-size:13px}
-  #page-naesaegim-call tr.nc-bar-row td{padding:0 6px 8px!important;border-bottom:1px solid #eef2f7}
-  #page-naesaegim-call .nc-bar{height:6px;border-radius:999px;background:#eef2f7;overflow:hidden}
-  #page-naesaegim-call .nc-bar span{display:block;height:100%;border-radius:999px}
   #page-naesaegim-call .nc-sec-h .btn-sm{font-weight:700}`;
   document.head.appendChild(st);
 }
