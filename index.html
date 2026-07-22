@@ -2139,6 +2139,15 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <div class="modal-footer"><button class="btn btn-outline" onclick="ncCloseDiag()">닫기</button></div>
     </div>
   </div>
+  <div class="modal-overlay" id="ncCodeOverlay" onclick="if(event.target===this)ncCloseCode()">
+    <div class="modal" style="max-width:820px">
+      <button class="modal-close" onclick="ncCloseCode()">&times;</button>
+      <h2>DB정보(P열) 코드 검증 — 재콜 단계 판정 근거</h2>
+      <p style="font-size:12.5px;color:var(--gray);margin-bottom:10px">단계는 DB정보에 <b>"재콜"</b>이 몇 번 나오는지로 판정합니다. <code>(부재재콜)</code>·<code>(통화재콜)</code>·<code>(통예재콜)</code>이 각각 1단계이고, <code>(재분배)</code>는 담당자 재배정이라 단계에 포함되지 않습니다. 예) <code>(부재재콜)(부재재콜)(통화재콜)(재분배)</code> → 재콜 3회 → <b>회수콜</b>.</p>
+      <div id="ncCodeBody" style="max-height:60vh;overflow:auto"></div>
+      <div class="modal-footer"><button class="btn btn-outline" onclick="ncCloseCode()">닫기</button></div>
+    </div>
+  </div>
 
   <div class="container">
     <div id="ncDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
@@ -2190,7 +2199,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
         <button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="ncDownloadExcel()">📥 엑셀</button>
         <span id="ncWarn" style="font-size:12px;color:var(--warning);margin-left:auto"></span>
       </div>
-      <div id="ncKpi" class="sp-kpi-row" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px"></div>
+      <div id="ncKpi" class="sp-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px"></div>
       <div id="ncContent"></div>
     </div>
   </div>
@@ -14024,7 +14033,14 @@ const NC_LANGS=['더위크','결합','홈페이지','일본어','중국어','스
 const NC_ENG=new Set(['더위크','결합','홈페이지']);
 const NC_FOREIGN=new Set(['일본어','중국어','스페인어','프랑스어']);
 const NC_TARGET=(typeof SP_TARGET_TEAMS!=='undefined')?SP_TARGET_TEAMS:new Set(['뇌새김영어','제2외국어']);
-let ncIdb=null, ncFiles=[], ncLoaded=false, ncModel=null, ncScanBusy=false, ncChart=null, ncSel=null, ncLangSel=null;
+const NC_DI_MAX=400;                   // DB정보 원문 히스토그램 최대 distinct 수(파일당)
+// 콜 5분류 — 콜이 어느 단계의 DB 때문에 발생했는지. d0/d1은 같은 신규 DB(rc0)를 분배당일/이후로 가른다.
+const NC_CATS=['d0','d1','r1','r2','r3'];
+const NC_CAT_LABEL={d0:'당일 DB 콜',d1:'이전 DB 콜',r1:'재콜 DB 콜',r2:'재재콜 DB 콜',r3:'회수콜 DB 콜'};
+const NC_CAT_SHORT={d0:'당일',d1:'이전',r1:'재콜',r2:'재재콜',r3:'회수콜'};
+const NC_CAT_COLOR={d0:'#4361ee',d1:'#14b8a6',r1:'#f0920e',r2:'#ef4444',r3:'#64748b'};
+let ncIdb=null, ncFiles=[], ncLoaded=false, ncModel=null, ncScanBusy=false, ncChart=null, ncEffChart=null, ncSel=null, ncLangSel=null;
+let ncStageAxis='cohort', ncStageView='day', ncStageCat='d0';   // 단계별 콜 섹션 상태
 
 // ── IndexedDB ──
 function ncOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(NC_DB_NAME,NC_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{ncIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
@@ -14043,16 +14059,27 @@ async function ncPurgeStaleContracts(){
   ncFiles=ncFiles.filter(f=>!ids.has(f.id));ncModel=null;
   return stale.length;
 }
+// 구버전 파싱된 DB 파일(유입일 inf 없음) 감지 후 삭제 → 폴더 재스캔 시 재파싱(리드 추적·DB정보 검증에 필요).
+// 공용폴더가 확인된 뒤(ncScanFolder 내부)에만 호출 — 폴더 없는 PC에서 원본을 잃지 않도록.
+function ncStaleDbFiles(){return ncFilesByType('db').filter(f=>f.rows&&f.rows.length&&!('inf' in f.rows[0]));}
+async function ncPurgeStaleDb(){
+  const stale=ncStaleDbFiles();
+  if(!stale.length)return 0;
+  const ids=new Set(stale.map(f=>f.id));
+  for(const f of stale)await ncIdbDel(f.id);
+  ncFiles=ncFiles.filter(f=>!ids.has(f.id));ncModel=null;
+  return stale.length;
+}
 
 // ── 클라우드 싱크 (payload.nc 독립 슬라이스) ──
 // 전체 파일(CTI·DB수·계약·명단) 동기화 → 공용폴더 없는 PC에서도 nc가 표시됨.
 // (탭별 개별 파일 동기화 v2로 대용량도 OOM·문자열 한도 없이 처리)
-function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount}));}
+function ncCollectSync(){return (ncFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,rowsCount:f.rowsCount,diHist:f.diHist}));}
 async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
   await ncIdbClear();ncFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};if(f.diHist)rec.diHist=f.diHist;const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
   ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
 }
@@ -14090,18 +14117,24 @@ function ncLangFromCls(cls){
 }
 
 // ── 파서 ──
-// DB(고객관리): 계열 C(2)·고객키 G(6)·OB명 H(7)·분배일 I(8)·연령대 L(11)·DB정보 P(15)·매체코드 T(19)·오더일 X(23)·전화 M/N/O(12/13/14)
+// DB(고객관리): 계열 C(2)·고객키 G(6)·OB명 H(7)·분배일 I(8)·유입일 J(9)·연령대 L(11)·DB정보 P(15)·매체코드 T(19)·오더일 X(23)·전화 M/N/O(12/13/14)
+//  유입일(J) = 리드 식별자. 단계(신규→재콜→재재콜→회수콜)마다 고객키가 새로 발급되므로
+//  '전화+유입일'로 묶어야 같은 DB의 생애주기를 추적할 수 있다.
+//  diHist = DB정보(P) 원문 히스토그램 — 재콜 단계 판정 근거 검증용(원문을 행마다 저장하지 않고 요약만 보관).
 function ncParseDb(wb){
-  const aoa=spReadAOA(wb),rows=[];
+  const aoa=spReadAOA(wb),rows=[],diHist={};let diN=0;
   for(let i=1;i<aoa.length;i++){const r=aoa[i];if(!r)continue;
     const k=String(r[6]==null?'':r[6]).trim();if(!k)continue;
     const se=parseInt(String(r[2]==null?'':r[2]).trim(),10);
+    const di=String(r[15]==null?'':r[15]).trim();
+    if(diHist[di]!==undefined)diHist[di]++;else if(diN<NC_DI_MAX){diHist[di]=1;diN++;}
     rows.push({k, ob:String(r[7]==null?'':r[7]).trim(), d:spNormDay(r[8]), od:spNormDay(r[23]),
+      inf:spNormDay(r[9]),
       ag:String(r[11]==null?'':r[11]).trim(), se:isNaN(se)?-1:se,
-      rc:ncRecallLevel(r[15]), lang:ncLang(r[19]),
+      rc:ncRecallLevel(di), lang:ncLang(r[19]),
       p1:tzNormPhone(r[12]),p2:tzNormPhone(r[13]),p3:tzNormPhone(r[14])});
   }
-  return rows;
+  return {rows,diHist};
 }
 // 계약(신청자관리 일마감): 고객키 D(3)·담당자 N(13)·신청일 P(15)·분류 Q(16,매체/상품코드)·코드 R(17,재콜)·반품일 AQ(42)
 function ncParseCont(wb){
@@ -14120,12 +14153,13 @@ async function ncIngestFile(type,file){
   if(ncFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup'};   // 명단 포함 전 타입 누적(동일 파일만 스킵)
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-  let rows;
-  if(type==='db')rows=ncParseDb(wb);
+  let rows,diHist=null;
+  if(type==='db'){const p=ncParseDb(wb);rows=p.rows;diHist=p.diHist;}
   else if(type==='contDaily')rows=ncParseCont(wb);
   else if(type==='cti')rows=tzParseCti(wb);
   else rows=spParseAttend(wb);
   const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
+  if(diHist)rec.diHist=diHist;
   const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);
   return {status:'ok'};
 }
@@ -14153,11 +14187,17 @@ function ncBuildRoster(){
   }
   return {full,bare};
 }
+// 콜/계약이 어느 단계 DB에서 비롯됐는지 — 신규(rc0)는 분배당일(d0)/이후(d1)로 분리.
+function ncCatOf(ev,day){return ev.rc===0?(ev.d===day?'d0':'d1'):(ev.rc===1?'r1':ev.rc===2?'r2':'r3');}
+// 리드 키 = 대표전화 + 유입일. 단계마다 고객키가 새로 발급되므로 이걸로 같은 DB의 생애주기를 묶는다.
+function ncLeadKey(r){const p=r.p1||r.p2||r.p3;return p?p+'|'+(r.inf||''):'K'+r.k;}
 function ncCompute(){
   const roster=ncBuildRoster();
   // DB: 뇌새김/제2외국어 담당만, 고객키별 분배 이벤트(events) + (k,rc) dedup 이벤트 + 전화 인덱스
   const keyEvents=new Map(), phoneIdx=new Map(), keyLangAll=new Map();
+  const pcIdx=new Map();      // '전화|담당자' → 이벤트[] — 콜 매칭용(담당자까지 일치해야 내 DB)
   const evMap=new Map();      // (k|rc) → 이벤트 1건 (누적파일 중복 제거)
+  let noInfRows=0;
   const dbFiles=ncFilesByType('db').slice().sort((a,b)=>a.fileName>b.fileName?1:a.fileName<b.fileName?-1:0);
   for(const f of dbFiles)for(const r of (f.rows||[])){
     if(!r.k)continue;
@@ -14166,10 +14206,15 @@ function ncCompute(){
     if(!keyLangAll.has(r.k))keyLangAll.set(r.k,lang);
     else if((keyLangAll.get(r.k)==='IN'||keyLangAll.get(r.k)==='콜백')&&lang!=='IN'&&lang!=='콜백')keyLangAll.set(r.k,lang);
     const ent=spCanon(roster,r.ob); if(!ent||!NC_TARGET.has(ent.team))continue;   // 담당 뇌새김/제2외국어만(모수·이벤트)
+    if(!('inf' in r))noInfRows++;
     const rc=r.rc, ek=r.k+'|'+rc;
     let ev=evMap.get(ek);
-    if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od};evMap.set(ek,ev);
-      if(!keyEvents.has(r.k))keyEvents.set(r.k,[]);keyEvents.get(r.k).push(ev);}
+    if(!ev){ev={k:r.k,rc,d:r.d,lang,codi:ent.nm,team:ent.team,se:r.se,ag:r.ag,od:r.od,inf:r.inf||'',lead:ncLeadKey(r),
+                tr:0,co:0,va:0,d0tr:0,d0va:0,ct:0};                    // tr/co/va=이 DB에 건 시도·연결·유효, d0*=분배당일분, ct=계약수
+      evMap.set(ek,ev);
+      if(!keyEvents.has(r.k))keyEvents.set(r.k,[]);keyEvents.get(r.k).push(ev);
+      for(const p of [r.p1,r.p2,r.p3]){if(!p)continue;const pk=p+'|'+ent.nm;if(!pcIdx.has(pk))pcIdx.set(pk,[]);pcIdx.get(pk).push(ev);}
+    }
     else{if(r.d&&(!ev.d||r.d<ev.d))ev.d=r.d;if(!ev.lang&&lang)ev.lang=lang;}
     for(const p of [r.p1,r.p2,r.p3]){if(!p)continue;if(!phoneIdx.has(p))phoneIdx.set(p,[]);const a=phoneIdx.get(p);if(!a.includes(r.k))a.push(r.k);}
   }
@@ -14198,36 +14243,57 @@ function ncCompute(){
     if(!lang){if(unmatched.length<1000)unmatched.push({k:r.k,mgr:r.mgr,day:r.d,cls:r.cls});continue;}   // 언어 판정 불가(DB·분류 모두 실패)
     const crc=best?best.rc:(r.rc?1:0);                                 // DB 없으면 R17 재콜여부로 신규/재콜 근사
     const daily=!r.rc&&!!(best&&best.d===r.d&&best.rc===0);             // 당일계약 = 신청일 분배 신규 & R17 비재콜
-    contracts.push({k:r.k,codi:ent.nm,team:ent.team,day:r.d,lang,rc:crc,daily,cancelled:!!r.rt,dbMatched:!!best});
+    if(best)best.ct++;                                                  // 이 DB에서 나온 계약(미시도·퍼널 분석용)
+    contracts.push({k:r.k,codi:ent.nm,team:ent.team,day:r.d,lang,rc:crc,daily,cancelled:!!r.rt,dbMatched:!!best,
+      cat:best?ncCatOf(best,r.d):null, evD:best?best.d:'', evCodi:best?best.codi:ent.nm, lead:best?best.lead:null});
   }
-  // CTI 콜: 뇌새김 roster 상담원만. fresh/care/old 분류(케어 제외 → 신규=fresh+old).
-  const calls=[];let unmatchedCall=0;
+  // CTI 콜 → DB 이벤트 매칭. 키 = 담당자 + 고객연락처 + (분배일 ≤ 통화일) 중 분배일 최신.
+  //  단계 전환 시 담당자가 바뀌는 리드가 98%라, 담당자를 안 보면 내가 건 신규 DB 콜이
+  //  남이 받아간 재콜 DB 콜로 오분류된다. 담당자 불일치는 별도 '타코디 DB 콜'로 분리.
+  const calls=[];let unmatchedCall=0,xcodiCall=0,preDistCall=0,careCall=0;
   for(const f of ncFilesByType('cti'))for(const c0 of (f.rows||[])){
-    const c=Object.assign({},c0);const nm=tzBare(c.name);const ent=spCanon(roster,c.name);
-    if(!ent||!NC_TARGET.has(ent.team)){continue;}                       // 뇌새김 상담원만
-    const keys=phoneIdx.get(c.phone);
-    if(!keys||!keys.length){unmatchedCall++;continue;}
-    let best=null;for(const k of keys){const evs=keyEvents.get(k);if(!evs)continue;for(const ev of evs){if(ev.d>c.day)continue;if(!best||ev.d>best.d||(ev.d===best.d&&best.rc&&!ev.rc))best=ev;}}
-    if(!best)for(const k of keys){const evs=keyEvents.get(k);if(evs&&evs.length){best=evs[0];break;}}
-    let cat;
-    if(best&&best.d===c.day&&!best.rc)cat='fresh';
-    else{let care=false;for(const k of keys){const od=contractOrder.get(k);if(od&&c.day>=od){care=true;break;}}
-      cat=care?'care':(best?'old':'none');}
-    if(cat==='care'||cat==='none')continue;                             // 케어·미매칭 제외
-    calls.push({day:c.day,codi:ent.nm,team:ent.team,lang:best?best.lang:'결합',rc:best?best.rc:0,kind:cat,conn:c.conn,valid:c.valid});   // kind: fresh(신규콜)·old(이전콜)
+    const ent=spCanon(roster,c0.name);
+    if(!ent||!NC_TARGET.has(ent.team))continue;                         // 뇌새김/제2외국어 상담원만
+    if(!c0.phone||!c0.day)continue;
+    const mine=pcIdx.get(c0.phone+'|'+ent.nm);
+    if(!mine||!mine.length){if(phoneIdx.has(c0.phone))xcodiCall++;else unmatchedCall++;continue;}
+    let ev=null;
+    for(const e2 of mine){if(!e2.d||e2.d>c0.day)continue;if(!ev||e2.d>ev.d||(e2.d===ev.d&&ev.rc&&!e2.rc))ev=e2;}
+    if(!ev){preDistCall++;continue;}                                    // 내 DB지만 분배 전 통화
+    // 케어통화(기존 계약자 사후통화) 제외 — 단, 분배 당일 신규 콜은 sales 콜로 우선 인정
+    if(!(ev.rc===0&&ev.d===c0.day)){
+      let care=false;for(const k of (phoneIdx.get(c0.phone)||[])){const od=contractOrder.get(k);if(od&&c0.day>=od){care=true;break;}}
+      if(care){careCall++;continue;}
+    }
+    ev.tr++;if(c0.conn)ev.co++;if(c0.valid)ev.va++;
+    if(ev.d===c0.day){ev.d0tr++;if(c0.valid)ev.d0va++;}
+    calls.push({day:c0.day,codi:ent.nm,team:ent.team,lang:ev.lang,cat:ncCatOf(ev,c0.day),ev,conn:c0.conn,valid:c0.valid});
   }
+  // 리드(전화+유입일) 단위 묶기 — 신규→재콜→재재콜→회수콜 생애주기 추적용
+  const leads=new Map();
+  for(const ev of dbEvents){let L=leads.get(ev.lead);if(!L){L={lead:ev.lead,evs:[]};leads.set(ev.lead,L);}L.evs.push(ev);}
+  for(const L of leads.values())L.evs.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.rc-b.rc);
   // 활동 인물 = 계약/콜이 있는 뇌새김 코디
   const active=new Set();contracts.forEach(c=>active.add(c.codi));calls.forEach(c=>active.add(c.codi));
   dbEvents.forEach(e=>active.add(e.codi));
   const persons=Array.from(active).filter(Boolean).sort((a,b)=>a.localeCompare(b,'ko'));
   const days=[];dbEvents.forEach(e=>{if(e.d)days.push(e.d);});contracts.forEach(c=>{if(c.day)days.push(c.day);});calls.forEach(c=>{if(c.day)days.push(c.day);});days.sort();
   const warns=[];
+  const staleDb=ncStaleDbFiles().length;
   if(!ncFilesByType('db').length)warns.push('DB수 파일이 없습니다. 공용폴더를 연결/스캔하세요.');
   if(!dbEvents.length)warns.push('뇌새김 DB가 0건입니다. 명단(담당=뇌새김영어/제2외국어)·DB수 파일을 확인하세요.');
+  if(staleDb)warns.push(`구버전 파싱 DB 파일 ${staleDb}개(유입일 없음) — 리드 추적이 제한됩니다. <b>공용폴더 새로고침</b> 권장`);
   if(unmatched.length)warns.push(`언어 판정 불가 계약 ${unmatched.length.toLocaleString()}건 제외(DB·분류 모두 실패) <a href="#" onclick="ncShowUnmatched();return false;" style="color:#b45309;text-decoration:underline">[목록 보기]</a>`);
   if(unmatchedCall)warns.push(`전화 미매칭 콜 ${unmatchedCall.toLocaleString()}건 제외`);
+  if(xcodiCall)warns.push(`타코디 DB 콜 ${xcodiCall.toLocaleString()}건 제외(이미 재분배된 DB에 건 통화)`);
+  if(careCall)warns.push(`케어통화 ${careCall.toLocaleString()}건 제외(기존 계약자 사후통화)`);
   if(gunjaNoLang)warns.push(`군자 계약 중 언어 미상 ${gunjaNoLang.toLocaleString()}건은 전체엔 포함 <a href="#" onclick="ncShowUnmatched();return false;" style="color:#b45309;text-decoration:underline">[목록 보기]</a>`);
-  ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,unmatched,minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
+  // CTI 통화 기록이 1건이라도 있는 코디 — 이 코디의 DB만 '미시도/당일컨택' 판정에 쓴다.
+  //  (기록이 0건인 코디는 실제 미시도인지 CTI 수집 누락인지 구분할 수 없어 오판 위험)
+  const callCodis=new Set();calls.forEach(c=>callCodis.add(c.codi));
+  ncModel={roster,dbEvents,contracts,gunja,calls,persons,keyEvents,leads,unmatched,callCodis,
+    diag:{unmatchedCall,xcodiCall,preDistCall,careCall,noInfRows,staleDb},
+    minDay:days[0]||'',maxDay:days[days.length-1]||'',warns};
   return ncModel;
 }
 
@@ -14253,7 +14319,7 @@ function ncAgg(s,e){
   let gunjaAll=0;
   for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;gunjaAll++;if(g.lang)L(g.lang).gunja++;}   // 언어 미상은 전체(gunjaAll)에만
   for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;
-    const a=L(c.lang),pa=P(c.codi),pl=PL(c.codi,c.lang);const fresh=(c.kind==='fresh');
+    const a=L(c.lang),pa=P(c.codi),pl=PL(c.codi,c.lang);const fresh=(c.cat==='d0');
     const T=fresh?'fTry':'oTry',C=fresh?'fConn':'oConn',V=fresh?'fValid':'oValid';
     a[T]++;pa[T]++;pl[T]++;
     if(c.conn){a[C]++;pa[C]++;pl[C]++;}
@@ -14298,15 +14364,281 @@ function ncShowUnmatched(){
   document.getElementById('ncDiagOverlay').classList.add('open');
 }
 
+// ════════════════════════════════════════════════════════════
+//  단계별 콜 (당일 / 이전 / 재콜 / 재재콜 / 회수콜)
+//  축 2가지 — cohort: 분배일 기준(그날 분배된 DB를 끝까지 추적, 컨택률·계약률이 정합)
+//             call  : 통화일 기준(그날 실제 건 콜 = 활동량. 분배DB·컨택률 컬럼 숨김)
+// ════════════════════════════════════════════════════════════
+function ncStageBlank(){return {db:0,tryDb:new Set(),connDb:new Set(),tr:0,co:0,va:0,ct:0};}
+function ncStageSet(){const o={};for(const c of NC_CATS)o[c]=ncStageBlank();return o;}
+function ncStageAgg(s,e,axis){
+  const sel=ncSelSet(),cohort=(axis!=='call');
+  const tot=ncStageSet(),byDay=new Map(),byCodi=new Map();
+  const G=(m,k)=>{let v=m.get(k);if(!v){v=ncStageSet();m.set(k,v);}return v;};
+  if(cohort)for(const ev of ncModel.dbEvents){
+    if(!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
+    const cs=ev.rc===0?['d0','d1']:[NC_CATS[ev.rc+1]];        // 신규 DB는 당일·이전 두 행의 공통 모수
+    const bd=G(byDay,ev.d),bc=G(byCodi,ev.codi);
+    for(const c of cs){tot[c].db++;bd[c].db++;bc[c].db++;}
+  }
+  for(const c of ncModel.calls){
+    const ev=c.ev,day=cohort?ev.d:c.day;
+    if(!day||day<s||day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;
+    for(const b of [tot[c.cat],G(byDay,day)[c.cat],G(byCodi,c.codi)[c.cat]]){
+      b.tr++;if(c.conn)b.co++;if(c.valid)b.va++;b.tryDb.add(ev.k);if(c.conn)b.connDb.add(ev.k);}
+  }
+  for(const ct of ncModel.contracts){
+    if(!ct.cat)continue;
+    const day=cohort?ct.evD:ct.day, codi=cohort?ct.evCodi:ct.codi;   // 코호트에선 DB 소유 코디에 귀속
+    if(!day||day<s||day>e)continue;if(sel&&!sel.has(codi))continue;if(!ncLangMatch(ct.lang))continue;
+    tot[ct.cat].ct++;G(byDay,day)[ct.cat].ct++;G(byCodi,codi)[ct.cat].ct++;
+  }
+  return {tot,byDay,byCodi,cohort};
+}
+function ncStageTotal(set){
+  const t=ncStageBlank();
+  for(const c of NC_CATS){const b=set[c];
+    if(c!=='d1')t.db+=b.db;                                   // '이전'은 신규 코호트와 같은 모수 → 합계 중복 제외
+    b.tryDb.forEach(x=>t.tryDb.add(x));b.connDb.forEach(x=>t.connDb.add(x));
+    t.tr+=b.tr;t.co+=b.co;t.va+=b.va;t.ct+=b.ct;}
+  return t;
+}
+function ncPer1k(ct,tr){return tr?(ct/tr*1000).toFixed(1):'-';}   // 시도 1,000건당 계약 = 단계별 콜 효율
+function ncStageCols(cohort){return cohort?14:11;}
+function ncStageHead(first,cohort){
+  const c=[];
+  if(cohort)c.push('분배DB');
+  c.push('시도DB');
+  if(cohort)c.push('컨택률');
+  c.push('시도수','평균시도','연결','연결률','유효','유효율','계약');
+  if(cohort)c.push('계약률<br><span class="nc-th-s">(분배DB)</span>');
+  c.push('계약률<br><span class="nc-th-s">(시도DB)</span>','시도1천건당<br><span class="nc-th-s">계약</span>');
+  return `<thead><tr class="nc-sub"><th style="text-align:left">${first}</th>${c.map(x=>`<th>${x}</th>`).join('')}</tr></thead>`;
+}
+function ncStageCells(b,cohort,dupDb){
+  const td=b.tryDb.size;let h='';
+  if(cohort)h+=dupDb
+    ? `<td class="nc-dup" title="신규 DB 코호트와 동일한 모수입니다(합계에서 중복 제외)">(${ncC(b.db)})</td>`
+    : `<td>${ncC(b.db)}</td>`;
+  h+=`<td>${ncC(td)}</td>`;
+  if(cohort)h+=`<td class="nc-pctcol">${ncPct(td,b.db)}</td>`;
+  h+=`<td>${ncC(b.tr)}</td><td class="nc-avgcol">${ncAvg(b.tr,td)}</td><td>${ncC(b.co)}</td><td class="nc-pctcol">${ncPct(b.co,b.tr)}</td>`
+   + `<td>${ncC(b.va)}</td><td class="nc-pctcol">${ncPct(b.va,b.tr)}</td><td>${ncC(b.ct)}</td>`;
+  if(cohort)h+=`<td class="nc-pctcol">${ncPct(b.ct,b.db)}</td>`;
+  h+=`<td class="nc-pctcol">${ncPct(b.ct,td)}</td><td class="nc-avgcol">${ncPer1k(b.ct,b.tr)}</td>`;
+  return h;
+}
+function ncSetStageAxis(a){ncStageAxis=a;ncRender();}
+function ncSetStageView(v){ncStageView=v;ncRender();}
+function ncSetStageCat(c){ncStageCat=c;ncRender();}
+function ncRenderStage(agg){
+  const cohort=agg.cohort, tot=ncStageTotal(agg.tot), nCol=ncStageCols(cohort);
+  const tb=(on,fn,lbl)=>`<button class="btn btn-outline btn-sm${on?' active':''}" onclick="${fn}">${lbl}</button>`;
+  let rows=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(tot,cohort,false)}</tr>`;
+  for(const c of NC_CATS)
+    rows+=`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${NC_CAT_COLOR[c]}"></span>${NC_CAT_LABEL[c]}</td>${ncStageCells(agg.tot[c],cohort,c==='d1')}</tr>`;
+  // 하위 분해 — 선택한 단계 1개를 일자별 또는 코디별로
+  const byCodi=ncStageView==='codi';
+  const src=byCodi?agg.byCodi:agg.byDay;
+  let keys=Array.from(src.keys()).filter(k=>{const b=src.get(k)[ncStageCat];return b.tr||b.ct||b.db;});
+  if(byCodi)keys.sort((a,b)=>{const x=src.get(a)[ncStageCat],y=src.get(b)[ncStageCat];return (y.db-x.db)||(y.tr-x.tr)||a.localeCompare(b,'ko');});
+  else keys.sort();
+  let sub=keys.map(k=>`<tr><td class="nc-lbl nc-l">${byCodi?k:ncDayLabel(k)}</td>${ncStageCells(src.get(k)[ncStageCat],cohort,false)}</tr>`).join('');
+  if(!sub)sub=`<tr><td colspan="${nCol}" class="nc-empty">데이터 없음</td></tr>`;
+  else{const sum=ncStageBlank();for(const k of keys){const b=src.get(k)[ncStageCat];sum.db+=b.db;sum.tr+=b.tr;sum.co+=b.co;sum.va+=b.va;sum.ct+=b.ct;b.tryDb.forEach(x=>sum.tryDb.add(x));b.connDb.forEach(x=>sum.connDb.add(x));}
+    sub=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(sum,cohort,false)}</tr>`+sub;}
+  const catTabs=NC_CATS.map(c=>`<button class="nc-cat-tab${ncStageCat===c?' on':''}" style="--cc:${NC_CAT_COLOR[c]}" onclick="ncSetStageCat('${c}')">${NC_CAT_LABEL[c]}</button>`).join('');
+  const axisNote=cohort
+    ? '분배일 기준 — 그날 <b>분배된 DB</b>를 이후 통화까지 끝까지 추적합니다. 최근 며칠은 아직 추적이 덜 끝나 낮게 보일 수 있습니다.'
+    : '통화일 기준 — 그날 <b>실제 건 콜</b>만 셉니다. 분배DB·컨택률은 날짜 축이 달라 표시하지 않습니다.';
+  return `<div class="nc-sec"><div class="nc-sec-h">📞 DB 단계별 콜 현황
+      <span class="nc-sub-s">당일 · 이전 · 재콜 · 재재콜 · 회수콜</span>
+      <span style="margin-left:auto;display:flex;gap:6px">${tb(cohort,"ncSetStageAxis('cohort')",'분배일 코호트')}${tb(!cohort,"ncSetStageAxis('call')",'통화일 활동량')}</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead('구분',cohort)}<tbody>${rows}</tbody></table></div>
+    <div class="nc-note">· <b>당일 DB 콜</b>=분배 당일 건 신규 DB 콜 · <b>이전 DB 콜</b>=같은 신규 DB에 분배 다음날 이후(재콜로 넘어가기 전까지) 건 콜 · <b>재콜/재재콜/회수콜</b>=DB정보(P열)에 "재콜"이 1·2·3회 나타나는 DB
+      <a href="#" onclick="ncShowDiCodes();return false;" style="color:#4361ee;text-decoration:underline">[DB정보 코드 검증]</a><br>
+      · 매칭 키 = <b>담당자 + 고객연락처 + 통화일자 ≤ 분배일자(최신)</b>. 담당자가 다른 DB(재분배 후)에 건 콜은 제외했습니다.<br>· ${axisNote}</div>
+    <div class="nc-sub-h">단계별 분해<span style="margin-left:auto;display:flex;gap:6px">${tb(!byCodi,"ncSetStageView('day')",'일자별')}${tb(byCodi,"ncSetStageView('codi')",'코디별')}</span></div>
+    <div class="nc-cat-tabs">${catTabs}</div>
+    <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead(byCodi?'코디':(cohort?'분배일':'통화일'),cohort)}<tbody>${sub}</tbody></table></div></div>`;
+}
+// ── 단계별 시도 효율 & 기회비용 (통화일 기준) ──
+function ncRenderEff(agg){
+  const t=ncStageTotal(agg.tot);
+  const e0=agg.tot.d0.tr?agg.tot.d0.ct/agg.tot.d0.tr:0;                 // 당일 콜의 시도당 계약
+  const later={tr:0,ct:0};for(const c of ['r1','r2','r3']){later.tr+=agg.tot[c].tr;later.ct+=agg.tot[c].ct;}
+  const rows=NC_CATS.map(c=>{const b=agg.tot[c];const ef=b.tr?b.ct/b.tr:0;
+    return `<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${NC_CAT_COLOR[c]}"></span>${NC_CAT_LABEL[c]}</td>
+      <td>${ncC(b.tr)}</td><td class="nc-pctcol">${ncPct(b.tr,t.tr)}</td><td>${ncC(b.ct)}</td><td class="nc-pctcol">${ncPct(b.ct,t.ct)}</td>
+      <td class="nc-avgcol">${ncPer1k(b.ct,b.tr)}</td><td class="nc-avgcol">${e0&&b.tr?(ef/e0).toFixed(2)+'배':'-'}</td></tr>`;}).join('');
+  const wouldBe=Math.round(later.tr*e0);
+  const gap=wouldBe-later.ct;
+  const callout=later.tr?`<div class="nc-callout">
+      <div class="nc-callout-h">📌 재콜 이후 단계(재콜·재재콜·회수콜)의 투입 대비 성과</div>
+      <div>전체 시도의 <b>${ncPct(later.tr,t.tr)}</b>(${ncC(later.tr)}건)를 쓰고, 계약은 <b>${ncPct(later.ct,t.ct)}</b>(${ncC(later.ct)}건)를 만듭니다.
+      회수콜은 시도 <b>${agg.tot.r3.ct?Math.round(agg.tot.r3.tr/agg.tot.r3.ct).toLocaleString():'—'}건당 계약 1건</b>입니다.</div>
+      <div style="margin-top:6px;color:#64748b">참고 시뮬레이션 — 같은 시도량(${ncC(later.tr)}건)을 <b>당일 컨택 수준의 효율</b>(시도 1천건당 ${ncPer1k(agg.tot.d0.ct,agg.tot.d0.tr)}건)로 썼다면 이론상 <b>${ncC(wouldBe)}건</b>(현재 ${ncC(later.ct)}건, 차이 ${gap>=0?'+':''}${ncC(gap)}건). DB 총량이 늘지 않는 한 그대로 실현되진 않지만, <b>단계별 시간 배분의 기회비용</b>을 보여줍니다.</div>
+    </div>`:'';
+  return `<div class="nc-sec"><div class="nc-sec-h">📉 단계별 시도 효율 &amp; 기회비용<span class="nc-sub-s">통화일 기준 · 콜 1건이 만드는 계약</span></div>
+    <div style="display:grid;grid-template-columns:minmax(420px,1fr) minmax(320px,420px);gap:18px;align-items:start">
+      <div class="nc-tblwrap"><table class="nc-tbl"><thead><tr class="nc-sub"><th style="text-align:left">구분</th><th>시도수</th><th>시도 비중</th><th>계약수</th><th>계약 비중</th><th>시도1천건당 계약</th><th>당일 대비 효율</th></tr></thead>
+        <tbody>${rows}<tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(t.tr)}</td><td class="nc-pctcol">100.0%</td><td>${ncC(t.ct)}</td><td class="nc-pctcol">100.0%</td><td class="nc-avgcol">${ncPer1k(t.ct,t.tr)}</td><td class="nc-avgcol">-</td></tr></tbody></table></div>
+      <div style="height:250px"><canvas id="ncEffCanvas"></canvas></div>
+    </div>${callout}</div>`;
+}
+function ncRenderEffChart(agg){
+  const cv=document.getElementById('ncEffCanvas');if(!cv||typeof Chart==='undefined')return;
+  const t=ncStageTotal(agg.tot);
+  const labels=NC_CATS.map(c=>NC_CAT_SHORT[c]);
+  const trP=NC_CATS.map(c=>t.tr?+(agg.tot[c].tr/t.tr*100).toFixed(1):0);
+  const ctP=NC_CATS.map(c=>t.ct?+(agg.tot[c].ct/t.ct*100).toFixed(1):0);
+  const per=NC_CATS.map(c=>{const b=agg.tot[c];return b.tr?+(b.ct/b.tr*1000).toFixed(1):0;});
+  if(ncEffChart)ncEffChart.destroy();
+  ncEffChart=new Chart(cv,{data:{labels,datasets:[
+    {type:'bar',label:'시도 비중(%)',data:trP,backgroundColor:'#c7d2fe',yAxisID:'y',order:3},
+    {type:'bar',label:'계약 비중(%)',data:ctP,backgroundColor:'#4361ee',yAxisID:'y',order:2},
+    {type:'line',label:'시도1천건당 계약',data:per,borderColor:'#f0920e',backgroundColor:'#f0920e',yAxisID:'y1',tension:.3,order:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}},y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false}}},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
+}
+// ── 당일 컨택 유무별 계약률 (신규 DB 코호트 · 리드 최종 결과까지 추적) ──
+function ncRenderD0(s,e){
+  const sel=ncSelSet(),cov=ncModel.callCodis;
+  const G=()=>({db:0,ct:0,leads:new Set()});
+  const g={none:G(),tried:G(),valid:G()};
+  let skipDb=0;const skipCodi=new Set();
+  for(const ev of ncModel.dbEvents){
+    if(ev.rc!==0||!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
+    if(!cov.has(ev.codi)){skipDb++;skipCodi.add(ev.codi);continue;}   // CTI 기록 없는 코디 제외
+    const o=ev.d0va>0?g.valid:(ev.d0tr>0?g.tried:g.none);
+    o.db++;o.ct+=ev.ct;o.leads.add(ev.lead);
+  }
+  const leadCt=lk=>{const L=ncModel.leads.get(lk);if(!L)return 0;let n=0;for(const ev of L.evs)n+=ev.ct;return n;};
+  const defs=[['none','당일 컨택 없음','#ef4444'],['tried','당일 시도(유효통화 없음)','#f0920e'],['valid','당일 유효통화(90초+)','#22c55e']];
+  const tot={db:0,ct:0,lead:0,won:0};
+  const calc=defs.map(([k,lbl,col])=>{const o=g[k];let won=0;o.leads.forEach(lk=>{if(leadCt(lk)>0)won++;});
+    tot.db+=o.db;tot.ct+=o.ct;tot.lead+=o.leads.size;tot.won+=won;return {o,lbl,col,won};});
+  const out=calc.map(({o,lbl,col,won})=>`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${col}"></span>${lbl}</td>
+      <td>${ncC(o.db)}</td><td class="nc-pctcol">${ncPct(o.db,tot.db)}</td><td>${ncC(o.ct)}</td><td class="nc-pctcol">${ncPct(o.ct,o.db)}</td>
+      <td>${ncC(o.leads.size)}</td><td>${ncC(won)}</td><td class="nc-pctcol">${ncPct(won,o.leads.size)}</td></tr>`).join('');
+  // 리프트는 '당일 유효통화' vs '당일 시도했지만 유효통화 없음'으로 계산 — 둘 다 CTI로 확인된 모수라 비교가 깨끗하다.
+  const rv=g.valid.db?g.valid.ct/g.valid.db:0, rt=g.tried.db?g.tried.ct/g.tried.db:0;
+  const lift=rt?(rv/rt).toFixed(1):null;
+  return `<div class="nc-sec"><div class="nc-sec-h">⏱️ 당일 컨택 유무별 계약률<span class="nc-sub-s">기간 내 분배된 신규 DB · 리드 최종 결과까지 추적</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl"><thead>
+      <tr class="nc-grp"><th rowspan="2" style="text-align:left">분배 당일 컨택 상태</th><th colspan="4">신규 DB 기준</th><th colspan="3">리드 최종(재콜 단계 포함)</th></tr>
+      <tr class="nc-sub"><th>DB수</th><th>비중</th><th>계약수</th><th>계약률</th><th>리드수</th><th>계약 리드</th><th>리드 계약률</th></tr></thead>
+      <tbody>${out}<tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(tot.db)}</td><td class="nc-pctcol">100.0%</td><td>${ncC(tot.ct)}</td><td class="nc-pctcol">${ncPct(tot.ct,tot.db)}</td><td>${ncC(tot.lead)}</td><td>${ncC(tot.won)}</td><td class="nc-pctcol">${ncPct(tot.won,tot.lead)}</td></tr></tbody></table></div>
+    ${lift?`<div class="nc-callout"><div class="nc-callout-h">📌 분배 당일 &quot;유효통화까지&quot; 가면 계약률이 ${lift}배가 됩니다</div>
+      <div>당일 90초 이상 통화한 DB의 계약률 <b>${ncPct(g.valid.ct,g.valid.db)}</b> vs 당일 걸긴 했지만 유효통화가 없던 DB <b>${ncPct(g.tried.ct,g.tried.db)}</b>.
+      당일 시도는 했는데 유효통화로 못 이어진 DB가 <b>${ncC(g.tried.db)}건(${ncPct(g.tried.db,tot.db)})</b> — 여기가 가장 큰 개선 여지입니다.</div></div>`:''}
+    <div class="nc-note">· 리드 최종 = 전화+유입일로 같은 DB를 묶어, 이후 재콜·재재콜·회수콜 단계에서 난 계약까지 포함한 결과입니다.
+    <br>· 비교 배수는 CTI로 확인된 두 모수(<b>당일 유효통화</b> vs <b>당일 시도·유효통화 없음</b>)로만 계산합니다. 「당일 컨택 없음」 구간은 CTI 미수집 건이 섞일 수 있어 배수 계산에서 제외했습니다.
+    ${skipDb?`<br>· CTI 통화 기록이 전혀 없는 코디 ${skipCodi.size}명(DB ${ncC(skipDb)}건)은 미시도인지 수집 누락인지 구분할 수 없어 <b>집계에서 제외</b>했습니다.`:''}</div></div>`;
+}
+// ── 리드 생애주기 퍼널 ──
+function ncRenderFunnel(s,e){
+  const sel=ncSelSet(),cov=ncModel.callCodis;
+  const seed=new Set();
+  for(const ev of ncModel.dbEvents){
+    if(ev.rc!==0||!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
+    if(!cov.has(ev.codi))continue;                                 // CTI 미수집 코디 제외(리드당 시도수 왜곡 방지)
+    seed.add(ev.lead);}
+  const st=[0,1,2,3].map(()=>({leads:0,ct:0,tr:0}));
+  let won=0;
+  for(const lk of seed){const L=ncModel.leads.get(lk);if(!L)continue;
+    const seen=[false,false,false,false];let ct=0;
+    for(const ev of L.evs){const r=ev.rc;if(r<0||r>3)continue;if(!seen[r]){seen[r]=true;st[r].leads++;}st[r].ct+=ev.ct;st[r].tr+=ev.tr;ct+=ev.ct;}
+    if(ct>0)won++;}
+  if(!seed.size)return `<div class="nc-sec"><div class="nc-sec-h">🔄 리드 생애주기 퍼널</div><div class="nc-empty">데이터 없음</div></div>`;
+  const names=['신규','재콜','재재콜','회수콜'],cols=['#4361ee','#f0920e','#ef4444','#64748b'];
+  const base=st[0].leads||1;
+  let rows='',trTot=0,ctTot=0;
+  for(let i=0;i<4;i++){const o=st[i];trTot+=o.tr;ctTot+=o.ct;
+    rows+=`<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${cols[i]}"></span>${names[i]}</td>
+      <td>${ncC(o.leads)}</td><td class="nc-pctcol">${ncPct(o.leads,base)}</td>
+      <td class="nc-pctcol">${i?ncPct(o.leads,st[i-1].leads):'-'}</td>
+      <td>${ncC(o.tr)}</td><td class="nc-avgcol">${ncAvg(o.tr,o.leads)}</td>
+      <td>${ncC(o.ct)}</td><td class="nc-pctcol">${ncPct(o.ct,o.leads)}</td><td class="nc-avgcol">${ncPer1k(o.ct,o.tr)}</td></tr>`;
+    rows+=`<tr class="nc-bar-row"><td colspan="9"><div class="nc-bar"><span style="width:${(o.leads/base*100).toFixed(1)}%;background:${cols[i]}"></span></div></td></tr>`;}
+  return `<div class="nc-sec"><div class="nc-sec-h">🔄 리드 생애주기 퍼널<span class="nc-sub-s">전화+유입일로 묶은 같은 DB의 단계 진행</span></div>
+    <div class="nc-tblwrap"><table class="nc-tbl"><thead><tr class="nc-sub"><th style="text-align:left">단계</th><th>도달 리드</th><th>신규 대비</th><th>직전 단계 대비</th><th>시도수</th><th>리드당 시도</th><th>계약수</th><th>계약률</th><th>시도1천건당 계약</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="nc-callout"><div class="nc-callout-h">📌 리드 1개의 최종 성적</div>
+      <div>기간 내 신규 분배된 리드 <b>${ncC(seed.size)}개</b> 중 최종 계약 <b>${ncC(won)}개 (${ncPct(won,seed.size)})</b>.
+      리드 1개당 누적 시도 <b>${ncAvg(trTot,seed.size)}회</b>, 계약 1건을 만드는 데 평균 <b>${ctTot?ncC(Math.round(trTot/ctTot)):'—'}회</b> 시도합니다.</div></div>
+    <div class="nc-note">· 기간 필터는 <b>신규 분배일</b>에만 적용하고, 이후 재콜·재재콜·회수콜은 기간 밖이라도 끝까지 추적합니다. · 최근 분배분은 아직 사이클이 안 끝나 진행률이 낮게 보입니다.</div></div>`;
+}
+// ── 미시도 / 저시도 DB ──
+function ncRenderIdle(s,e){
+  const sel=ncSelSet(),cov=ncModel.callCodis;
+  const CATS=['d0','r1','r2','r3'],LBL={d0:'신규',r1:'재콜',r2:'재재콜',r3:'회수콜'};
+  const B=()=>({db:0,zero:0,low:0,tr:0});
+  const byCat={};CATS.forEach(c=>byCat[c]=B());
+  const byCodi=new Map();const noCti=new Map();
+  for(const ev of ncModel.dbEvents){
+    if(!ev.d||ev.d<s||ev.d>e)continue;if(sel&&!sel.has(ev.codi))continue;if(!ncLangMatch(ev.lang))continue;
+    const c=ev.rc===0?'d0':CATS[ev.rc];
+    const put=o=>{o.db++;o.tr+=ev.tr;if(!ev.tr)o.zero++;else if(ev.tr<=2)o.low++;};
+    if(!cov.has(ev.codi)){noCti.set(ev.codi,(noCti.get(ev.codi)||0)+1);continue;}   // CTI 미수집 코디는 분리
+    put(byCat[c]);
+    let m=byCodi.get(ev.codi);if(!m){m=B();byCodi.set(ev.codi,m);}put(m);
+  }
+  const line=(lbl,o,col)=>`<tr><td class="nc-lbl nc-l">${col?`<span class="nc-dot" style="background:${col}"></span>`:''}${lbl}</td>
+    <td>${ncC(o.db)}</td><td>${ncC(o.zero)}</td><td class="nc-pctcol${o.db&&o.zero/o.db>=.2?' nc-bad':''}">${ncPct(o.zero,o.db)}</td>
+    <td>${ncC(o.low)}</td><td class="nc-pctcol">${ncPct(o.low,o.db)}</td><td class="nc-avgcol">${ncAvg(o.tr,o.db)}</td></tr>`;
+  const tot=B();CATS.forEach(c=>{tot.db+=byCat[c].db;tot.zero+=byCat[c].zero;tot.low+=byCat[c].low;tot.tr+=byCat[c].tr;});
+  const catRows=CATS.map(c=>line(LBL[c],byCat[c],NC_CAT_COLOR[c])).join('');
+  const codis=Array.from(byCodi.keys()).filter(k=>byCodi.get(k).db>=10)
+    .sort((a,b)=>{const x=byCodi.get(a),y=byCodi.get(b);return (y.zero/y.db)-(x.zero/x.db);});
+  let codiRows=codis.map(k=>line(k,byCodi.get(k))).join('');
+  if(!codiRows)codiRows=`<tr><td colspan="7" class="nc-empty">데이터 없음</td></tr>`;
+  const head=first=>`<thead><tr class="nc-sub"><th style="text-align:left">${first}</th><th>분배DB</th><th>미시도</th><th>미시도율</th><th>저시도(1~2회)</th><th>저시도율</th><th>평균시도</th></tr></thead>`;
+  return `<div class="nc-sec"><div class="nc-sec-h">⚠️ 미시도 / 저시도 DB<span class="nc-sub-s">분배받고 한 번도 안 건 DB · 분배일 기준</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+      <div><div class="nc-sub-h">단계별</div><div class="nc-tblwrap"><table class="nc-tbl">${head('단계')}<tbody>
+        <tr class="nc-total"><td class="nc-lbl nc-l">합계</td><td>${ncC(tot.db)}</td><td>${ncC(tot.zero)}</td><td class="nc-pctcol">${ncPct(tot.zero,tot.db)}</td><td>${ncC(tot.low)}</td><td class="nc-pctcol">${ncPct(tot.low,tot.db)}</td><td class="nc-avgcol">${ncAvg(tot.tr,tot.db)}</td></tr>
+        ${catRows}</tbody></table></div></div>
+      <div><div class="nc-sub-h">코디별 <span class="nc-sub-s">미시도율 높은 순 · 분배 10건 이상</span></div><div class="nc-tblwrap" style="max-height:330px;overflow:auto"><table class="nc-tbl">${head('코디')}<tbody>${codiRows}</tbody></table></div></div>
+    </div>
+    ${noCti.size?`<div class="nc-callout" style="border-left-color:#f0920e;background:#fffbeb;border-color:#fde68a">
+      <div class="nc-callout-h">⚠️ CTI 통화 기록이 전혀 없는 코디 ${noCti.size}명 (DB ${ncC(Array.from(noCti.values()).reduce((a,b)=>a+b,0))}건) — 위 집계에서 제외</div>
+      <div>${Array.from(noCti.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([n,c])=>`${n} <b>${ncC(c)}</b>`).join(' · ')}${noCti.size>12?' 외':''}<br>
+      실제로 안 건 것인지 <b>CTI 수집 누락</b>(다른 회선·상담원명 불일치)인지 구분할 수 없어 미시도로 단정하지 않았습니다. CTI 파일 기간·상담원명을 먼저 확인하세요.</div></div>`:''}
+    <div class="nc-note">· 미시도 = 분배받은 뒤 CTI 통화 기록이 0건인 DB. 회수콜 단계에서 특히 높으면 <b>분배 자체가 낭비</b>라는 신호입니다. · 저시도 = 시도 1~2회에 그친 DB.</div></div>`;
+}
+// ── DB정보(P열) 코드 검증 모달 — 재콜 단계 판정 근거 ──
+function ncShowDiCodes(){
+  const body=document.getElementById('ncCodeBody');if(!body)return;
+  const h={};let has=false;
+  for(const f of ncFilesByType('db'))if(f.diHist){has=true;for(const k in f.diHist)h[k]=(h[k]||0)+f.diHist[k];}
+  if(!has){body.innerHTML='<div class="nc-empty">DB정보 원문 요약이 없습니다. <b>공용폴더 새로고침</b>으로 DB 파일을 다시 읽으면 표시됩니다.</div>';}
+  else{
+    const arr=Object.entries(h).sort((a,b)=>b[1]-a[1]);
+    const tot=arr.reduce((s,x)=>s+x[1],0);
+    const lv=['신규','재콜','재재콜','회수콜'];
+    const tr=arr.map(([v,c])=>{const n=ncRecallLevel(v);
+      return `<tr><td style="text-align:left;font-family:monospace;font-size:11.5px">${v?String(v).replace(/</g,'&lt;'):'<i style="color:#aaa">(빈값)</i>'}</td>
+        <td>${c.toLocaleString()}</td><td class="nc-pctcol">${ncPct(c,tot)}</td><td>${(String(v).match(/재콜/g)||[]).length}</td>
+        <td style="font-weight:700;color:${NC_CAT_COLOR[n===0?'d0':NC_CATS[n+1]]}">${lv[n]}</td></tr>`;}).join('');
+    body.innerHTML=`<table class="nc-tbl" style="min-width:640px"><thead><tr class="nc-sub"><th style="text-align:left">DB정보(P열) 원문</th><th>건수</th><th>비중</th><th>"재콜" 출현</th><th>판정 단계</th></tr></thead><tbody>${tr}</tbody></table>`;
+  }
+  document.getElementById('ncCodeOverlay').classList.add('open');
+}
+function ncCloseCode(){document.getElementById('ncCodeOverlay').classList.remove('open');}
+
 // ── 렌더 ──
-function ncRenderKpi(t){
+function ncRenderKpi(t,stage){
   const dbT=ncDbTot(t);
+  const st=stage?stage.tot:null, all=stage?ncStageTotal(stage.tot):null;
+  const later=st?['r1','r2','r3'].reduce((a,c)=>a+st[c].tr,0):0;
   const cards=[
     {ic:'🗂️',l:'DB수',v:ncC(dbT),s:`신규 ${ncC(t.db[0])} · 재콜계 ${ncC(t.db[1]+t.db[2]+t.db[3])}`,c:'violet'},
     {ic:'✅',l:'실계약수',v:ncC(t.cAll),s:`계약률 ${ncPct(t.cAll,dbT)}`,c:'green'},
     {ic:'📅',l:'일계약수',v:ncC(t.cDaily),s:`일계약률 ${ncPct(t.cDaily,dbT)} · 이전 ${ncC(t.cAll-t.cDaily)}`,c:'teal'},
-    {ic:'📞',l:'신규 콜 시도',v:ncC(t.fTry),s:`연결 ${ncC(t.fConn)} (${ncPct(t.fConn,t.fTry)}) · 유효 ${ncC(t.fValid)}`,c:'violet2'},
-    {ic:'🔁',l:'이전 콜 시도',v:ncC(t.oTry),s:`연결 ${ncC(t.oConn)} (${ncPct(t.oConn,t.oTry)}) · 유효 ${ncC(t.oValid)}`,c:'amber'},
+    {ic:'📞',l:'당일 DB 콜',v:ncC(st?st.d0.tr:t.fTry),s:st?`유효 ${ncC(st.d0.va)} (${ncPct(st.d0.va,st.d0.tr)}) · 시도1천당 계약 ${ncPer1k(st.d0.ct,st.d0.tr)}`:'',c:'violet2'},
+    {ic:'🔁',l:'이전 DB 콜',v:ncC(st?st.d1.tr:t.oTry),s:st?`유효 ${ncC(st.d1.va)} (${ncPct(st.d1.va,st.d1.tr)}) · 시도1천당 계약 ${ncPer1k(st.d1.ct,st.d1.tr)}`:'',c:'teal'},
+    {ic:'♻️',l:'재콜 이후 콜',v:ncC(later),s:st?`전체 시도의 ${ncPct(later,all.tr)} · 계약 ${ncC(st.r1.ct+st.r2.ct+st.r3.ct)}건 (${ncPct(st.r1.ct+st.r2.ct+st.r3.ct,all.ct)})`:'',c:'amber'},
     {ic:'🧑‍💼',l:'군자 계약수',v:ncC(t.gunja),s:'담당자에 &quot;군자&quot; 포함',c:'red'},
   ];
   document.getElementById('ncKpi').innerHTML=cards.map(k=>`<div class="nc-kpi nc-kpi-${k.c}"><div class="nc-kpi-top"><span class="nc-kpi-ic">${k.ic}</span><span class="nc-kpi-l">${k.l}</span></div><div class="nc-kpi-v">${k.v}</div><div class="nc-kpi-s">${k.s}</div></div>`).join('');
@@ -14365,7 +14697,7 @@ function ncAggByDate(s,e){
   for(const c of ncModel.contracts){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;const a=D(c.day);a.cAll++;a.c[c.rc]++;if(c.daily)a.cDaily++;}
   for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;if(!ncLangMatch(g.lang))continue;D(g.day).gunja++;}
   for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;
-    const a=D(c.day);const fresh=c.kind==='fresh',T=fresh?'fTry':'oTry',C=fresh?'fConn':'oConn',V=fresh?'fValid':'oValid';
+    const a=D(c.day);const fresh=c.cat==='d0',T=fresh?'fTry':'oTry',C=fresh?'fConn':'oConn',V=fresh?'fValid':'oValid';
     a[T]++;if(c.conn)a[C]++;if(c.valid)a[V]++;}
   return byDay;
 }
@@ -14460,10 +14792,14 @@ function ncRender(){
   const scope=ncScopeLangs();
   const tot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));
   if(ncAllLangs())tot.gunja=agg.gunjaAll;   // 전체(모든 언어) 군자 = 언어 미상 포함 총계
-  ncRenderKpi(tot);
+  const stageCall=ncStageAgg(s,e,'call');                                  // 효율·KPI는 항상 통화일(활동량) 기준
+  const stageSel=(ncStageAxis==='call')?stageCall:ncStageAgg(s,e,'cohort');
+  ncRenderKpi(tot,stageCall);
   const chartBox=`<div class="nc-sec"><div class="nc-sec-h">📈 일자별 추이<span class="nc-sub-s">DB수·실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
-  document.getElementById('ncContent').innerHTML=ncRenderMatrix(agg,tot)+ncRenderDaily(s,e)+chartBox+ncRenderPerson(agg);
-  ncRenderChart(s,e);
+  document.getElementById('ncContent').innerHTML=
+    ncRenderStage(stageSel)+ncRenderEff(stageCall)+ncRenderD0(s,e)+ncRenderFunnel(s,e)+ncRenderIdle(s,e)
+    +ncRenderMatrix(agg,tot)+ncRenderDaily(s,e)+chartBox+ncRenderPerson(agg);
+  ncRenderChart(s,e);ncRenderEffChart(stageCall);
   const w=document.getElementById('ncWarn');if(w)w.innerHTML=(ncModel.warns||[]).join(' · ');
   ncUpdateCodiBtn();
 }
@@ -14577,6 +14913,7 @@ async function ncScanFolder(opts={}){
   spDirHandle=h;spDirName=h.name;
   if(!await spVerifyPerm(h,!!opts.request)){ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');return;}
   await ncPurgeStaleContracts();   // 구버전(분류 미포함) 계약 파일 제거 → 아래 스캔에서 재파싱
+  await ncPurgeStaleDb();          // 구버전(유입일 미포함) DB 파일 제거 → 재파싱으로 리드 추적 활성화
   ncScanBusy=true;ncUpdateDirStatus('busy');if(!opts.fromShow)ncSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);   // DB수·계약(일마감·신청자관리)·명단 자동 / CTI만 수동
   const tasks=[];
@@ -14641,7 +14978,26 @@ async function ncDownloadExcel(){
     paoa.push([codi,dbT,g.cAll,ncPct(g.cAll,dbT),g.cDaily,g.cAll-g.cDaily,g.fTry,g.fValid,g.oTry,g.oValid]);}
   const pws=XLSX.utils.aoa_to_sheet(paoa);pws['!cols']=phead.map((h,i)=>({wch:i===0?12:9}));
   for(let c=0;c<phead.length;c++){const cell=pws[XLSX.utils.encode_cell({r:0,c})];if(cell)cell.s=hdrStyle;}
+  // 단계별 콜 시트 — 분배일 코호트 기준(합계 + 단계별 + 코디×단계)
+  const st=ncStageAgg(s,e,'cohort');
+  const shead=['구분','분배DB','시도DB','컨택률','시도수','평균시도','연결','연결률','유효','유효율','계약','계약률(분배DB)','계약률(시도DB)','시도1천건당계약'];
+  const srow=(label,b)=>{const td=b.tryDb.size;return [label,b.db,td,ncPct(td,b.db),b.tr,ncAvg(b.tr,td),b.co,ncPct(b.co,b.tr),b.va,ncPct(b.va,b.tr),b.ct,ncPct(b.ct,b.db),ncPct(b.ct,td),ncPer1k(b.ct,b.tr)];};
+  const saoa=[[`뇌새김 DB 단계별 콜 현황 (${s} ~ ${e}) · 분배일 코호트 기준`],shead];
+  saoa.push(srow('합계',ncStageTotal(st.tot)));
+  for(const c of NC_CATS)saoa.push(srow(NC_CAT_LABEL[c],st.tot[c]));
+  saoa.push([]);saoa.push(['코디별 × 단계']);saoa.push(shead);
+  const scodis=Array.from(st.byCodi.keys()).sort((a,b)=>a.localeCompare(b,'ko'));
+  for(const codi of scodis){const set=st.byCodi.get(codi);
+    saoa.push(srow(codi,ncStageTotal(set)));
+    for(const c of NC_CATS){const b=set[c];if(!b.db&&!b.tr&&!b.ct)continue;saoa.push(srow('   └ '+NC_CAT_LABEL[c],b));}}
+  const sws=XLSX.utils.aoa_to_sheet(saoa);
+  sws['!merges']=[{s:{r:0,c:0},e:{r:0,c:shead.length-1}}];
+  sws['!cols']=shead.map((h,i)=>({wch:i===0?22:12}));
+  for(const r of [1,saoa.findIndex(x=>x[0]==='코디별 × 단계')+1]){if(r<1)continue;
+    for(let c=0;c<shead.length;c++){const cell=sws[XLSX.utils.encode_cell({r,c})];if(cell)cell.s=hdrStyle;}}
+  const stcell=sws[XLSX.utils.encode_cell({r:0,c:0})];if(stcell)stcell.s={font:{bold:true,sz:13},alignment:{horizontal:'center'}};
   const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,sws,'단계별콜');
   XLSX.utils.book_append_sheet(wb,ws,'언어별종합');
   XLSX.utils.book_append_sheet(wb,pws,'개인별');
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
@@ -14704,7 +15060,26 @@ function ncEnsureStyle(){
   #page-naesaegim-call .tz-codi-panel .tz-codi-act{display:flex;gap:6px;margin-bottom:8px}
   #page-naesaegim-call .tz-codi-list{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
   #page-naesaegim-call .tz-ck{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#334155;cursor:pointer;padding:2px 0}
-  #page-naesaegim-call .tz-ck input{cursor:pointer}`;
+  #page-naesaegim-call .tz-ck input{cursor:pointer}
+  /* 단계별 콜 · 신규 분석 섹션 */
+  #page-naesaegim-call .nc-tbl td.nc-l{text-align:left}
+  #page-naesaegim-call .nc-th-s{font-weight:500;color:#94a3b8;font-size:10px}
+  #page-naesaegim-call .nc-stage{font-size:11.5px}
+  #page-naesaegim-call .nc-stage th,#page-naesaegim-call .nc-stage td{padding:6px 5px}
+  #page-naesaegim-call .nc-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  #page-naesaegim-call .nc-dup{color:#a0aec0;font-style:italic}
+  #page-naesaegim-call .nc-bad{color:#dc2626!important}
+  #page-naesaegim-call .nc-sub-h{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;color:#475569;margin:18px 0 10px}
+  #page-naesaegim-call .nc-cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  #page-naesaegim-call .nc-cat-tab{padding:5px 12px;font-size:12px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;cursor:pointer}
+  #page-naesaegim-call .nc-cat-tab:hover{background:#e9eef5}
+  #page-naesaegim-call .nc-cat-tab.on{color:#fff;background:var(--cc);border-color:var(--cc)}
+  #page-naesaegim-call .nc-callout{margin-top:14px;padding:13px 15px;border:1px solid #dbe3ff;border-left:4px solid #4361ee;border-radius:10px;background:#f5f8ff;font-size:12.5px;color:#334155;line-height:1.7}
+  #page-naesaegim-call .nc-callout-h{font-weight:800;color:#1e293b;margin-bottom:4px;font-size:13px}
+  #page-naesaegim-call tr.nc-bar-row td{padding:0 6px 8px!important;border-bottom:1px solid #eef2f7}
+  #page-naesaegim-call .nc-bar{height:6px;border-radius:999px;background:#eef2f7;overflow:hidden}
+  #page-naesaegim-call .nc-bar span{display:block;height:100%;border-radius:999px}
+  #page-naesaegim-call .nc-sec-h .btn-sm{font-weight:700}`;
   document.head.appendChild(st);
 }
 

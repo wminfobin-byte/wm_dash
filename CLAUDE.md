@@ -154,6 +154,23 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 - **구버전 db 재파싱**: 계열(sr) 없이 파싱된 옛 db 파일은 `tbFileStale`로 감지 → 폴더 재스캔(`tbScanFolder`/자동) 시 같은 fileHash라도 삭제 후 재파싱(공용폴더 새로고침만으로 계열 채움). 폴더 없는 PC는 싱크로 전파.
 - **핵심 함수**: `tbCompute`(dbRecs/contRecs/dbKey 빌드), `tbAggBy`(slot 또는 slot|day 키 집계), `tbSlotTable`/`tbSlotDateBlocks`/`tbLangSection`/`tbRenderKpi`/`tbRenderSlotChart`/`tbRender`, `tbScanFolder`/`tbAutoScanOnShow`/`tbConnectFolder`(sp 폴더 공유), `tbOnShow`/`tbGenerate`/`tbReady`(db 1개 이상). 탭 등록=`switchPage` 훅 + `AUTH_ACCOUNTS` master tabs + 헤더 `headerRight-timeboard-perf`.
 
+## 뇌새김 콜 현황 탭 (nc* 네임스페이스) — DB 단계별 콜
+
+톡이즈 성과 옆. **CTI 통화 × 고객관리 DB × 신청자관리 계약**을 매칭해 콜을 **DB 단계별 5분류**로 본다. 별도 IndexedDB(`naesaegimCallDashboard` v1), 공용폴더는 sp/tb/tz와 핸들 공유(`spDirHandle`), 클라우드 싱크 `payload.nc`.
+
+- **업로드 4종**: `db`(고객관리·공용폴더·누적), `contDaily`(신청자관리 일마감·공용폴더·누적), `attend`(명단·누적 합집합), `cti`(걸은전화상세·**수동만**·누적).
+- **DB 컬럼**: 계열 C(2)·고객키 G(6)·OB명 H(7)·분배일 I(8)·**유입일 J(9)**·연령대 L(11)·전화 M/N/O(12/13/14)·DB정보 P(15)·매체 T(19)·오더일 X(23). 파싱 시 `diHist`(DB정보 원문 히스토그램)를 파일 레코드에 요약 보관 — 원문을 행마다 저장하지 않고 판정 근거만 검증 가능.
+- **재콜 단계 판정 (`ncRecallLevel`)**: DB정보(P)에 `재콜` 출현 횟수 = 0신규/1재콜/2재재콜/3회수콜. 실제 값은 `(부재재콜)` `(통화재콜)` `(통예재콜)` 3종이 각각 1단계이고 **`(재분배)`는 단계에 포함되지 않는다**(담당자 재배정). 예 `(부재재콜)(부재재콜)(통화재콜)(재분배)` → 회수콜. 모달 `ncShowDiCodes`로 원문×건수×판정단계 검증.
+- **고객키는 단계마다 새로 발급**된다(일별 고객관리 파일 간 키 중복 0). 따라서 **리드 = 대표전화 + 유입일**(`ncLeadKey`)로 묶어야 생애주기가 보인다. 단계 전환 시 **담당자가 바뀌는 리드가 98%**.
+- **콜↔DB 매칭 (핵심)**: 키 = **담당자 + 고객연락처 + (분배일 ≤ 통화일) 중 분배일 최신**. `pcIdx`(`전화|담당자` → 이벤트[])로 조회. 담당자를 안 보면 내가 건 신규 DB 콜이 남이 받아간 재콜 DB 콜로 오분류된다. 담당자 불일치 = `xcodiCall`(제외), 전화 미매칭 = `unmatchedCall`, 분배 전 통화 = `preDistCall`. **케어통화 제외 유지**(실계약 고객 & 콜일 ≥ 최초 신청일; 단 분배 당일 신규 콜은 sales 콜로 우선).
+- **콜 5분류 (`ncCatOf`)**: `d0` 당일(rc0 & 분배일==통화일) / `d1` 이전(rc0 & 이후 — 재콜로 넘어가기 전까지) / `r1` 재콜 / `r2` 재재콜 / `r3` 회수콜. 계약도 같은 방식으로 자기 DB 이벤트에서 `cat` 부여.
+- **집계 축 2가지 (`ncStageAgg`)**: `cohort`=분배일 기준(그날 분배 DB를 이후 통화까지 추적 — 컨택률·계약률 정합) / `call`=통화일 기준(활동량, 분배DB·컨택률 컬럼 숨김). 버튼 토글(`ncStageAxis`). **`d1`의 분배DB는 `d0`와 같은 신규 코호트**라 합계에서 중복 제외(`ncStageTotal`), 표에선 괄호 회색 표기.
+- **지표**: 분배DB · 시도DB(distinct) · 컨택률 · 시도수 · 평균시도 · 연결/연결률 · 유효/유효율 · 계약 · 계약률(분배DB/시도DB) · **시도1천건당 계약**(`ncPer1k`, 단계별 콜 효율).
+- **분석 섹션**: ① `ncRenderStage` 단계별 표(+일자별/코디별 × 단계 탭) ② `ncRenderEff` 시도 효율·기회비용(차트 `ncEffChart`) ③ `ncRenderD0` 당일 컨택 유무별 계약률 ④ `ncRenderFunnel` 리드 생애주기 퍼널 ⑤ `ncRenderIdle` 미시도/저시도 DB. 이후 기존 언어별 매트릭스·일자별·추이차트·개인별.
+- **데이터 품질 가드**: `ncModel.callCodis`(CTI 기록 1건 이상인 코디)에 없는 코디의 DB는 ③④⑤에서 **제외**하고 사유를 화면에 표기 — 실제 미시도인지 CTI 수집 누락인지 구분 불가하기 때문. 당일컨택 리프트는 「당일 유효통화」 vs 「당일 시도·유효통화 없음」으로만 계산(둘 다 CTI 확인된 모수).
+- **구버전 재파싱**: `ncPurgeStaleDb`(유입일 `inf` 없는 db 파일) / `ncPurgeStaleContracts`(분류 `cls` 없는 계약 파일) — **공용폴더 확인 후에만** 삭제 후 재스캔. 폴더 없는 PC는 싱크로 전파.
+- **엑셀**: `단계별콜`(코호트 기준 합계·단계별·코디×단계) + `언어별종합` + `개인별` 3시트.
+
 ## 톡이즈 성과 탭 (tz* 네임스페이스)
 
 타임보드성과 옆에 배치. **CTI(걸은전화상세) 통화 데이터 × 톡이즈 DB/계약**을 매칭해 **톡이즈 계약 하락 원인**(영업코디가 기존계약자 케어통화=학습케어에 시간을 뺏겨 신규 컨택이 떨어지는지)을 데이터로 검증. 별도 IndexedDB(`talkisPerfDashboard` v1, `files` 스토어). **공용폴더는 sp/tb와 같은 핸들 재사용**(`spDirHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tz` 독립 슬라이스, v9~, 헤더 `syncBtn9`).
