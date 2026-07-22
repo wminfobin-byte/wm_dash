@@ -14361,9 +14361,10 @@ const NC_CATI={d0:0,d1:1,r1:2,r2:3,r3:4};
 function ncArrSum(a){return a[0]+a[1]+a[2]+a[3]+a[4];}
 function ncTdAdd(g,i,k){(g.td[i]||(g.td[i]=new Set())).add(k);}
 function ncTdN(g,i){return g.td[i]?g.td[i].size:0;}                          // 단계별 시도DB수
-function ncTdAll(g){const s=new Set();for(let i=0;i<5;i++)if(g.td[i])g.td[i].forEach(x=>s.add(x));return s.size;}  // 전체 시도DB(중복 제거)
-// 각 단계의 분배 모수 DB수 — 당일(0)·이전(1)은 같은 신규 DB 코호트를 공유한다.
-function ncCatDb(g,i){return i<=1?g.db[0]:g.db[i-1];}
+// 각 단계의 모수 DB수. 당일·재콜·재재콜·회수콜은 분배DB(rc별),
+// **이전(d1)만 분배 모수가 따로 없어**(당일과 같은 신규 코호트) 실제 시도한 DB 수를 쓴다.
+function ncCatDb(g,i){return i===1?ncTdN(g,1):(i===0?g.db[0]:g.db[i-1]);}
+function ncCatDbLabel(c){return c==='d1'?'시도DB수':'DB수';}
 function ncFTry(g){return g.tr[0];}                              // 당일 콜
 function ncOTry(g){return g.tr[1]+g.tr[2]+g.tr[3]+g.tr[4];}      // 이전+재콜계 콜
 function ncFValid(g){return g.va[0];}
@@ -14385,7 +14386,7 @@ function ncAgg(s,e){
   for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;
     const i=NC_CATI[c.cat];if(i==null)continue;
     const la=L(c.lang);
-    ncTdAdd(la,i,c.ev.k);                      // 시도DB는 매트릭스(언어 버킷)에서만 쓴다 — 개인별 표는 안 쓰므로 Set 생략(렌더 비용 절감)
+    if(i===1)ncTdAdd(la,1,c.ev.k);             // 시도DB는 '이전' 단계만 필요(나머지는 분배DB 사용) — Set 최소화
     for(const b of [la,P(c.codi),PL(c.codi,c.lang)]){b.tr[i]++;if(c.conn)b.co[i]++;if(c.valid)b.va[i]++;}}
   return {lang,person,personLang,gunjaAll};
 }
@@ -14528,10 +14529,6 @@ function ncRenderStage(agg){
       <span class="nc-sub-s">당일 · 이전 · 재콜 · 재재콜 · 회수콜</span>
       <span style="margin-left:auto;display:flex;gap:6px">${tb(cohort,"ncSetStageAxis('cohort')",'분배일 코호트')}${tb(!cohort,"ncSetStageAxis('call')",'통화일 활동량')}</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead('구분',cohort)}<tbody>${rows}</tbody></table></div>
-    <div class="nc-note">· <b>당일 DB 콜</b>=분배 당일 건 신규 DB 콜 · <b>이전 DB 콜</b>=같은 신규 DB에 분배 다음날 이후(재콜로 넘어가기 전까지) 건 콜 · <b>재콜/재재콜/회수콜</b>=DB정보(P열)에 "재콜"이 1·2·3회 나타나는 DB
-      <a href="#" onclick="ncShowDiCodes();return false;" style="color:#4361ee;text-decoration:underline">[DB정보 코드 검증]</a><br>
-      · 매칭 키 = <b>담당자 + 고객연락처 + 통화일자 ≤ 분배일자(최신)</b>. 담당자가 다른 DB(재분배 후)에 건 콜은 제외했습니다.<br>
-      · <b>계약 비중</b> = 그 행의 계약수 ÷ <b>표의 합계 계약수</b>(위 표는 5단계 합계 기준, 아래 분해표는 선택한 단계의 기간 합계 기준). 계약이 어느 단계에서 나오는지 보는 값입니다.<br>· ${axisNote}</div>
     <div class="nc-sub-h">단계별 분해<span style="margin-left:auto;display:flex;gap:6px">${tb(!byCodi,"ncSetStageView('day')",'일자별')}${tb(byCodi,"ncSetStageView('codi')",'코디별')}</span></div>
     <div class="nc-cat-tabs">${catTabs}</div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-stage">${ncStageHead(byCodi?'코디':(cohort?'분배일':'통화일'),cohort)}<tbody>${sub}</tbody></table></div></div>`;
@@ -14623,7 +14620,7 @@ function ncRenderIdle(s,e){
       <div class="nc-callout-h">CTI 통화 기록이 전혀 없는 코디 ${noCti.size}명 (DB ${ncC(Array.from(noCti.values()).reduce((a,b)=>a+b,0))}건) — 위 집계에서 제외</div>
       <div>${Array.from(noCti.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([n,c])=>`${n} <b>${ncC(c)}</b>`).join(' · ')}${noCti.size>12?' 외':''}<br>
       실제로 안 건 것인지 <b>CTI 수집 누락</b>(다른 회선·상담원명 불일치)인지 구분할 수 없어 미시도로 단정하지 않았습니다. CTI 파일 기간·상담원명을 먼저 확인하세요.</div></div>`:''}
-    <div class="nc-note">· 미시도 = 분배받은 뒤 CTI 통화 기록이 0건인 DB. 회수콜 단계에서 특히 높으면 <b>분배 자체가 낭비</b>라는 신호입니다. · 저시도 = 시도 1~2회에 그친 DB.</div></div>`;
+    </div>`;
 }
 // ── DB정보(P열) 코드 검증 모달 — 재콜 단계 판정 근거 ──
 function ncShowDiCodes(){
@@ -14665,12 +14662,12 @@ function ncRenderKpi(t,stage){
 //   당일/이전은 같은 신규 DB 코호트를 모수로 쓴다 → '이전'의 DB수는 회색 괄호로 중복 표기.
 //   평균시도 = 시도수 ÷ 같은 행의 DB수(분배 기준). 단계별 콜 섹션은 '실제 시도한 DB' 기준이라 값이 다르다.
 function ncMatrixRow(label,g,cls){
-  const dbT=ncTdAll(g);                                    // 전체 = 시도한 distinct DB(단계 간 중복 제거)
+  const dbT=ncDbTot(g);                                    // 전체 = 분배DB(재콜 포함)
   const cells=[[ncC(dbT),''],[ncC(g.cAll),''],[ncPct(g.cAll,dbT),'p']];
-  for(let i=0;i<5;i++){const d=ncTdN(g,i);
+  for(let i=0;i<5;i++){const d=ncCatDb(g,i);
     cells.push([ncC(d),''],[ncC(g.cc[i]),''],[ncPct(g.cc[i],d),'p']);}
   cells.push([ncC(g.gunja),'']);
-  for(let i=0;i<5;i++){const d=ncTdN(g,i);
+  for(let i=0;i<5;i++){const d=ncCatDb(g,i);
     cells.push([ncC(g.tr[i]),''],[ncAvg(g.tr[i],d),'a'],[ncC(g.co[i]),''],[ncC(g.va[i]),''],[ncPct(g.va[i],g.tr[i]),'p']);}
   const cm={p:'nc-pctcol',a:'nc-avgcol',d:'nc-dup'};
   const gs=new Set([0,3,6,9,12,15,18,19,24,29,34,39]);   // 그룹 시작 열 → 굵은 세로 구분선
@@ -14680,7 +14677,7 @@ function ncMatrixRow(label,g,cls){
 }
 function ncMatrixHeader(firstCol){
   const dbGrp=NC_CATS.map(c=>`<th colspan="3" class="nc-gs" style="border-bottom:2px solid ${NC_CAT_COLOR[c]}">${NC_CAT_SHORT[c]}</th>`).join('');
-  const dbSub=NC_CATS.map(()=>'<th class="nc-gs">시도DB수</th><th>계약수</th><th>계약률</th>').join('');
+  const dbSub=NC_CATS.map(c=>`<th class="nc-gs">${ncCatDbLabel(c)}</th><th>계약수</th><th>계약률</th>`).join('');
   const clGrp=NC_CATS.map(c=>`<th colspan="5" class="nc-gs" style="border-bottom:2px solid ${NC_CAT_COLOR[c]}">${NC_CAT_SHORT[c]} 콜</th>`).join('');
   const clSub=NC_CATS.map(()=>'<th class="nc-gs">시도</th><th>평균시도</th><th>연결</th><th>유효</th><th>유효율</th>').join('');
   return `<thead>
@@ -14690,7 +14687,7 @@ function ncMatrixHeader(firstCol){
       <th rowspan="2" class="nc-gs">군자<br>계약수</th>${clGrp}
     </tr>
     <tr class="nc-sub">
-      <th class="nc-gs">시도DB수</th><th>실계약수</th><th>실계약률</th>${dbSub}${clSub}
+      <th class="nc-gs">DB수</th><th>실계약수</th><th>실계약률</th>${dbSub}${clSub}
     </tr></thead>`;
 }
 function ncMatrixCols(){return 1+3+15+1+25;}
@@ -14701,9 +14698,7 @@ function ncRenderMatrix(agg,tot){
   for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
   return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader()}<tbody>${body}</tbody></table></div>
-    <div class="nc-note">· <b>당일</b>=분배 당일 / <b>이전</b>=같은 신규 DB에 분배 다음날 이후 · <b>재콜/재재콜/회수콜</b>=DB정보 "재콜" 출현횟수 1/2/3 · 언어 = 매체코드(T열)<br>
-      · <b>시도DB수</b> = 그 단계에서 실제로 통화를 시도한 DB(고객키) 수 — 분배만 되고 안 건 DB는 빠집니다. 전체 열은 단계 간 중복을 제거한 값이라 <b>단계별 합보다 작습니다</b>.<br>
-      · 계약률 = 계약수 ÷ 시도DB수, 평균시도 = 시도수 ÷ 시도DB수. 분배 기준 모수·컨택률은 「DB 단계별 콜 현황」 섹션을 보세요. · DB단가·광고비·취소수 제외</div></div>`;
+    </div>`;
 }
 // 일자별(분배일) 집계 — 선택 언어 합산, 같은 컬럼 구조
 function ncAggByDate(s,e){
@@ -14715,7 +14710,7 @@ function ncAggByDate(s,e){
   for(const g of ncModel.gunja){if(!g.day||g.day<s||g.day>e)continue;if(!ncLangMatch(g.lang))continue;D(g.day).gunja++;}
   for(const c of ncModel.calls){if(!c.day||c.day<s||c.day>e)continue;if(sel&&!sel.has(c.codi))continue;if(!ncLangMatch(c.lang))continue;
     const a=D(c.day),i=NC_CATI[c.cat];if(i==null)continue;
-    a.tr[i]++;if(c.conn)a.co[i]++;if(c.valid)a.va[i]++;ncTdAdd(a,i,c.ev.k);}
+    a.tr[i]++;if(c.conn)a.co[i]++;if(c.valid)a.va[i]++;if(i===1)ncTdAdd(a,1,c.ev.k);}
   return byDay;
 }
 function ncRenderDaily(s,e){
@@ -14726,7 +14721,7 @@ function ncRenderDaily(s,e){
   let body=ncMatrixRow('합계',tot,'nc-total');
   for(const d of days)body+=ncMatrixRow(ncDayLabel(d),byDay.get(d));
   const langLbl=ncAllLangs()?'전체 언어':`선택 ${ncScopeLangs().length}개 언어`;
-  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과<span class="nc-sub-s">${langLbl} 합산 · 분배일 기준 · 오래된→최신</span></div>
+  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과</div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader('일자')}<tbody>${body}</tbody></table></div></div>`;
 }
 // 개인별 컬럼: 코디 · DB수 · 실계약 · 계약률 · 일계약 · 이전계약 · 신규콜(시도·유효) · 이전콜(시도·유효)
@@ -14831,8 +14826,7 @@ function ncRender(){
   const stageCall=ncCached('stageCall',s,e,()=>ncStageAgg(s,e,'call'));    // 효율·KPI는 항상 통화일(활동량) 기준
   const stageSel=(ncStageAxis==='call')?stageCall:ncCached('stageCohort',s,e,()=>ncStageAgg(s,e,'cohort'));
   ncRenderKpi(tot,stageCall);
-  const chartBox=`<div class="nc-sec"><div class="nc-sec-h">일자별 추이<span class="nc-sub-s">신규 DB수 · 실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div>
-    <div class="nc-note">· DB수는 <b>신규(재콜 0회)만</b> — 재콜·재재콜·회수콜까지 합치면 같은 리드가 최대 4번 세어져 계약률이 왜곡됩니다. 실계약수는 <b>전체</b>(재콜 단계 계약 포함), 계약률 = 실계약수 ÷ 신규 DB수.</div></div>`;
+  const chartBox=`<div class="nc-sec"><div class="nc-sec-h">일자별 추이<span class="nc-sub-s">신규 DB수 · 실계약수(막대) · 계약률(선)</span></div><div style="height:260px"><canvas id="ncChartCanvas"></canvas></div></div>`;
   document.getElementById('ncContent').innerHTML=
     ncRenderStage(stageSel)+ncRenderEff(stageCall)+ncRenderIdle(s,e)
     +ncRenderMatrix(agg,tot)+ncRenderDaily(s,e)+chartBox+ncRenderPerson(agg);
@@ -14993,15 +14987,15 @@ async function ncAutoScanOnShow(){
 async function ncDownloadExcel(){
   if(!ncModel){alert('데이터가 없습니다.');return;}
   const [s,e]=ncRangeDays();const agg=ncAgg(s,e);const scope=ncScopeLangs();
-  const head=['언어','시도DB수','실계약수','실계약률']
-    .concat(...NC_CATS.map(c=>[`${NC_CAT_SHORT[c]} 시도DB`,`${NC_CAT_SHORT[c]} 계약`,`${NC_CAT_SHORT[c]} 계약률`]))
+  const head=['언어','DB수','실계약수','실계약률']
+    .concat(...NC_CATS.map(c=>[`${NC_CAT_SHORT[c]} ${ncCatDbLabel(c)}`,`${NC_CAT_SHORT[c]} 계약`,`${NC_CAT_SHORT[c]} 계약률`]))
     .concat(['군자계약'])
     .concat(...NC_CATS.map(c=>[`${NC_CAT_SHORT[c]}콜 시도`,`${NC_CAT_SHORT[c]}콜 평균시도`,`${NC_CAT_SHORT[c]}콜 연결`,`${NC_CAT_SHORT[c]}콜 유효`,`${NC_CAT_SHORT[c]}콜 유효율`]));
-  const rowOf=(label,g)=>{const dbT=ncTdAll(g);
+  const rowOf=(label,g)=>{const dbT=ncDbTot(g);
     let r=[label,dbT,g.cAll,ncPct(g.cAll,dbT)];
-    for(let i=0;i<5;i++){const d=ncTdN(g,i);r.push(d,g.cc[i],ncPct(g.cc[i],d));}
+    for(let i=0;i<5;i++){const d=ncCatDb(g,i);r.push(d,g.cc[i],ncPct(g.cc[i],d));}
     r.push(g.gunja);
-    for(let i=0;i<5;i++){const d=ncTdN(g,i);r.push(g.tr[i],ncAvg(g.tr[i],d),g.co[i],g.va[i],ncPct(g.va[i],g.tr[i]));}
+    for(let i=0;i<5;i++){const d=ncCatDb(g,i);r.push(g.tr[i],ncAvg(g.tr[i],d),g.co[i],g.va[i],ncPct(g.va[i],g.tr[i]));}
     return r;};
   const aoa=[[`뇌새김 콜 현황 (${s} ~ ${e})`],head];
   const etot=ncSum(scope.map(l=>agg.lang.get(l)||ncBlank()));if(ncAllLangs())etot.gunja=agg.gunjaAll;
