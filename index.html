@@ -14577,6 +14577,7 @@ function ncRenderEffChart(agg){
     plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
 }
 // ── 미시도 / 저시도 DB ──
+function ncToggleIdle(i){const tr=document.getElementById('nc-idle-'+i);if(tr)tr.classList.toggle('hidden');}
 function ncRenderIdle(s,e){
   const sel=ncSelSet(),cov=ncModel.callCodis;
   const CATS=['d0','r1','r2','r3'],LBL={d0:'신규',r1:'재콜',r2:'재재콜',r3:'회수콜'};
@@ -14589,18 +14590,28 @@ function ncRenderIdle(s,e){
     const put=o=>{o.db++;o.tr+=ev.tr;if(!ev.tr)o.zero++;else if(ev.tr<=2)o.low++;};
     if(!cov.has(ev.codi)){noCti.set(ev.codi,(noCti.get(ev.codi)||0)+1);continue;}   // CTI 미수집 코디는 분리
     put(byCat[c]);
-    let m=byCodi.get(ev.codi);if(!m){m=B();byCodi.set(ev.codi,m);}put(m);
+    let m=byCodi.get(ev.codi);
+    if(!m){m={all:B(),cat:{}};CATS.forEach(x=>m.cat[x]=B());byCodi.set(ev.codi,m);}
+    put(m.all);put(m.cat[c]);                                   // 코디×단계 분해(펼치기용)
   }
-  const line=(lbl,o,col)=>`<tr><td class="nc-lbl nc-l">${col?`<span class="nc-dot" style="background:${col}"></span>`:''}${lbl}</td>
-    <td>${ncC(o.db)}</td><td>${ncC(o.zero)}</td><td class="nc-pctcol${o.db&&o.zero/o.db>=.2?' nc-bad':''}">${ncPct(o.zero,o.db)}</td>
-    <td>${ncC(o.low)}</td><td class="nc-pctcol">${ncPct(o.low,o.db)}</td><td class="nc-avgcol">${ncAvg(o.tr,o.db)}</td></tr>`;
+  const cells=o=>`<td>${ncC(o.db)}</td><td>${ncC(o.zero)}</td><td class="nc-pctcol${o.db&&o.zero/o.db>=.2?' nc-bad':''}">${ncPct(o.zero,o.db)}</td>`
+    +`<td>${ncC(o.low)}</td><td class="nc-pctcol">${ncPct(o.low,o.db)}</td><td class="nc-avgcol">${ncAvg(o.tr,o.db)}</td>`;
+  const line=(lbl,o,col)=>`<tr><td class="nc-lbl nc-l">${col?`<span class="nc-dot" style="background:${col}"></span>`:''}${lbl}</td>${cells(o)}</tr>`;
   const tot=B();CATS.forEach(c=>{tot.db+=byCat[c].db;tot.zero+=byCat[c].zero;tot.low+=byCat[c].low;tot.tr+=byCat[c].tr;});
   const catRows=CATS.map(c=>line(LBL[c],byCat[c],NC_CAT_COLOR[c])).join('');
-  const codis=Array.from(byCodi.keys()).filter(k=>byCodi.get(k).db>=10)
-    .sort((a,b)=>{const x=byCodi.get(a),y=byCodi.get(b);return (y.zero/y.db)-(x.zero/x.db);});
-  let codiRows=codis.map(k=>line(k,byCodi.get(k))).join('');
-  if(!codiRows)codiRows=`<tr><td colspan="7" class="nc-empty">데이터 없음</td></tr>`;
   const head=first=>`<thead><tr class="nc-sub"><th>${first}</th><th>분배DB</th><th>미시도</th><th>미시도율</th><th>저시도(1~2회)</th><th>저시도율</th><th>평균시도</th></tr></thead>`;
+  const codis=Array.from(byCodi.keys()).filter(k=>byCodi.get(k).all.db>=10)
+    .sort((a,b)=>{const x=byCodi.get(a).all,y=byCodi.get(b).all;return (y.zero/y.db)-(x.zero/x.db);});
+  let codiRows=codis.map((k,i)=>{
+    const m=byCodi.get(k);
+    const det=CATS.filter(c=>m.cat[c].db).map(c=>
+      `<tr><td class="nc-lbl nc-l"><span class="nc-dot" style="background:${NC_CAT_COLOR[c]}"></span>${LBL[c]}</td>${cells(m.cat[c])}</tr>`).join('')
+      ||`<tr><td colspan="7" class="nc-empty">분배 DB 없음</td></tr>`;
+    return `<tr><td class="nc-lbl nc-l"><button class="nc-expand" onclick="ncToggleIdle(${i})">▶</button>${k}</td>${cells(m.all)}</tr>`
+      +`<tr class="nc-pd hidden" id="nc-idle-${i}"><td colspan="7"><div class="nc-pd-wrap"><div class="nc-pd-h">${k} · 단계별 분해</div>`
+      +`<table class="nc-tbl">${head('단계')}<tbody>${det}</tbody></table></div></td></tr>`;
+  }).join('');
+  if(!codiRows)codiRows=`<tr><td colspan="7" class="nc-empty">데이터 없음</td></tr>`;
   return `<div class="nc-sec"><div class="nc-sec-h">미시도 / 저시도 DB<span class="nc-sub-s">분배받고 한 번도 안 건 DB · 분배일 기준</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
       <div><div class="nc-sub-h">단계별</div><div class="nc-tblwrap"><table class="nc-tbl">${head('단계')}<tbody>
