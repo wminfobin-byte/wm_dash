@@ -14696,7 +14696,7 @@ function ncRenderMatrix(agg,tot){
   const totLabel=ncAllLangs()?'전체':`선택 ${scope.length}개 언어`;
   let body=ncMatrixRow(totLabel,tot,'nc-total');
   for(const l of scope){const g=agg.lang.get(l)||ncBlank();body+=ncMatrixRow(l,g);}
-  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 성과<span class="nc-sub-s">DB수는 재콜 포함 전체 / 계약률·연결률·유효율은 각 모수 대비</span></div>
+  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 성과<span class="nc-sub-s">콜 = 통화일 기준</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader()}<tbody>${body}</tbody></table></div>
     </div>`;
 }
@@ -14716,12 +14716,12 @@ function ncAggByDate(s,e){
 function ncRenderDaily(s,e){
   const byDay=ncCached('byDay',s,e,()=>ncAggByDate(s,e));
   const days=Array.from(byDay.keys()).sort();
-  if(!days.length)return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과</div><div class="nc-empty">데이터 없음</div></div>`;
+  if(!days.length)return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과<span class="nc-sub-s">DB=분배일 · 계약=신청일 · 콜=통화일</span></div><div class="nc-empty">데이터 없음</div></div>`;
   const tot=ncSum(days.map(d=>byDay.get(d)));
   let body=ncMatrixRow('합계',tot,'nc-total');
   for(const d of days)body+=ncMatrixRow(ncDayLabel(d),byDay.get(d));
   const langLbl=ncAllLangs()?'전체 언어':`선택 ${ncScopeLangs().length}개 언어`;
-  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과</div>
+  return `<div class="nc-sec"><div class="nc-sec-h">언어별 · 계약별 · 일자별 성과<span class="nc-sub-s">DB=분배일 · 계약=신청일 · 콜=통화일</span></div>
     <div class="nc-tblwrap"><table class="nc-tbl nc-matrix">${ncMatrixHeader('일자')}<tbody>${body}</tbody></table></div></div>`;
 }
 // 개인별 컬럼: 코디 · DB수 · 실계약 · 계약률 · 일계약 · 이전계약 · 신규콜(시도·유효) · 이전콜(시도·유효)
