@@ -5266,20 +5266,24 @@ function cdRenderMonthlyTable(data){
 }
 
 // ── 주차별 ──
-// 주차 기준 = Math.ceil(일자/7) → 1~7 / 8~14 / 15~21 / 22~28 / 29~말일.
-// 5주차는 달 길이에 따라 2~3일밖에 안 되므로 라벨에 실제 기간을 함께 표기한다.
+// 주차 = 달력 주(일요일~토요일). 키는 그 주 일요일 날짜(YYYY-MM-DD)라 문자열 정렬이 곧 시간순.
+// 달을 걸치는 주는 ISO 방식으로 "목요일이 속한 달"에 통째로 귀속시킨다 → 모든 주가 온전한 7일.
+//  (그 대신 월별 표 합계와 주차별 표 합계는 경계 며칠만큼 어긋날 수 있다)
+function cdWeekKey(d){
+  const s=new Date(d.getFullYear(),d.getMonth(),d.getDate()-d.getDay());   // 그 주의 일요일
+  return `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}-${String(s.getDate()).padStart(2,'0')}`;
+}
 function cdWeekLabel(wk){
-  const m=String(wk).match(/^(\d{4})-(\d{2})-W(\d+)$/);
+  const m=String(wk).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(!m)return wk;
-  const y=+m[1],mo=+m[2],w=+m[3];
-  const last=new Date(y,mo,0).getDate();
-  const s=(w-1)*7+1,e=Math.min(w*7,last);
-  return `${mo}월 ${w}주차 (${mo}/${s}~${mo}/${e})`;
+  const y=+m[1],mo=+m[2]-1,dd=+m[3];
+  const s=new Date(y,mo,dd),e=new Date(y,mo,dd+6),th=new Date(y,mo,dd+4);  // 일 / 토 / 목(귀속 기준)
+  const w=Math.ceil(th.getDate()/7);   // 그 달의 첫 목요일이 1~7일이라 목요일 일자로 주차가 나온다
+  return `${th.getMonth()+1}월 ${w}주차 (${s.getMonth()+1}/${s.getDate()}~${e.getMonth()+1}/${e.getDate()})`;
 }
 function cdRenderWeeklyTable(data){
   const byBW={},byW={};
-  for(const c of data){if(!c.appDate)continue;const d=c.appDate;const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const w=Math.ceil(d.getDate()/7);const wk=`${mk}-W${w}`;
+  for(const c of data){if(!c.appDate)continue;const wk=cdWeekKey(c.appDate);
     if(!byW[wk])byW[wk]=cdNewBucket();cdAddToBucket(byW[wk],c);
     const bk=`${c.brand}|${wk}`;if(!byBW[bk])byBW[bk]=cdNewBucket();cdAddToBucket(byBW[bk],c);}
   const weeks=Object.keys(byW).sort();
@@ -5421,8 +5425,7 @@ function cdRenderBkView(viewKey,filtered){
 
   // 주차별
   const byBW={};
-  for(const c of filtered){if(!c.appDate)continue;const d=c.appDate;const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const w=Math.ceil(d.getDate()/7);const wk=`${mk}-W${w}`;
+  for(const c of filtered){if(!c.appDate)continue;const wk=cdWeekKey(c.appDate);
     const bwk=`${c.brand}|${wk}`;if(!byBW[bwk])byBW[bwk]=cdNewBucket();cdAddToBucket(byBW[bwk],c);}
   const weeks=[...new Set(Object.keys(byBW).map(k=>k.split('|')[1]))].sort();
   let wHtml=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
