@@ -9818,11 +9818,42 @@ async function gdApplyCmsGrade(inputEl){
   }
 }
 
+// 워크시트에서 지정한 행들을 실제로 제거하고 아래 행을 끌어올린다(셀 서식 유지).
+// XLSX에 행 삭제 API가 없어 셀 객체를 그대로 재배치하는 방식.
+function gdDeleteSheetRows(ws, delSet){
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  const del=[...delSet].sort((a,b)=>a-b);
+  const shiftOf=r=>{let n=0;for(const d of del) if(d<r) n++; return n;};
+  const out={};
+  for(const k of Object.keys(ws)) if(k[0]==='!') out[k]=ws[k];
+  for(let r=range.s.r;r<=range.e.r;r++){
+    if(delSet.has(r)) continue;
+    const nr=r-shiftOf(r);
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const cell=ws[XLSX.utils.encode_cell({r,c})];
+      if(cell===undefined) continue;
+      out[XLSX.utils.encode_cell({r:nr,c})]=cell;
+    }
+  }
+  const lastR=Math.max(range.s.r, range.e.r-del.length);
+  out['!ref']=XLSX.utils.encode_range({s:{r:range.s.r,c:range.s.c},e:{r:lastR,c:range.e.c}});
+  if(ws['!merges']){
+    out['!merges']=ws['!merges'].filter(m=>{
+      for(let r=m.s.r;r<=m.e.r;r++) if(delSet.has(r)) return false;
+      return true;
+    }).map(m=>({s:{r:m.s.r-shiftOf(m.s.r),c:m.s.c},e:{r:m.e.r-shiftOf(m.e.r),c:m.e.c}}));
+  }
+  if(ws['!rows']) out['!rows']=ws['!rows'].filter((_,i)=>!delSet.has(i));
+  return out;
+}
+
 // ── CMS 15-4 코디그룹 현재명단 파일에 차등 결과 반영 후 다운로드 ──
 // CMS 15-4에서 받은 "코디그룹_현재명단" 양식(코디명·코디키·그룹명·그룹키)을 그대로 받아,
 // 등급 그룹(그룹명 A/B/C/D등급 = 그룹키 1~4) 행만 현재 회차 차등 등급으로 덮어쓴다.
 // 이 양식은 한 코디가 여러 그룹(TB·메타안경 등)에 중복 등재되므로 등급 그룹 행만 건드리고
 // 나머지 행(제2외국어·톡이즈·TB·빈 그룹 등)은 이름이 같아도 절대 수정하지 않는다.
+// 이 파일은 "분배용" 그룹 설정이므로 H등급(분배 완전 제외) 코디는 등급 그룹 행 자체를 삭제한다.
+// (등급 그룹 외 행에 있는 H 코디는 삭제하지 않는다)
 async function gdApplyGroupList(inputEl){
   const f=inputEl.files&&inputEl.files[0]; inputEl.value='';
   if(!f) return;
@@ -9883,7 +9914,7 @@ async function gdApplyGroupList(inputEl){
       bareToMember[b]=bareToMember[b]?'__DUP__':mn;
     }
 
-    const changed=[], hSkipped=[], hitNames=new Set();
+    const changed=[], hSkipped=[], deleted=[], delRows=new Set(), hitNames=new Set();
     let matched=0, unchanged=0, targetRows=0;
     for(let r=hr+1;r<=range.e.r;r++){
       const gnAddr=XLSX.utils.encode_cell({r,c:grpNameCol});
@@ -9909,6 +9940,9 @@ async function gdApplyGroupList(inputEl){
       if(!member) continue; // 대시보드에 없는 코디 → 건드리지 않음
       matched++; hitNames.add(member);
       const newG=grades[member];
+      if(newG==='H'){ // 분배 완전 제외 → 등급 그룹 행 자체를 삭제
+        delRows.add(r); deleted.push(nm+'('+(curName||'-')+')'); continue;
+      }
       const newKey=keyMap[newG];
       if(newKey===undefined){ hSkipped.push(`${nm}(${curName||'-'} → ${newG})`); continue; }
       const newName=newG+'등급';
@@ -9925,6 +9959,7 @@ async function gdApplyGroupList(inputEl){
       }
       changed.push({name:nm, from:(curName||'(빈값)')+(curKey!==null?`/${curKey}`:''), to:newName+`/${newKey}`});
     }
+    if(delRows.size) wb.Sheets[sn]=gdDeleteSheetRows(ws, delRows);
     const notInFile=Object.keys(grades).filter(n=>!hitNames.has(n)).sort((a,b)=>a.localeCompare(b,'ko'));
     const base=f.name.replace(/\.xlsx?$/i,'');
     const outName=`${base}_차등반영.xlsx`;
@@ -9935,6 +9970,10 @@ async function gdApplyGroupList(inputEl){
       `· 매칭된 코디: ${matched}명\n`+
       `· 등급 변경: ${changed.length}건\n`+
       `· 이미 동일(변경 없음): ${unchanged}명`;
+    if(deleted.length){
+      msg+='\n· H등급(분배 제외) → 등급 그룹 행 삭제: '+deleted.length+'건\n   '
+        +deleted.slice(0,15).join(', ')+(deleted.length>15?' 외 '+(deleted.length-15)+'건':'');
+    }
     if(hSkipped.length){
       msg+=`\n· ⚠ 파일에 해당 등급 그룹이 없어 미변경: ${hSkipped.length}명\n   ${hSkipped.slice(0,10).join(', ')}${hSkipped.length>10?` 외 ${hSkipped.length-10}명`:''}`;
     }
