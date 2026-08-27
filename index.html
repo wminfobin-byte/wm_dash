@@ -63,6 +63,11 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--bg)
 .upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .upload-box{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:.2s;position:relative}
 .upload-box:hover,.upload-box.dragover{border-color:var(--primary);background:var(--primary-light)}
+.gd-grade-drop{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border:2px dashed #c4c4c4;border-radius:8px;color:#777;font-size:12px;font-weight:700;line-height:1.4;cursor:default;transition:.15s;user-select:none}
+.gd-grade-drop small{font-weight:500;color:#aaa}
+.gd-grade-drop.dragover{border-color:var(--primary);background:var(--primary-light);color:var(--primary)}
+.gd-grade-drop.dragover small{color:var(--primary)}
+.btn.dragover{outline:2px dashed var(--primary);outline-offset:2px}
 .upload-box.loaded{border-color:var(--success);background:#e8faf8}
 .upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .upload-box .icon{font-size:30px;margin-bottom:6px}
@@ -2388,10 +2393,11 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadChangesExcel()" title="이번 회차와 직전 회차 간 등급이 변동된 코디만 추출">변동 Excel 다운로드</button>
-      <button class="btn btn-success btn-sm" onclick="document.getElementById('gdCmsGradeInput').click()" title="CMS 종합등급 파일을 올리면 대시보드에 있는 상담원만 현재 등급으로 반영해 같은 양식으로 다운로드">CMS 등급 반영</button>
+      <button class="btn btn-success btn-sm" id="gdBtnCmsGrade" onclick="document.getElementById('gdCmsGradeInput').click()" title="CMS 종합등급 파일을 올리면 대시보드에 있는 상담원만 현재 등급으로 반영해 같은 양식으로 다운로드 (파일을 이 버튼 위로 끌어다 놓아도 됩니다)">CMS 등급 반영</button>
       <input type="file" id="gdCmsGradeInput" accept=".xlsx,.xls" style="display:none" onchange="gdApplyCmsGrade(this)">
-      <button class="btn btn-success btn-sm" onclick="document.getElementById('gdGroupListInput').click()" title="CMS 15-4 코디그룹 현재명단 파일을 올리면 등급 그룹(A~D등급 / 그룹키 1~4) 행만 현재 차등 등급으로 바꿔 같은 양식으로 다운로드">15-4 등급 반영</button>
+      <button class="btn btn-success btn-sm" id="gdBtnGroupList" onclick="document.getElementById('gdGroupListInput').click()" title="CMS 15-4 코디그룹 현재명단 파일을 올리면 등급 그룹(A~D등급 / 그룹키 1~4) 행만 현재 차등 등급으로 바꿔 같은 양식으로 다운로드 (파일을 이 버튼 위로 끌어다 놓아도 됩니다)">15-4 등급 반영</button>
       <input type="file" id="gdGroupListInput" accept=".xlsx,.xls" style="display:none" onchange="gdApplyGroupList(this)">
+      <span class="gd-grade-drop" id="gdGradeDrop" title="CMS 종합등급 파일 또는 15-4 코디그룹 현재명단 파일을 여기에 끌어다 놓으면 양식을 자동 판별해 등급을 반영한 파일을 내려받습니다">⬇ 등급 파일 드래그&amp;드롭 <small>양식 자동 판별</small></span>
     </div>
     <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
@@ -9746,6 +9752,69 @@ async function gdDownloadChangesExcel(){
   }
 }
 
+// ── 등급 반영 파일 드래그&드롭 ──
+// CMS 종합등급 / 15-4 코디그룹 현재명단 두 양식을 헤더로 자동 판별해 알맞은 반영 함수로 넘긴다.
+// 버튼 위에 직접 떨어뜨리면 판별 없이 그 버튼의 양식으로 처리한다.
+async function gdDetectGradeFileKind(f){
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',sheetRows:12});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    if(!ws||!ws['!ref']) return null;
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    const heads=new Set();
+    for(let r=range.s.r;r<=Math.min(range.e.r,range.s.r+9);r++){
+      for(let c=range.s.c;c<=range.e.c;c++){
+        const cell=ws[XLSX.utils.encode_cell({r,c})];
+        if(cell&&cell.v!=null) heads.add(String(cell.v).replace(/\s/g,''));
+      }
+    }
+    if(heads.has('코디명')&&heads.has('그룹명')) return 'list';
+    if(heads.has('상담원')&&heads.has('종합등급')) return 'cms';
+    return null;
+  }catch(e){ console.warn('[gd] 등급 파일 판별 실패',e); return null; }
+}
+
+async function gdHandleGradeDrop(files, forceKind){
+  const f=files&&files[0];
+  if(!f) return;
+  if(!/\.xlsx?$/i.test(f.name)){ alert('엑셀 파일(.xlsx/.xls)만 반영할 수 있습니다.\n\n받은 파일: '+f.name); return; }
+  if(files.length>1) alert('파일은 하나씩 처리합니다.\n첫 번째 파일만 반영합니다 — '+f.name);
+  const kind=forceKind||await gdDetectGradeFileKind(f);
+  if(!kind){
+    alert('등급 반영 양식을 알아보지 못했습니다 — '+f.name+'\n\n· CMS 종합등급: "상담원"·"종합등급" 헤더\n· 15-4 코디그룹: "코디명"·"그룹명" 헤더\n\n둘 중 하나인지 확인하거나, 원하는 버튼 위에 직접 끌어다 놓아주세요.');
+    return;
+  }
+  if(kind==='cms') await gdApplyCmsGradeFile(f);
+  else await gdApplyGroupListFile(f);
+}
+
+function gdInitGradeDrop(){
+  const targets=[
+    [document.getElementById('gdGradeDrop'), null],   // 자동 판별
+    [document.getElementById('gdBtnCmsGrade'), 'cms'],
+    [document.getElementById('gdBtnGroupList'), 'list']
+  ];
+  for(const [el,kind] of targets){
+    if(!el || el.dataset.gdDrop) continue;
+    el.dataset.gdDrop='1';
+    el.addEventListener('dragover',e=>{
+      if(!(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes('Files'))) return;
+      e.preventDefault(); e.stopPropagation();
+      try{ e.dataTransfer.dropEffect='copy'; }catch(_){}
+      el.classList.add('dragover');
+    });
+    el.addEventListener('dragleave',()=>el.classList.remove('dragover'));
+    el.addEventListener('drop',e=>{
+      e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover');
+      const fl=e.dataTransfer&&e.dataTransfer.files;
+      if(fl&&fl.length) gdHandleGradeDrop(fl, kind);
+    });
+  }
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',gdInitGradeDrop);
+else gdInitGradeDrop();
+
 // ── CMS 종합등급 파일에 차등 결과 반영 후 다운로드 ──
 // CMS가 업로드한 양식(WM_종합등급)을 그대로 받아, "상담원" 이름이 대시보드 멤버와
 // 일치하는 행만 "종합등급" 열을 현재 회차 등급(A/B/C/D/H)으로 덮어쓴다.
@@ -9753,6 +9822,9 @@ async function gdDownloadChangesExcel(){
 // 이름은 명단·CMS 모두 동일한 "(R_센터)이름" 형식이라 전체 이름 정확 매칭으로 안전.
 async function gdApplyCmsGrade(inputEl){
   const f=inputEl.files&&inputEl.files[0]; inputEl.value='';
+  return gdApplyCmsGradeFile(f);
+}
+async function gdApplyCmsGradeFile(f){
   if(!f) return;
   if(!gdResult || !gdResult.groups || !Object.keys(gdResult.groups).length){
     alert('먼저 대시보드를 생성해주세요. (반영할 차등 등급이 없습니다)'); return;
@@ -9856,6 +9928,9 @@ function gdDeleteSheetRows(ws, delSet){
 // (등급 그룹 외 행에 있는 H 코디는 삭제하지 않는다)
 async function gdApplyGroupList(inputEl){
   const f=inputEl.files&&inputEl.files[0]; inputEl.value='';
+  return gdApplyGroupListFile(f);
+}
+async function gdApplyGroupListFile(f){
   if(!f) return;
   if(!gdResult || !gdResult.groups || !Object.keys(gdResult.groups).length){
     alert('먼저 대시보드를 생성해주세요. (반영할 차등 등급이 없습니다)'); return;
