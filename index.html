@@ -2390,6 +2390,8 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
       <button class="btn btn-outline btn-sm" onclick="gdDownloadChangesExcel()" title="이번 회차와 직전 회차 간 등급이 변동된 코디만 추출">변동 Excel 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="document.getElementById('gdCmsGradeInput').click()" title="CMS 종합등급 파일을 올리면 대시보드에 있는 상담원만 현재 등급으로 반영해 같은 양식으로 다운로드">CMS 등급 반영</button>
       <input type="file" id="gdCmsGradeInput" accept=".xlsx,.xls" style="display:none" onchange="gdApplyCmsGrade(this)">
+      <button class="btn btn-success btn-sm" onclick="document.getElementById('gdGroupListInput').click()" title="CMS 15-4 코디그룹 현재명단 파일을 올리면 등급 그룹(A~D등급 / 그룹키 1~4) 행만 현재 차등 등급으로 바꿔 같은 양식으로 다운로드">15-4 등급 반영</button>
+      <input type="file" id="gdGroupListInput" accept=".xlsx,.xls" style="display:none" onchange="gdApplyGroupList(this)">
     </div>
     <div class="table-section" id="gdCaptureArea">
       <h3>차등 성과</h3>
@@ -9813,6 +9815,140 @@ async function gdApplyCmsGrade(inputEl){
   }catch(err){
     console.error('[gd] CMS 등급 반영 오류',err);
     alert('CMS 파일 처리 오류: '+(err&&err.message||err));
+  }
+}
+
+// ── CMS 15-4 코디그룹 현재명단 파일에 차등 결과 반영 후 다운로드 ──
+// CMS 15-4에서 받은 "코디그룹_현재명단" 양식(코디명·코디키·그룹명·그룹키)을 그대로 받아,
+// 등급 그룹(그룹명 A/B/C/D등급 = 그룹키 1~4) 행만 현재 회차 차등 등급으로 덮어쓴다.
+// 이 양식은 한 코디가 여러 그룹(TB·메타안경 등)에 중복 등재되므로 등급 그룹 행만 건드리고
+// 나머지 행(제2외국어·톡이즈·TB·빈 그룹 등)은 이름이 같아도 절대 수정하지 않는다.
+async function gdApplyGroupList(inputEl){
+  const f=inputEl.files&&inputEl.files[0]; inputEl.value='';
+  if(!f) return;
+  if(!gdResult || !gdResult.groups || !Object.keys(gdResult.groups).length){
+    alert('먼저 대시보드를 생성해주세요. (반영할 차등 등급이 없습니다)'); return;
+  }
+  const grades=gdResult.groups; // {전체이름: 'A'|'B'|'C'|'D'|'H'}
+  const bare=n=>String(n||'').replace(/^\([^)]*\)\s*/,'').trim();
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellStyles:true});
+    const sn=wb.SheetNames[0];
+    const ws=wb.Sheets[sn];
+    if(!ws||!ws['!ref']){ alert('빈 시트입니다.'); return; }
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    // 헤더 행 탐색 (상단 10행 이내)
+    let hr=-1, nameCol=-1, grpNameCol=-1, grpKeyCol=-1;
+    for(let r=range.s.r; r<=Math.min(range.e.r, range.s.r+9); r++){
+      let nC=-1,gnC=-1,gkC=-1;
+      for(let c=range.s.c;c<=range.e.c;c++){
+        const h=ws[XLSX.utils.encode_cell({r,c})];
+        const v=h?String(h.v||'').replace(/\s/g,''):'';
+        if(v==='코디명') nC=c;
+        if(v==='그룹명') gnC=c;
+        if(v==='그룹키') gkC=c;
+      }
+      if(nC>=0&&gnC>=0){ hr=r; nameCol=nC; grpNameCol=gnC; grpKeyCol=gkC; break; }
+    }
+    if(hr<0){
+      alert('15-4 코디그룹 현재명단 양식이 아닙니다.\n("코디명"·"그룹명" 헤더를 찾지 못했습니다)'); return;
+    }
+    // 파일에서 등급 그룹명↔그룹키 매핑 학습 (없으면 기본값 A1/B2/C3/D4)
+    const keyMap={A:1,B:2,C:3,D:4};
+    const gradeOf=s=>{ const m=String(s||'').replace(/\s/g,'').match(/^([ABCDH])등급$/); return m?m[1]:null; };
+    for(let r=hr+1;r<=range.e.r;r++){
+      const gn=ws[XLSX.utils.encode_cell({r,c:grpNameCol})];
+      const g=gradeOf(gn&&gn.v);
+      if(!g) continue;
+      if(grpKeyCol>=0){
+        const gk=ws[XLSX.utils.encode_cell({r,c:grpKeyCol})];
+        const kv=gk?Number(gk.v):NaN;
+        if(Number.isFinite(kv)) keyMap[g]=kv;
+      }
+    }
+    // 대상 행 = 등급 그룹(그룹명 A~D/H등급 또는 그룹키가 등급 키 집합)
+    const targetKeys=new Set(Object.values(keyMap).filter(v=>Number.isFinite(v)));
+    // 파일 내 이름 인덱스 (짧은이름 폴백용)
+    const bareCount={};
+    for(let r=hr+1;r<=range.e.r;r++){
+      const nc=ws[XLSX.utils.encode_cell({r,c:nameCol})];
+      const nm=nc?String(nc.v||'').trim():''; if(!nm) continue;
+      const b=bare(nm); bareCount[b]=(bareCount[b]||0)+1;
+    }
+    // 대시보드 멤버 → 파일 이름 매칭 (전체이름 우선, 없으면 유일한 짧은이름)
+    const bareToMember={};
+    for(const mn of Object.keys(grades)){
+      const b=bare(mn);
+      bareToMember[b]=bareToMember[b]?'__DUP__':mn;
+    }
+
+    const changed=[], hSkipped=[], hitNames=new Set();
+    let matched=0, unchanged=0, targetRows=0;
+    for(let r=hr+1;r<=range.e.r;r++){
+      const gnAddr=XLSX.utils.encode_cell({r,c:grpNameCol});
+      const gnCell=ws[gnAddr];
+      const curName=gnCell?String(gnCell.v??'').trim():'';
+      let curKey=null;
+      if(grpKeyCol>=0){
+        const gk=ws[XLSX.utils.encode_cell({r,c:grpKeyCol})];
+        const kv=gk?Number(gk.v):NaN;
+        if(Number.isFinite(kv)&&gk&&String(gk.v).trim()!=='') curKey=kv;
+      }
+      const isTarget = gradeOf(curName)!==null || (curKey!==null && targetKeys.has(curKey));
+      if(!isTarget) continue; // 등급 그룹 외 행은 그대로 둔다
+      targetRows++;
+      const nc=ws[XLSX.utils.encode_cell({r,c:nameCol})];
+      const nm=nc?String(nc.v||'').trim():'';
+      if(!nm) continue;
+      let member = (grades[nm]!==undefined) ? nm : null;
+      if(!member){
+        const cand=bareToMember[bare(nm)];
+        if(cand && cand!=='__DUP__' && bareCount[bare(nm)]===1) member=cand;
+      }
+      if(!member) continue; // 대시보드에 없는 코디 → 건드리지 않음
+      matched++; hitNames.add(member);
+      const newG=grades[member];
+      const newKey=keyMap[newG];
+      if(newKey===undefined){ hSkipped.push(`${nm}(${curName||'-'} → ${newG})`); continue; }
+      const newName=newG+'등급';
+      const sameName=(curName===newName);
+      const sameKey=(grpKeyCol<0)||(curKey===newKey);
+      if(sameName&&sameKey){ unchanged++; continue; }
+      if(gnCell){ gnCell.v=newName; gnCell.w=newName; gnCell.t='s'; delete gnCell.f; }
+      else ws[gnAddr]={t:'s',v:newName,w:newName};
+      if(grpKeyCol>=0){
+        const gkAddr=XLSX.utils.encode_cell({r,c:grpKeyCol});
+        const gkCell=ws[gkAddr];
+        if(gkCell){ gkCell.v=newKey; gkCell.w=String(newKey); gkCell.t='n'; delete gkCell.f; }
+        else ws[gkAddr]={t:'n',v:newKey,w:String(newKey)};
+      }
+      changed.push({name:nm, from:(curName||'(빈값)')+(curKey!==null?`/${curKey}`:''), to:newName+`/${newKey}`});
+    }
+    const notInFile=Object.keys(grades).filter(n=>!hitNames.has(n)).sort((a,b)=>a.localeCompare(b,'ko'));
+    const base=f.name.replace(/\.xlsx?$/i,'');
+    const outName=`${base}_차등반영.xlsx`;
+    XLSX.writeFile(wb, outName, {cellStyles:true, bookSST:true});
+
+    let msg=`✅ 15-4 코디그룹 등급 반영 완료 — ${outName}\n\n`+
+      `· 등급 그룹(${[...targetKeys].sort((a,b)=>a-b).join('/')}) 행: ${targetRows}건\n`+
+      `· 매칭된 코디: ${matched}명\n`+
+      `· 등급 변경: ${changed.length}건\n`+
+      `· 이미 동일(변경 없음): ${unchanged}명`;
+    if(hSkipped.length){
+      msg+=`\n· ⚠ 파일에 해당 등급 그룹이 없어 미변경: ${hSkipped.length}명\n   ${hSkipped.slice(0,10).join(', ')}${hSkipped.length>10?` 외 ${hSkipped.length-10}명`:''}`;
+    }
+    if(notInFile.length){
+      msg+=`\n· ⚠ 대시보드엔 있으나 파일의 등급 그룹엔 없는 코디: ${notInFile.length}명\n   ${notInFile.slice(0,15).join(', ')}${notInFile.length>15?` 외 ${notInFile.length-15}명`:''}`;
+    }
+    if(changed.length){
+      const list=changed.slice(0,30).map(c=>`  ${c.name}: ${c.from} → ${c.to}`).join('\n');
+      msg+=`\n\n[변경 내역]\n${list}${changed.length>30?`\n  …외 ${changed.length-30}건`:''}`;
+    }
+    alert(msg);
+  }catch(err){
+    console.error('[gd] 15-4 등급 반영 오류',err);
+    alert('15-4 코디그룹 파일 처리 오류: '+(err&&err.message||err));
   }
 }
 
