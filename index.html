@@ -15800,7 +15800,6 @@ let acIdb=null, acReports=[], acLoaded=false, acModel=null, acChart=null;
 let acFilter={start:'',end:'',media:new Set(),pkg:new Set(),quick:'thisMonth'};
 let acExportScope='last';      // last=최근 보고서 / range=필터 기간 전체
 let acExportFull=false;        // 광고비·DB수 열 포함
-let acExportSkipDash=false;    // 값 없는(-) 행 제외
 let acCumMonth='';             // 월 누적 단가 표에서 보는 월
 const AC_COLORS=['#4361ee','#2ec4b6','#f0920e','#d1182b','#7c3aed','#0891b2','#16a34a','#db2777','#f59e0b','#64748b'];
 
@@ -16146,7 +16145,6 @@ function acExportSection(){
         <button class="${acExportScope==='range'?'active':''}" onclick="acSetScope('range')">필터 기간 전체</button>
       </div>
       <label class="ac-ck"><input type="checkbox" ${acExportFull?'checked':''} onchange="acExportFull=this.checked;acRenderExport()"> 광고비·DB수 열 포함</label>
-      <label class="ac-ck"><input type="checkbox" ${acExportSkipDash?'checked':''} onchange="acExportSkipDash=this.checked;acRenderExport()"> 값 없는(-) 행 제외</label>
       <button class="sp-btn green" style="margin-left:auto" onclick="acDownloadExcel()">엑셀 다운로드</button>
     </div>
     <div class="ac-grid2">
@@ -16187,7 +16185,7 @@ function acExportCumRows(){
 }
 function acTsv(rows,full){
   const head=full?['일자','매체','패키지','광고비','DB수','DB단가']:['일자','매체','패키지','DB단가'];
-  const body=rows.filter(r=>!acExportSkipDash||r.cpa!=null).map(r=>{
+  const body=rows.filter(r=>r.cpa!=null).map(r=>{
     const base=[r.d,r.media,r.pkg];
     if(full)base.push(r.cost==null?'-':r.cost,r.db==null?'-':r.db);
     base.push(r.cpa==null?'-':Math.round(r.cpa));
@@ -16201,8 +16199,8 @@ function acRenderExport(){
   if(dt)dt.value=acTsv(d,acExportFull);
   if(ct)ct.value=acTsv(c,false);
   const dc=document.getElementById('acDailyCnt'), cc=document.getElementById('acCumCnt');
-  if(dc)dc.textContent=`${d.filter(r=>!acExportSkipDash||r.cpa!=null).length}행`;
-  if(cc)cc.textContent=`${c.filter(r=>!acExportSkipDash||r.cpa!=null).length}행`;
+  if(dc)dc.textContent=`${d.filter(r=>r.cpa!=null).length}행`;
+  if(cc)cc.textContent=`${c.filter(r=>r.cpa!=null).length}행`;
 }
 function acCopy(id,btn){
   const el=document.getElementById(id);if(!el)return;
@@ -16375,9 +16373,9 @@ async function acDownloadExcel(){
     ws['!cols']=widths.map(w=>({wch:w}));
     XLSX.utils.book_append_sheet(wb,ws,name);
   };
-  const dRows=acExportDailyRows().filter(r=>!acExportSkipDash||r.cpa!=null);
+  const dRows=acExportDailyRows().filter(r=>r.cpa!=null);
   mk([['일자','매체','패키지','광고비','DB수','DB단가']].concat(dRows.map(r=>[r.d,r.media,r.pkg,r.cost==null?'-':r.cost,r.db==null?'-':r.db,r.cpa==null?'-':Math.round(r.cpa)])),'당일',[12,10,10,14,8,12]);
-  const cRows=acExportCumRows().filter(r=>!acExportSkipDash||r.cpa!=null);
+  const cRows=acExportCumRows().filter(r=>r.cpa!=null);
   mk([['일자','매체','패키지','DB단가']].concat(cRows.map(r=>[r.d,r.media,r.pkg,r.cpa==null?'-':Math.round(r.cpa)])),'월누적',[12,10,10,12]);
   const ms=acMonthStats();
   mk([['월','데이터 일수','광고비','DB수','평균 DB단가','일평균 광고비']].concat([...ms.keys()].sort().map(ym=>{const o=ms.get(ym);
