@@ -743,6 +743,45 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 .sp-drill h3{margin:0 0 4px;font-size:19px}
 .sp-drill .close{float:right;font-size:26px;line-height:1;background:none;border:none;cursor:pointer;color:#94a3b8}
 .sp-empty{text-align:center;padding:80px 20px;color:var(--gray)}
+
+/* 원격 변경 알림 배너 */
+.wm-sync-new{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;align-items:center;gap:12px;background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.35);font-size:13px;font-weight:600;max-width:420px}
+.wm-sync-new button{white-space:nowrap}
+
+/* ═══════════ 광고비 (ac) ═══════════ */
+#page-ad-cost .container{max-width:100%;padding:24px 36px}
+#page-ad-cost .sp-kpi-grid{margin-top:18px}
+.ac-chips{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ac-chip{padding:5px 11px;border:1.5px solid var(--border);border-radius:20px;background:#fff;font-size:12px;font-weight:700;color:var(--gray);cursor:pointer;font-family:inherit;transition:.15s}
+.ac-chip:hover{border-color:var(--primary);color:var(--primary)}
+.ac-chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.ac-bar-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#f8fafc;border:1px solid #eef1f6;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.ac-ck{display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--dark);cursor:pointer}
+.ac-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1100px){.ac-grid2{grid-template-columns:1fr}}
+.ac-ta-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ac-ta{width:100%;height:230px;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:11.5px;line-height:1.55;padding:10px 12px;border:1px solid var(--border);border-radius:10px;resize:vertical;background:#f8fafc;color:#0f172a;white-space:pre}
+.ac-paste{width:100%;height:300px;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;line-height:1.5;padding:12px;border:1px solid var(--border);border-radius:10px;resize:vertical}
+.ac-wrap{overflow:auto;border:1px solid #eef1f6;border-radius:10px;max-height:620px}
+table.ac-tbl{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+table.ac-tbl th,table.ac-tbl td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid #eef1f6;border-left:1px solid #f1f5f9}
+table.ac-tbl th:first-child,table.ac-tbl td:first-child{text-align:left;border-left:none}
+table.ac-tbl thead th{position:sticky;top:0;background:#1e293b;color:#fff;font-size:11.5px;font-weight:700;text-align:center;z-index:2}
+table.ac-tbl tbody tr:hover td{background:#f8fafc}
+table.ac-tbl tr.ac-total td{background:#f1f5f9;font-weight:800;border-top:2px solid #cbd5e1}
+table.ac-tbl tr.ac-total:hover td{background:#e9eef5}
+table.ac-tbl td.ac-empty{color:#cbd5e1}
+table.ac-tbl td.ac-rowtot{background:#fafbfc}
+table.ac-tbl.ac-inner{font-size:12px;border-radius:0}
+table.ac-tbl.ac-inner thead th{background:#475569}
+.ac-sub{color:var(--gray);font-size:11px;font-weight:500}
+.ac-exp{cursor:pointer;color:var(--primary);font-weight:800;font-size:10px;margin-right:2px;user-select:none}
+.ac-bar{height:4px;border-radius:3px;background:#eef1f6;margin-top:3px}
+.ac-bar i{display:block;height:100%;border-radius:3px;background:var(--primary)}
+.ac-sel{padding:5px 9px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:12.5px;font-weight:600}
+.ac-warn{margin-top:12px;padding:11px 14px;border:1px solid #fde68a;background:#fffbeb;border-radius:9px;font-size:12.5px;color:#92400e;line-height:1.7}
+.ac-ok{margin-top:12px;padding:11px 14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;font-size:12.5px;color:#166534;line-height:1.7}
+.ac-pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:#eef2ff;color:#4361ee}
 </style>
 </head>
 <body>
@@ -897,6 +936,17 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn10">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-ad-cost" style="display:none">
+    <div class="status-dots" id="acStatusDots" title="저장된 광고비 보고">
+      <div class="status-dot" id="ac-dot-report"></div>
+    </div>
+    <span id="acLastUpdate" style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap"></span>
+    <button class="btn-header" onclick="acOpenModal('input')">보고 붙여넣기</button>
+    <button class="btn-header" onclick="acOpenModal('manage')">보고 이력</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn11">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
 </div>
 
 <!-- Tab Navigation -->
@@ -908,6 +958,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
   <div class="tab-item" data-page="talkis-perf" onclick="switchPage('talkis-perf')">톡이즈 콜 현황</div>
+  <div class="tab-item" data-page="ad-cost" onclick="switchPage('ad-cost')">광고비</div>
   <div class="tab-item dimmed" data-page="ngroup" onclick="switchPage('ngroup')">N그룹 성과</div>
   <div class="tab-item placeholder">+ 추가 예정</div>
 </div>
@@ -2222,6 +2273,67 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
   </div>
 </div><!-- /page-naesaegim-call -->
 
+<!-- ═══ Page: 광고비 ═══ -->
+<div class="page" id="page-ad-cost">
+  <!-- Modal -->
+  <div class="modal-overlay" id="acModalOverlay" onclick="if(event.target===this)acCloseModal()">
+    <div class="modal">
+      <button class="modal-close" onclick="acCloseModal()">&times;</button>
+      <div id="acModalInput">
+        <h2>광고비 보고 붙여넣기</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:12px">담당자 공유 원문을 <b>그대로</b> 붙여넣으세요. 하루치 보고와 연휴 묶음(금~일) 보고 모두 자동 인식하며, 매체·패키지는 원문에 있는 대로 잡습니다(새 패키지가 생기면 자동 추가, 없으면 그 행은 생성하지 않음).</p>
+        <textarea class="ac-paste" id="acPasteBox" placeholder="26년 8월 27일(목) GFA, 메타, 카카오, GDN, 당근, 틱톡 성과 공유 드립니다.&#10;&#10;GFA : 광고비 3,226,657원 / DB수 85 / DB단가 37,961원&#10;A. 더위크 : 광고비 585,698원 / DB수 9 / DB단가 65,078원&#10;-8월 누적 DB단가 38,608원&#10;..."></textarea>
+        <div id="acParsePreview"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="acCloseModal()">닫기</button>
+          <button class="btn btn-outline" onclick="acPreviewPaste()">미리보기</button>
+          <button class="btn btn-primary" onclick="acSavePaste()">저장</button>
+        </div>
+      </div>
+      <div id="acModalManage" class="hidden">
+        <h2>보고 이력 관리</h2>
+        <p style="font-size:13px;color:var(--gray);margin-bottom:12px">같은 기간을 다시 붙여넣으면 기존 보고를 덮어씁니다. 잘못 저장한 보고는 × 로 삭제하세요.</p>
+        <div class="file-history" id="acReportList"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" style="color:var(--danger);border-color:#fecaca" onclick="acResetAll()">전체 초기화</button>
+          <button class="btn btn-outline" onclick="acCloseModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="acEmpty" class="sp-empty">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">💰</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">광고비 보고를 붙여넣으세요</div>
+      <div style="font-size:14px">우측 상단 <b>보고 붙여넣기</b> → 담당자 공유 원문 그대로 붙여넣기 → 저장</div>
+    </div>
+
+    <div class="hidden" id="acDashboard">
+      <div class="sp-control-bar">
+        <label>기간</label>
+        <input type="date" id="acDateStart" onchange="acDateChanged()">
+        <span style="color:var(--gray)">~</span>
+        <input type="date" id="acDateEnd" onchange="acDateChanged()">
+        <span class="sp-divider"></span>
+        <div class="ac-chips">
+          <button class="ac-chip" data-acquick="7d" onclick="acQuickRange('7d')">최근 7일</button>
+          <button class="ac-chip" data-acquick="30d" onclick="acQuickRange('30d')">최근 30일</button>
+          <button class="ac-chip on" data-acquick="thisMonth" onclick="acQuickRange('thisMonth')">이번 달</button>
+          <button class="ac-chip" data-acquick="lastMonth" onclick="acQuickRange('lastMonth')">지난 달</button>
+          <button class="ac-chip" data-acquick="all" onclick="acQuickRange('all')">전체</button>
+        </div>
+        <span style="flex-basis:100%;height:0"></span>
+        <label>매체</label><div class="ac-chips" id="acMediaChips"></div>
+        <span class="sp-divider"></span>
+        <label>패키지</label><div class="ac-chips" id="acPkgChips"></div>
+      </div>
+      <div id="acKpi" class="sp-kpi-grid" style="grid-template-columns:repeat(4,1fr)"></div>
+      <div id="acContent"></div>
+    </div>
+  </div>
+</div><!-- /page-ad-cost -->
+
 <!-- ═══ Page: 차등성과 ═══ -->
 <div class="page active" id="page-grade-dash">
 
@@ -2432,7 +2544,7 @@ table.sp-matrix tr.sp-total-row .sp-namecol{background:#f1f5f9}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
   {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
@@ -2463,7 +2575,9 @@ function applyAuth(){
     if(authUser.tabs.includes('timeboard-perf') && typeof tbLoadFiles==='function') await tbLoadFiles();
     if(authUser.tabs.includes('talkis-perf') && typeof tzLoadFiles==='function') await tzLoadFiles();
     if(authUser.tabs.includes('naesaegim-call') && typeof ncLoadFiles==='function') await ncLoadFiles();
-    autoSyncDownload();
+    if(authUser.tabs.includes('ad-cost') && typeof acLoadFiles==='function') await acLoadFiles();
+    await autoSyncDownload();
+    if(typeof wmSyncStartPoll==='function') wmSyncStartPoll();
   })();
 }
 
@@ -2476,6 +2590,7 @@ async function autoSyncDownload(){
   const spAccess=authUser&&authUser.tabs.includes('series-perf');
   const tbAccess=authUser&&authUser.tabs.includes('timeboard-perf');
   const tzAccess=authUser&&authUser.tabs.includes('talkis-perf');
+  const acAccess=authUser&&authUser.tabs.includes('ad-cost');
 
   // 원격 동기화 타임스탬프 비교 — 원격이 더 새로우면 항상 갱신
   const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
@@ -2502,7 +2617,9 @@ async function autoSyncDownload(){
     const ncAccess=authUser&&authUser.tabs.includes('naesaegim-call');
     const ncHasLocal=typeof ncFiles!=='undefined'&&ncFiles&&ncFiles.length>0;
     const ncOk=!ncAccess||ncHasLocal||!payload.nc;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk)return;
+    const acHasLocal=typeof acReports!=='undefined'&&acReports&&acReports.length>0;
+    const acOk=!acAccess||acHasLocal||!payload.ac;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -2586,6 +2703,10 @@ async function autoSyncDownload(){
     }
     if(payload.tz&&tzAccess&&(!tzHasLocal||remoteNewer)&&typeof tzRestoreSync==='function'){
       await tzRestoreSync(payload.tz);
+    }
+    // 광고비 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.ac&&acAccess&&(!acHasLocal||remoteNewer)&&typeof acRestoreSync==='function'){
+      await acRestoreSync(payload.ac);
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -2781,14 +2902,19 @@ function showSyncActions(token){
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('syncModal').remove()">닫기</button>
         <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="localStorage.removeItem('${SYNC_TOKEN_KEY}');document.getElementById('syncModal').remove()">토큰 초기화</button>
       </div>
+      <label style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;font-size:12px;color:#555">
+        <input type="checkbox" id="wmAutoPullCk" onchange="wmSyncToggleAutoPull(this.checked)"> 다른 PC 업로드 시 자동 반영 (1분마다 확인)
+      </label>
       <div class="sync-status" id="syncStatus"></div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend',html);
+  const ck=document.getElementById('wmAutoPullCk');
+  if(ck)ck.checked=localStorage.getItem(WM_AUTOPULL_KEY)!=='0';
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -2830,10 +2956,75 @@ function wmSyncRenderBadge(){
 }
 function syncLog(msg){const el=document.getElementById('syncStatus');if(el)el.innerHTML=msg;}
 
+// ── 원격 변경 감지 (다른 PC 업로드 → 최대 1분 내 반영) ──
+//  이전에는 로그인/새로고침 때만 다운로드해서, 켜 둔 화면은 갱신을 알 방법이 없었다(체감 수십 분 지연).
+//  매니페스트(수백 바이트)만 주기적으로 찍어 ts를 비교하고, 새 데이터면 바로 받아온다.
+//  GitHub API가 아니라 raw + 캐시버스터로 읽으므로 rate limit(시간당 60회)에 걸리지 않는다.
+const WM_AUTOPULL_KEY='wm_sync_autopull';       // '0' 이면 자동 반영 끔 (알림만)
+const WM_REMOTE_TS_KEY='wm_sync_remote_ts';
+const WM_POLL_MS=60000;
+let _wmPollTimer=null,_wmPollBusy=false;
+async function wmSyncPeekTs(){
+  try{
+    const r=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/main/${SYNC_MANIFEST}?t=${Date.now()}`,{cache:'no-store'});
+    if(!r.ok)return 0;
+    const m=await r.json();
+    return m.ts||(m.payloadMeta&&m.payloadMeta.ts)||0;
+  }catch(e){return 0;}
+}
+function wmSyncBanner(mode,ts){
+  let b=document.getElementById('wmSyncNew');
+  if(mode==='hide'){if(b)b.remove();return;}
+  if(!b){b=document.createElement('div');b.id='wmSyncNew';b.className='wm-sync-new';document.body.appendChild(b);}
+  const t=ts?new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'';
+  if(mode==='pulling')b.innerHTML=`<span class="sync-spin">↻</span> 새 데이터(${t} 업로드분) 불러오는 중…`;
+  else if(mode==='done')b.innerHTML=`✓ 최신 데이터로 갱신했습니다 (${t} 업로드분)`;
+  else b.innerHTML=`<span>🔔 다른 PC에서 올린 새 데이터가 있습니다 (${t})</span><button class="btn btn-primary btn-sm" onclick="wmSyncPullNow()">지금 불러오기</button>`;
+}
+async function wmSyncPullNow(){
+  const dirty=localStorage.getItem(WM_SYNC_DIRTY_KEY)==='1';
+  if(dirty&&!confirm('이 PC에 아직 업로드하지 않은 변경사항이 있습니다.\n원격 데이터로 덮어쓸까요?'))return;
+  const ts=parseInt(localStorage.getItem(WM_REMOTE_TS_KEY)||'0');
+  wmSyncBanner('pulling',ts);
+  await doSyncDownloadManual();
+  wmSyncBanner('done',parseInt(localStorage.getItem('sync_last_ts')||'0'));
+  setTimeout(()=>wmSyncBanner('hide'),4000);
+}
+async function wmSyncPoll(force){
+  if(!authUser||_wmPollBusy||window._wmSyncRestoring)return;
+  if(document.hidden&&!force)return;                     // 백그라운드 탭은 건너뛰고, 돌아올 때 즉시 확인
+  _wmPollBusy=true;
+  try{
+    const ts=await wmSyncPeekTs();
+    const local=parseInt(localStorage.getItem('sync_last_ts')||'0');
+    if(!ts||ts<=local)return;
+    localStorage.setItem(WM_REMOTE_TS_KEY,String(ts));
+    const dirty=localStorage.getItem(WM_SYNC_DIRTY_KEY)==='1';
+    const auto=localStorage.getItem(WM_AUTOPULL_KEY)!=='0';
+    if(auto&&!dirty){                                    // 로컬 변경분이 있으면 자동으로 덮어쓰지 않는다
+      wmSyncBanner('pulling',ts);
+      await autoSyncDownload();
+      wmSyncBanner('done',ts);
+      setTimeout(()=>wmSyncBanner('hide'),4000);
+    }else{
+      wmSyncBanner('new',ts);
+    }
+  }catch(e){console.log('원격 변경 감지 실패:',e&&e.message);}
+  finally{_wmPollBusy=false;}
+}
+function wmSyncStartPoll(){
+  if(_wmPollTimer)return;
+  _wmPollTimer=setInterval(()=>wmSyncPoll(),WM_POLL_MS);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)wmSyncPoll();});
+  window.addEventListener('focus',()=>wmSyncPoll());
+  setTimeout(()=>wmSyncPoll(),8000);
+}
+function wmSyncToggleAutoPull(on){localStorage.setItem(WM_AUTOPULL_KEY,on?'1':'0');if(on)wmSyncPoll(true);}
+
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -2905,6 +3096,14 @@ async function doSyncUpload(token){
         ncSync=ncCollectSync();
       }
     }catch(e){console.warn('nc sync collect 실패',e);}
+    // 광고비 데이터 (acReports 미로드 시 IDB에서 직접 읽어 누락 방지)
+    let acSync=[];
+    try{
+      if(typeof acCollectSync==='function'){
+        if((!acReports||!acReports.length)&&typeof acLoadFiles==='function'){ if(!acLoaded) await acLoadFiles(); }
+        acSync=acCollectSync();
+      }
+    }catch(e){console.warn('ac sync collect 실패',e);}
     // 바이트 → base64 (spread 연산자 스택 초과 방지, 8KB 단위)
     const bytesToB64=(bytes)=>{let bin='';for(let i=0;i<bytes.length;i+=8192){bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));}return btoa(bin);};
     const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
@@ -2914,8 +3113,8 @@ async function doSyncUpload(token){
     //  v2는 슬라이스 하나를 통째로 JSON.stringify 했는데, nc(CTI 150만행+DB 50만행)가 192MB까지 커지면서
     //  문자열 하나만으로 UTF-16 기준 ~384MB를 잡아 Out of Memory가 났다.
     //  → 배열 슬라이스는 SLICE_GROUP_BYTES 예상치를 넘지 않게 나눠 담아, 한 번에 만드는 문자열을 작게 유지한다.
-    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ls:lsData};
-    const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ls'];
+    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ac:acSync,ls:lsData};
+    const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ac','ls'];
     // 슬라이스별 행 인코더(있으면 그룹 stringify 직전에 적용) — nc는 CTI/DB를 사전 인터닝으로 압축한다
     // nc는 CTI의 dur(미사용)까지 떨어내는 전용 인코더, 나머지는 공용 인코더(wmEncFile)
     const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null,tz:wmEncFile,tb:wmEncFile,sp:wmEncFile,cd:wmEncFile,ng:wmEncFile};
@@ -3142,6 +3341,9 @@ async function doSyncDownloadManual(){
     if(payload.tz&&authUser&&authUser.tabs.includes('talkis-perf')&&typeof tzRestoreSync==='function'){
       await tzRestoreSync(payload.tz);
     }
+    if(payload.ac&&authUser&&authUser.tabs.includes('ad-cost')&&typeof acRestoreSync==='function'){
+      await acRestoreSync(payload.ac);
+    }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
       restoreResultFromSync(payload.ngResults);
@@ -3286,7 +3488,10 @@ function switchPage(pageId){
   if(hrTz) hrTz.style.display = pageId==='talkis-perf' ? 'flex' : 'none';
   const hrNc=document.getElementById('headerRight-naesaegim-call');
   if(hrNc) hrNc.style.display = pageId==='naesaegim-call' ? 'flex' : 'none';
+  const hrAc=document.getElementById('headerRight-ad-cost');
+  if(hrAc) hrAc.style.display = pageId==='ad-cost' ? 'flex' : 'none';
   if(pageId==='naesaegim-call' && typeof ncOnShow==='function') ncOnShow();
+  if(pageId==='ad-cost' && typeof acOnShow==='function') acOnShow();
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
   if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
   if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
@@ -15581,6 +15786,658 @@ function ncEnsureStyle(){
   #page-naesaegim-call .nc-callout-h{font-weight:800;color:#1e293b;margin-bottom:4px;font-size:13px}
   #page-naesaegim-call .nc-sec-h .btn-sm{font-weight:700}`;
   document.head.appendChild(st);
+}
+
+// ════════════════════════════════════════════════════════════
+//  광고비 (ac* 네임스페이스) — 매체·패키지별 광고비/DB수/DB단가 누적
+//  입력: 담당자가 매일 공유하는 성과 텍스트를 그대로 붙여넣기(파싱).
+//        하루치 보고 + 연휴 묶음(금~일) 보고 양쪽 지원.
+//  산출: ① 붙여넣기용 정리(당일 버전 / 월 누적 버전 TSV) ② 기간·매체·패키지 필터 분석
+//  저장: IndexedDB(adCostDashboard) + 클라우드 싱크 payload.ac
+// ════════════════════════════════════════════════════════════
+const AC_DB_NAME='adCostDashboard', AC_DB_VER=1;
+let acIdb=null, acReports=[], acLoaded=false, acModel=null, acChart=null;
+let acFilter={start:'',end:'',media:new Set(),pkg:new Set(),quick:'thisMonth'};
+let acExportScope='last';      // last=최근 보고서 / range=필터 기간 전체
+let acExportFull=false;        // 광고비·DB수 열 포함
+let acExportSkipDash=false;    // 값 없는(-) 행 제외
+let acCumMonth='';             // 월 누적 단가 표에서 보는 월
+const AC_COLORS=['#4361ee','#2ec4b6','#f0920e','#d1182b','#7c3aed','#0891b2','#16a34a','#db2777','#f59e0b','#64748b'];
+
+// ── IndexedDB ──
+function acOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(AC_DB_NAME,AC_DB_VER);
+  req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('reports'))db.createObjectStore('reports',{keyPath:'id'});};
+  req.onsuccess=()=>{acIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
+function acIdbPut(rec){return new Promise((res,rej)=>{const tx=acIdb.transaction('reports','readwrite');tx.objectStore('reports').put(rec);tx.oncomplete=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
+function acIdbGetAll(){return new Promise((res,rej)=>{const tx=acIdb.transaction('reports','readonly');const r=tx.objectStore('reports').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
+function acIdbDel(id){return new Promise((res,rej)=>{const tx=acIdb.transaction('reports','readwrite');tx.objectStore('reports').delete(id);tx.oncomplete=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
+async function acIdbClear(){const all=await acIdbGetAll();for(const r of all)await acIdbDel(r.id);}
+async function acLoadFiles(){try{await acOpenIDB();acReports=await acIdbGetAll();acLoaded=true;acModel=null;acUpdateHeader();}catch(e){console.error('광고비 IDB 로드:',e);}}
+
+// ── 클라우드 싱크 (payload.ac 독립 슬라이스 — 원문+파싱결과 모두 작아 인코딩 불필요) ──
+function acCollectSync(){return (acReports||[]).map(r=>({id:r.id,start:r.start,end:r.end,dates:r.dates,savedAt:r.savedAt,text:r.text,daily:r.daily,media:r.media,cum:r.cum,mediaOrder:r.mediaOrder,pkgOrder:r.pkgOrder,pkgOrderBy:r.pkgOrderBy,warns:r.warns}));}
+async function acRestoreSync(arr){
+  if(!Array.isArray(arr))return;
+  if(!acIdb)await acOpenIDB();
+  await acIdbClear();acReports=[];
+  for(const r of arr){if(!r||!r.id)continue;await acIdbPut(r);acReports.push(r);}
+  acLoaded=true;acModel=null;acUpdateHeader();
+  if(typeof currentPage!=='undefined'&&currentPage==='ad-cost')acOnShow();
+}
+
+// ── 포맷 헬퍼 ──
+function acNum(s){if(s==null)return null;const t=String(s).trim();if(!t||t==='-'||t==='–'||t==='—')return null;const n=Number(t.replace(/[,\s원]/g,''));return isNaN(n)?null:n;}
+function acFullYear(y){y=+y;return y<100?2000+y:y;}
+function acYmd(y,m,d){return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function acN(v){return v==null?'-':Math.round(v).toLocaleString('ko-KR');}
+function acMoney(v){return v==null?'-':Math.round(v).toLocaleString('ko-KR');}
+function acPctStr(cur,prev){
+  if(prev==null||!isFinite(prev)||prev===0||cur==null)return '<span style="color:#94a3b8">전기 데이터 없음</span>';
+  const r=(cur-prev)/prev*100;const s=r>=0?'up':'down';const sign=r>=0?'▲':'▼';
+  return `전기 대비 <span class="${s}">${sign} ${Math.abs(r).toFixed(1)}%</span>`;
+}
+function acDayLabel(d){const dt=new Date(d+'T00:00:00');const w='일월화수목금토'[dt.getDay()];return `${d.slice(5,7)}/${d.slice(8,10)}(${w})`;}
+function acAddDays(d,n){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()+n);return acYmd(dt.getFullYear(),dt.getMonth()+1,dt.getDate());}
+
+// ════════ 파서 ════════
+// 헤더  : 26년 8월 27일(목) GFA, 메타 … / 26년 8월 21일(금) ~ 26년 8월 23일(일) …
+// 매체  : GFA : 광고비 3,226,657원 / DB수 85 / DB단가 37,961원
+// 패키지: A. 더위크 : 광고비 585,698원 / DB수 9 / DB단가 65,078원
+// 일자별: -08월 21일(금) 931,076원 / DB수 25 / DB단가 37,243원   (기간 묶음 보고에서만 등장)
+// 누적  : -8월 누적 DB단가 38,608원
+function acParseReport(text){
+  const lines=String(text||'').replace(/[\u00a0\u200b]/g,' ').split(/\r?\n/);
+  const warns=[];
+  // 1) 보고 기간
+  let start=null,end=null,hy=null;
+  for(const ln of lines){
+    if(!/\d{2,4}년\s*\d{1,2}월\s*\d{1,2}일/.test(ln))continue;
+    if(/누적/.test(ln))continue;
+    const ms=[...ln.matchAll(/(?:(\d{2,4})년\s*)?(\d{1,2})월\s*(\d{1,2})일/g)];
+    if(!ms.length)continue;
+    hy=acFullYear(ms[0][1]||new Date().getFullYear());
+    start=acYmd(hy,ms[0][2],ms[0][3]);
+    if(ms.length>1){const b=ms[1];end=acYmd(b[1]?acFullYear(b[1]):hy,b[2],b[3]);}
+    else end=start;
+    break;
+  }
+  if(!start)return {ok:false,error:'보고 일자를 찾지 못했습니다. (예: 26년 8월 27일(목) …)'};
+  if(end<start){const t=start;start=end;end=t;}
+  const dates=[];{let d=start,guard=0;while(d<=end&&guard++<70){dates.push(d);d=acAddDays(d,1);}}
+  const ey=+end.slice(0,4), em=+end.slice(5,7);
+
+  // 2) 본문
+  const METRIC=/광고비\s*([\d,]+|[-–—])\s*원?\s*\/\s*DB\s*수\s*([\d,]+|[-–—])\s*\/\s*DB\s*단가\s*([\d,]+|[-–—])/;
+  const DAYLINE=/^[-–]\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:\([^)]*\))?\s*(?:광고비\s*)?([\d,]+|[-–—])\s*원?\s*\/\s*DB\s*수\s*([\d,]+|[-–—])\s*\/\s*DB\s*단가\s*([\d,]+|[-–—])/;
+  const CUMLINE=/^[-–]\s*(\d{1,2})\s*월\s*누적\s*DB\s*단가\s*([\d,]+|[-–—])/;
+  const PKGLINE=/^([A-Za-z])\s*[.)]\s*([^:：]+?)\s*[:：]\s*(.*)$/;
+  const MEDLINE=/^([^:：\-–\s][^:：]{0,24}?)\s*[:：]\s*(.*)$/;
+  const dailyMap=new Map(), mediaMap=new Map(), cumMap=new Map(), pkgTot=new Map(), medTot=new Map();
+  const mediaOrder=[], pkgOrder=[], pkgOrderBy={};
+  let curMedia=null, curPkg=null;
+  const dayOf=(mm,dd)=>dates.find(x=>+x.slice(5,7)===+mm&&+x.slice(8,10)===+dd)||acYmd(hy,mm,dd);
+
+  for(const raw of lines){
+    const ln=raw.trim();
+    if(!ln||/^[─—–\-=_]{4,}$/.test(ln))continue;
+    let m;
+    if((m=ln.match(CUMLINE))){
+      if(!curMedia)continue;
+      const mo=+m[1], y=(mo>em?ey-1:ey), ym=`${y}-${String(mo).padStart(2,'0')}`;
+      const pkg=curPkg||'전체';
+      cumMap.set(`${ym}|${curMedia}|${pkg}`,{ym,media:curMedia,pkg,cpa:acNum(m[2]),asOf:end});
+      continue;
+    }
+    if((m=ln.match(DAYLINE))){
+      if(!curMedia)continue;
+      const d=dayOf(m[1],m[2]);
+      const rec={d,media:curMedia,cost:acNum(m[3]),db:acNum(m[4]),cpa:acNum(m[5])};
+      if(curPkg){rec.pkg=curPkg;dailyMap.set(`${d}|${curMedia}|${curPkg}`,rec);}
+      else mediaMap.set(`${d}|${curMedia}`,rec);
+      continue;
+    }
+    if((m=ln.match(PKGLINE))&&/광고비/.test(m[3])){
+      curPkg=m[2].trim();
+      if(!pkgOrder.includes(curPkg))pkgOrder.push(curPkg);
+      if(curMedia){                                   // 패키지 순서는 매체마다 다르다 (메타는 D.제2외국어 → E.톡이즈)
+        if(!pkgOrderBy[curMedia])pkgOrderBy[curMedia]=[];
+        if(pkgOrderBy[curMedia].indexOf(curPkg)<0)pkgOrderBy[curMedia].push(curPkg);
+      }
+      const mm=m[3].match(METRIC);
+      if(mm&&curMedia){
+        const v={cost:acNum(mm[1]),db:acNum(mm[2]),cpa:acNum(mm[3])};
+        pkgTot.set(`${curMedia}|${curPkg}`,v);
+        if(dates.length===1)dailyMap.set(`${start}|${curMedia}|${curPkg}`,{d:start,media:curMedia,pkg:curPkg,cost:v.cost,db:v.db,cpa:v.cpa});
+      }
+      continue;
+    }
+    if((m=ln.match(MEDLINE))&&/광고비/.test(m[2])){
+      curMedia=m[1].trim();curPkg=null;
+      if(!mediaOrder.includes(curMedia))mediaOrder.push(curMedia);
+      const mm=m[2].match(METRIC);
+      if(mm){
+        const v={cost:acNum(mm[1]),db:acNum(mm[2]),cpa:acNum(mm[3])};
+        medTot.set(curMedia,v);
+        if(dates.length===1)mediaMap.set(`${start}|${curMedia}`,{d:start,media:curMedia,cost:v.cost,db:v.db,cpa:v.cpa});
+      }
+      continue;
+    }
+  }
+
+  const daily=[...dailyMap.values()], media=[...mediaMap.values()], cum=[...cumMap.values()];
+  if(!daily.length)return {ok:false,error:'매체·패키지 데이터를 찾지 못했습니다. 원문 형식을 확인하세요.'};
+
+  // 3) 검증 — 일자별 합계 vs 패키지 합계, 패키지 합계 vs 매체 합계
+  for(const [k,v] of pkgTot){
+    if(v.cost==null||dates.length===1)continue;
+    const md=k.split('|')[0], pk=k.slice(md.length+1);
+    const sum=daily.filter(r=>r.media===md&&r.pkg===pk).reduce((a,r)=>a+(r.cost||0),0);
+    if(Math.abs(sum-v.cost)>1)warns.push(`${md} ${pk}: 일자별 합계 ${Math.round(sum).toLocaleString()} ≠ 보고 합계 ${v.cost.toLocaleString()}`);
+  }
+  for(const [md,v] of medTot){
+    if(v.cost==null)continue;
+    let sum=0,has=false;
+    for(const [k,x] of pkgTot){if(k.split('|')[0]===md&&x.cost!=null){sum+=x.cost;has=true;}}
+    if(has&&Math.abs(sum-v.cost)>1)warns.push(`${md}: 패키지 합계 ${Math.round(sum).toLocaleString()} ≠ 매체 합계 ${v.cost.toLocaleString()}`);
+  }
+
+  return {ok:true,report:{id:`${start}_${end}`,start,end,dates,savedAt:Date.now(),text:String(text||''),
+    daily,media,cum,mediaOrder,pkgOrder,pkgOrderBy,warns}};
+}
+
+// ════════ 모델 ════════
+function acCompute(){
+  const reps=(acReports||[]).slice().sort((a,b)=>(a.savedAt||0)-(b.savedAt||0));
+  const dmap=new Map(), mmap=new Map(), cmap=new Map(), mOrd=new Map(), pOrd=new Map(), mpOrd=new Map();
+  reps.forEach(rep=>{
+    (rep.mediaOrder||[]).forEach((m,i)=>{if(!mOrd.has(m))mOrd.set(m,i);});
+    (rep.pkgOrder||[]).forEach((p,i)=>{if(!pOrd.has(p))pOrd.set(p,i);});
+    const pob=rep.pkgOrderBy||{};
+    Object.keys(pob).forEach(md=>pob[md].forEach((p,i)=>mpOrd.set(md+'|'+p,i)));   // 최신 보고 순서로 갱신
+    (rep.daily||[]).forEach(r=>dmap.set(`${r.d}|${r.media}|${r.pkg}`,r));
+    (rep.media||[]).forEach(r=>mmap.set(`${r.d}|${r.media}`,r));
+    (rep.cum||[]).forEach(r=>{const k=`${r.ym}|${r.media}|${r.pkg}`;const p=cmap.get(k);if(!p||(r.asOf||'')>=(p.asOf||''))cmap.set(k,r);});
+  });
+  const rows=[...dmap.values()];
+  const medias=[...new Set(rows.map(r=>r.media))].sort((a,b)=>(mOrd.has(a)?mOrd.get(a):99)-(mOrd.has(b)?mOrd.get(b):99));
+  // 전역 패키지 순서 = 매체별 순번의 평균 (매체마다 A~E 순서가 달라 단순 최초등장 순서로는 어긋난다)
+  const pAvg=new Map();
+  [...new Set(rows.map(r=>r.pkg))].forEach(p=>{
+    const xs=[];mpOrd.forEach((i,k)=>{if(k.slice(k.indexOf('|')+1)===p)xs.push(i);});
+    pAvg.set(p,xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:(pOrd.has(p)?pOrd.get(p):99));
+  });
+  const pkgs=[...pAvg.keys()].sort((a,b)=>pAvg.get(a)-pAvg.get(b));
+  pkgs.forEach((p,i)=>pOrd.set(p,i));
+  const dates=[...new Set(rows.map(r=>r.d))].sort();
+  acModel={rows,medias,pkgs,dates,cum:[...cmap.values()],mediaTot:[...mmap.values()],reports:reps,mOrd,pOrd,mpOrd};
+  acModel.rows.sort(acSortRow);
+  // 필터 = 전체 선택 (신규 매체·패키지는 자동 편입, 사라진 값은 제거)
+  medias.forEach(m=>acFilter.media.add(m));
+  pkgs.forEach(p=>acFilter.pkg.add(p));
+  [...acFilter.media].forEach(m=>{if(!medias.includes(m))acFilter.media.delete(m);});
+  [...acFilter.pkg].forEach(p=>{if(!pkgs.includes(p))acFilter.pkg.delete(p);});
+  return acModel;
+}
+function acOrd(map,v){return map&&map.has(v)?map.get(v):99;}
+function acPkgOrd(media,pkg){
+  if(acModel&&acModel.mpOrd&&acModel.mpOrd.has(media+'|'+pkg))return acModel.mpOrd.get(media+'|'+pkg);
+  return acOrd(acModel?acModel.pOrd:null,pkg);
+}
+function acSortRow(a,b){
+  const mo=acModel?acModel.mOrd:null;
+  if(a.d!==b.d)return a.d<b.d?-1:1;
+  const dm=acOrd(mo,a.media)-acOrd(mo,b.media);if(dm)return dm;
+  return acPkgOrd(a.media,a.pkg)-acPkgOrd(b.media,b.pkg);
+}
+function acPassMP(r){return acFilter.media.has(r.media)&&acFilter.pkg.has(r.pkg);}
+function acRowsIn(s,e){return acModel.rows.filter(r=>r.d>=s&&r.d<=e&&acPassMP(r));}
+function acAgg(rows){let cost=0,db=0,n=0;for(const r of rows){if(r.cost!=null){cost+=r.cost;n++;}if(r.db!=null)db+=r.db;}return{cost,db,cpa:db>0?cost/db:null,n};}
+
+// 월 단위 통계 (매체·패키지 필터만 적용, 기간 필터 무관 — "해당 일자의 월 평균"용)
+function acMonthStats(){
+  const by=new Map();
+  for(const r of acModel.rows){
+    if(!acPassMP(r))continue;
+    const ym=r.d.slice(0,7);
+    let o=by.get(ym);if(!o){o={cost:0,db:0,byDay:new Map()};by.set(ym,o);}
+    if(r.cost!=null)o.cost+=r.cost;
+    if(r.db!=null)o.db+=r.db;
+    let d=o.byDay.get(r.d);if(!d){d={cost:0,db:0};o.byDay.set(r.d,d);}
+    if(r.cost!=null)d.cost+=r.cost;
+    if(r.db!=null)d.db+=r.db;
+  }
+  for(const o of by.values()){
+    const ds=[...o.byDay.keys()].sort();let c=0,b=0;o.mtd=new Map();
+    for(const d of ds){c+=o.byDay.get(d).cost;b+=o.byDay.get(d).db;o.mtd.set(d,{cost:c,db:b,cpa:b>0?c/b:null});}
+    o.days=ds.length;o.avgDay=ds.length?o.cost/ds.length:null;o.cpa=o.db>0?o.cost/o.db:null;
+  }
+  return by;
+}
+
+// ════════ 붙여넣기 → 저장 ════════
+function acPreviewPaste(){
+  const txt=document.getElementById('acPasteBox').value;
+  const box=document.getElementById('acParsePreview');
+  const res=acParseReport(txt);
+  if(!res.ok){box.innerHTML=`<div class="ac-warn">⚠ ${res.error}</div>`;return null;}
+  const rp=res.report;
+  const g=acAgg(rp.daily);
+  const dup=acReports.some(r=>r.id===rp.id);
+  box.innerHTML=`<div class="ac-ok"><b>${rp.start}${rp.end!==rp.start?` ~ ${rp.end}`:''}</b> · 매체 ${rp.mediaOrder.length}개 · 패키지 ${rp.pkgOrder.length}개 · 데이터 ${rp.daily.length}행 · 누적단가 ${rp.cum.length}행<br>
+    광고비 ${acMoney(g.cost)}원 · DB수 ${acN(g.db)} · 평균단가 ${acMoney(g.cpa)}원${dup?' <span class="ac-pill">같은 기간 보고 → 덮어쓰기</span>':''}</div>
+    ${rp.warns.length?`<div class="ac-warn">⚠ 합계 검증 경고 (저장은 가능)<br>${rp.warns.map(w=>'· '+w).join('<br>')}</div>`:''}`;
+  return rp;
+}
+async function acSavePaste(){
+  const rp=acPreviewPaste();
+  if(!rp)return;
+  if(!acIdb)await acOpenIDB();
+  await acIdbPut(rp);
+  acReports=acReports.filter(r=>r.id!==rp.id);acReports.push(rp);
+  acModel=null;acExportScope='last';
+  document.getElementById('acPasteBox').value='';
+  acCloseModal();acUpdateHeader();
+  acGenerate(true);
+}
+
+// ════════ 화면 ════════
+function acReady(){return (acReports||[]).length>0;}
+async function acOnShow(){
+  if(!acLoaded)await acLoadFiles();
+  if(acReady())acGenerate(!acModel);
+  else{document.getElementById('acDashboard').classList.add('hidden');document.getElementById('acEmpty').classList.remove('hidden');}
+}
+function acGenerate(force){
+  if(!acReady())return;
+  if(force||!acModel)acCompute();
+  document.getElementById('acEmpty').classList.add('hidden');
+  document.getElementById('acDashboard').classList.remove('hidden');
+  acInitDateRange(force);acRenderChips();acRender();
+}
+function acInitDateRange(force){
+  const s=document.getElementById('acDateStart'), e=document.getElementById('acDateEnd');
+  if(!s||!e)return;
+  if(!force&&s.value&&e.value){acFilter.start=s.value;acFilter.end=e.value;return;}
+  const ds=acModel.dates;if(!ds.length)return;
+  const last=ds[ds.length-1];
+  const first=`${last.slice(0,7)}-01`;
+  const st=ds.find(d=>d>=first)||ds[0];
+  s.value=acFilter.start=st;e.value=acFilter.end=last;acFilter.quick='thisMonth';
+}
+function acQuickRange(q){
+  const ds=acModel.dates;if(!ds.length)return;
+  const last=ds[ds.length-1];let st=ds[0],en=last;
+  if(q==='7d')st=acAddDays(last,-6);
+  else if(q==='30d')st=acAddDays(last,-29);
+  else if(q==='thisMonth')st=`${last.slice(0,7)}-01`;
+  else if(q==='lastMonth'){
+    const d=new Date(last+'T00:00:00');d.setMonth(d.getMonth()-1);
+    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const inM=ds.filter(x=>x.slice(0,7)===ym);
+    if(!inM.length){alert('전월 데이터가 없습니다.');return;}
+    st=inM[0];en=inM[inM.length-1];
+  }
+  acFilter.quick=q;acFilter.start=st;acFilter.end=en;
+  document.getElementById('acDateStart').value=st;
+  document.getElementById('acDateEnd').value=en;
+  document.querySelectorAll('#page-ad-cost [data-acquick]').forEach(b=>b.classList.toggle('on',b.dataset.acquick===q));
+  acRender();
+}
+function acDateChanged(){
+  acFilter.start=document.getElementById('acDateStart').value;
+  acFilter.end=document.getElementById('acDateEnd').value;
+  acFilter.quick='';
+  document.querySelectorAll('#page-ad-cost [data-acquick]').forEach(b=>b.classList.remove('on'));
+  acRender();
+}
+function acRenderChips(){
+  const mv=document.getElementById('acMediaChips'), pv=document.getElementById('acPkgChips');
+  if(mv)mv.innerHTML=`<button class="ac-chip ${acFilter.media.size===acModel.medias.length?'on':''}" onclick="acChipAll('media')">매체 전체</button>`+
+    acModel.medias.map(m=>`<button class="ac-chip ${acFilter.media.has(m)?'on':''}" onclick="acChip('media',this.dataset.v)" data-v="${m}">${m}</button>`).join('');
+  if(pv)pv.innerHTML=`<button class="ac-chip ${acFilter.pkg.size===acModel.pkgs.length?'on':''}" onclick="acChipAll('pkg')">패키지 전체</button>`+
+    acModel.pkgs.map(p=>`<button class="ac-chip ${acFilter.pkg.has(p)?'on':''}" onclick="acChip('pkg',this.dataset.v)" data-v="${p}">${p}</button>`).join('');
+}
+function acChip(kind,v){const s=acFilter[kind];if(s.has(v))s.delete(v);else s.add(v);acRenderChips();acRender();}
+function acChipAll(kind){const all=kind==='media'?acModel.medias:acModel.pkgs;const s=acFilter[kind];
+  if(s.size===all.length)s.clear();else{s.clear();all.forEach(x=>s.add(x));}
+  acRenderChips();acRender();}
+
+function acRender(){
+  if(!acModel)return;
+  const s=acFilter.start||acModel.dates[0], e=acFilter.end||acModel.dates[acModel.dates.length-1];
+  const rows=acRowsIn(s,e);
+  const days=[...new Set(rows.map(r=>r.d))].sort();
+  const g=acAgg(rows);
+  // 전기 = 직전 동일 길이 구간
+  const span=Math.max(1,Math.round((new Date(e+'T00:00:00')-new Date(s+'T00:00:00'))/86400000)+1);
+  const pe=acAddDays(s,-1), ps=acAddDays(s,-span);
+  const prevRows=acRowsIn(ps,pe);
+  const pg=acAgg(prevRows);
+  const pDays=[...new Set(prevRows.map(r=>r.d))].length;
+
+  document.getElementById('acKpi').innerHTML=[
+    ['총 광고비',`${acMoney(g.cost)}원`,acPctStr(g.cost,pg.cost||null)],
+    ['총 DB수',acN(g.db),acPctStr(g.db,pg.db||null)],
+    ['평균 DB단가',`${acMoney(g.cpa)}원`,acPctStr(g.cpa,pg.cpa)],
+    ['일평균 광고비',`${acMoney(days.length?g.cost/days.length:null)}원`,acPctStr(days.length?g.cost/days.length:null,pDays?pg.cost/pDays:null)],
+  ].map(a=>`<div class="sp-kpi"><div class="l">${a[0]}</div><div class="v">${a[1]}</div><div class="s">${a[2]}</div></div>`).join('');
+
+  const html=[];
+  html.push(acExportSection());
+  html.push(`<div class="sp-section"><h3>일자별 추이 <span class="sub">막대 = 매체별 광고비 · 선 = 전체 DB단가</span></h3><div class="sp-chart-wrap"><canvas id="acChartCanvas"></canvas></div></div>`);
+  html.push(acDailySection(rows,days));
+  html.push(acMatrixSection(rows));
+  html.push(acMediaSection(rows,prevRows));
+  html.push(acMonthSection());
+  html.push(acCumSection());
+  document.getElementById('acContent').innerHTML=html.join('');
+  acRenderChart(rows,days);
+  acRenderExport();
+}
+
+// ── ① 붙여넣기용 정리 ──
+function acExportSection(){
+  const last=acLastReport();
+  return `<div class="sp-section"><h3>엑셀 붙여넣기용 정리
+      <span class="sub">${last?`최근 보고: <b>${last.start}${last.end!==last.start?` ~ ${last.end}`:''}</b>`:''}</span></h3>
+    <div class="ac-bar-row">
+      <div class="sp-seg">
+        <button class="${acExportScope==='last'?'active':''}" onclick="acSetScope('last')">최근 보고서</button>
+        <button class="${acExportScope==='range'?'active':''}" onclick="acSetScope('range')">필터 기간 전체</button>
+      </div>
+      <label class="ac-ck"><input type="checkbox" ${acExportFull?'checked':''} onchange="acExportFull=this.checked;acRenderExport()"> 광고비·DB수 열 포함</label>
+      <label class="ac-ck"><input type="checkbox" ${acExportSkipDash?'checked':''} onchange="acExportSkipDash=this.checked;acRenderExport()"> 값 없는(-) 행 제외</label>
+      <button class="sp-btn green" style="margin-left:auto" onclick="acDownloadExcel()">엑셀 다운로드</button>
+    </div>
+    <div class="ac-grid2">
+      <div>
+        <div class="ac-ta-h"><b>당일 버전</b><span class="ac-sub" id="acDailyCnt"></span>
+          <button class="sp-btn" style="margin-left:auto" onclick="acCopy('acDailyTsv',this)">복사</button></div>
+        <textarea class="ac-ta" id="acDailyTsv" readonly onclick="this.select()"></textarea>
+      </div>
+      <div>
+        <div class="ac-ta-h"><b>월 누적 버전</b><span class="ac-sub" id="acCumCnt"></span>
+          <button class="sp-btn" style="margin-left:auto" onclick="acCopy('acCumTsv',this)">복사</button></div>
+        <textarea class="ac-ta" id="acCumTsv" readonly onclick="this.select()"></textarea>
+      </div>
+    </div></div>`;
+}
+function acLastReport(){const r=(acReports||[]).slice().sort((a,b)=>(a.savedAt||0)-(b.savedAt||0));return r.length?r[r.length-1]:null;}
+function acSetScope(v){acExportScope=v;acRender();}
+function acExportDailyRows(){
+  if(acExportScope==='last'){
+    const rp=acLastReport();if(!rp)return [];
+    return (rp.daily||[]).slice().sort(acSortRow);
+  }
+  return acRowsIn(acFilter.start,acFilter.end).slice().sort(acSortRow);
+}
+function acExportCumRows(){
+  const out=[];
+  const reps=(acReports||[]).slice().sort((a,b)=>(a.end<b.end?-1:1));
+  const pick=acExportScope==='last'?[acLastReport()].filter(Boolean)
+    :reps.filter(r=>r.end>=acFilter.start&&r.end<=acFilter.end);
+  for(const rp of pick){
+    const ym=rp.end.slice(0,7);
+    const mo=acModel?acModel.mOrd:null;
+    (rp.cum||[]).filter(c=>c.ym===ym)
+      .sort((a,b)=>(acOrd(mo,a.media)-acOrd(mo,b.media))||(acPkgOrd(a.media,a.pkg)-acPkgOrd(b.media,b.pkg)))
+      .forEach(c=>out.push({d:rp.end,media:c.media,pkg:c.pkg,cost:null,db:null,cpa:c.cpa}));
+  }
+  return out;
+}
+function acTsv(rows,full){
+  const head=full?['일자','매체','패키지','광고비','DB수','DB단가']:['일자','매체','패키지','DB단가'];
+  const body=rows.filter(r=>!acExportSkipDash||r.cpa!=null).map(r=>{
+    const base=[r.d,r.media,r.pkg];
+    if(full)base.push(r.cost==null?'-':r.cost,r.db==null?'-':r.db);
+    base.push(r.cpa==null?'-':Math.round(r.cpa));
+    return base.join('\t');
+  });
+  return [head.join('\t')].concat(body).join('\n');
+}
+function acRenderExport(){
+  const d=acExportDailyRows(), c=acExportCumRows();
+  const dt=document.getElementById('acDailyTsv'), ct=document.getElementById('acCumTsv');
+  if(dt)dt.value=acTsv(d,acExportFull);
+  if(ct)ct.value=acTsv(c,false);
+  const dc=document.getElementById('acDailyCnt'), cc=document.getElementById('acCumCnt');
+  if(dc)dc.textContent=`${d.filter(r=>!acExportSkipDash||r.cpa!=null).length}행`;
+  if(cc)cc.textContent=`${c.filter(r=>!acExportSkipDash||r.cpa!=null).length}행`;
+}
+function acCopy(id,btn){
+  const el=document.getElementById(id);if(!el)return;
+  const done=()=>{if(btn){const o=btn.textContent;btn.textContent='복사됨!';setTimeout(()=>{btn.textContent=o;},1200);}};
+  const fallback=()=>{el.removeAttribute('readonly');el.select();document.execCommand('copy');el.setAttribute('readonly','');done();};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(el.value).then(done).catch(fallback);
+  else fallback();
+}
+
+// ── ② 일자별 ──
+function acDailySection(rows,days){
+  const ms=acMonthStats();
+  const byDay=new Map();
+  for(const r of rows){let o=byDay.get(r.d);if(!o){o={cost:0,db:0,rows:[]};byDay.set(r.d,o);}if(r.cost!=null)o.cost+=r.cost;if(r.db!=null)o.db+=r.db;o.rows.push(r);}
+  let prev=null;
+  const tr=days.map(d=>{
+    const o=byDay.get(d), cpa=o.db>0?o.cost/o.db:null;
+    const m=ms.get(d.slice(0,7))||{};
+    const mtd=m.mtd?m.mtd.get(d):null;
+    const diff=prev==null?null:(o.cost-prev);
+    prev=o.cost;
+    const diffHtml=diff==null?'-':`<span style="color:${diff>=0?'#dc2626':'#2563eb'}">${diff>=0?'+':'−'}${Math.abs(Math.round(diff)).toLocaleString()}</span>`;
+    return `<tr>
+      <td><span class="ac-exp" onclick="acToggleDay('${d}')">▶</span> ${acDayLabel(d)} <span class="ac-sub">${d}</span></td>
+      <td>${acMoney(o.cost)}</td><td>${acN(o.db)}</td><td><b>${acMoney(cpa)}</b></td><td>${diffHtml}</td>
+      <td>${acMoney(mtd?mtd.cost:null)}</td><td>${acN(mtd?mtd.db:null)}</td><td>${acMoney(mtd?mtd.cpa:null)}</td>
+      <td>${acMoney(m.avgDay)}</td><td>${acMoney(m.cpa)}</td></tr>
+      <tr class="ac-detail hidden" id="acDay-${d}"><td colspan="10" style="padding:0;background:#f8fafc">${acDayDetail(o.rows)}</td></tr>`;
+  }).join('');
+  const g=acAgg(rows);
+  return `<div class="sp-section"><h3>일자별 광고비 <span class="sub">일자 ▶ 클릭 시 매체·패키지 상세 · 월누적/월평균 열은 매체·패키지 필터만 반영(기간 무관)</span></h3>
+    <div class="ac-wrap"><table class="ac-tbl">
+      <thead><tr><th>일자</th><th>광고비</th><th>DB수</th><th>DB단가</th><th>전일 대비</th>
+        <th>월누적 광고비</th><th>월누적 DB수</th><th>월누적 단가</th><th>월 일평균 광고비</th><th>월 평균단가</th></tr></thead>
+      <tbody><tr class="ac-total"><td>합계 (${days.length}일)</td><td>${acMoney(g.cost)}</td><td>${acN(g.db)}</td><td>${acMoney(g.cpa)}</td><td>-</td>
+        <td colspan="5" style="text-align:center;color:#94a3b8">— 아래는 해당 월 기준 —</td></tr>${tr}</tbody>
+    </table></div></div>`;
+}
+function acDayDetail(rows){
+  const byM=new Map();
+  for(const r of rows){if(!byM.has(r.media))byM.set(r.media,[]);byM.get(r.media).push(r);}
+  const blocks=[...byM.entries()].sort((a,b)=>acOrd(acModel.mOrd,a[0])-acOrd(acModel.mOrd,b[0])).map(pair=>{
+    const md=pair[0], list=pair[1], g=acAgg(list);
+    const items=list.slice().sort((a,b)=>acPkgOrd(md,a.pkg)-acPkgOrd(md,b.pkg))
+      .map(r=>`<tr><td style="padding-left:28px">${r.pkg}</td><td>${acMoney(r.cost)}</td><td>${acN(r.db)}</td><td>${acMoney(r.cpa)}</td></tr>`).join('');
+    return `<tr class="ac-total"><td>${md}</td><td>${acMoney(g.cost)}</td><td>${acN(g.db)}</td><td>${acMoney(g.cpa)}</td></tr>${items}`;
+  }).join('');
+  return `<table class="ac-tbl ac-inner"><thead><tr><th>매체 / 패키지</th><th>광고비</th><th>DB수</th><th>DB단가</th></tr></thead><tbody>${blocks}</tbody></table>`;
+}
+function acToggleDay(d){const el=document.getElementById('acDay-'+d);if(el)el.classList.toggle('hidden');}
+
+// ── ③ 매체 × 패키지 ──
+function acMatrixSection(rows){
+  const medias=acModel.medias.filter(m=>acFilter.media.has(m));
+  const pkgs=acModel.pkgs.filter(p=>acFilter.pkg.has(p));
+  const cell=new Map();
+  for(const r of rows){const k=`${r.media}|${r.pkg}`;let o=cell.get(k);if(!o){o={cost:0,db:0};cell.set(k,o);}if(r.cost!=null)o.cost+=r.cost;if(r.db!=null)o.db+=r.db;}
+  const colTot=new Map();const gTot={cost:0,db:0};
+  const body=medias.map(md=>{
+    let rc=0,rd=0;
+    const tds=pkgs.map(p=>{
+      const o=cell.get(`${md}|${p}`);
+      if(!o||(!o.cost&&!o.db))return '<td class="ac-empty">-</td>';
+      rc+=o.cost;rd+=o.db;
+      let t=colTot.get(p);if(!t){t={cost:0,db:0};colTot.set(p,t);}
+      t.cost+=o.cost;t.db+=o.db;
+      return `<td><b>${acMoney(o.db>0?o.cost/o.db:null)}</b><div class="ac-sub">${acMoney(o.cost)} · DB ${acN(o.db)}</div></td>`;
+    }).join('');
+    gTot.cost+=rc;gTot.db+=rd;
+    return `<tr><td><b>${md}</b></td>${tds}<td class="ac-rowtot"><b>${acMoney(rd>0?rc/rd:null)}</b><div class="ac-sub">${acMoney(rc)} · DB ${acN(rd)}</div></td></tr>`;
+  }).join('');
+  const foot=pkgs.map(p=>{const t=colTot.get(p)||{cost:0,db:0};
+    return `<td><b>${acMoney(t.db>0?t.cost/t.db:null)}</b><div class="ac-sub">${acMoney(t.cost)} · DB ${acN(t.db)}</div></td>`;}).join('');
+  return `<div class="sp-section"><h3>매체 × 패키지 <span class="sub">기간 합계 · 큰 숫자 = DB단가</span></h3>
+    <div class="ac-wrap"><table class="ac-tbl">
+      <thead><tr><th>매체</th>${pkgs.map(p=>`<th>${p}</th>`).join('')}<th>매체 합계</th></tr></thead>
+      <tbody>${body}<tr class="ac-total"><td>합계</td>${foot}<td><b>${acMoney(gTot.db>0?gTot.cost/gTot.db:null)}</b><div class="ac-sub">${acMoney(gTot.cost)} · DB ${acN(gTot.db)}</div></td></tr></tbody>
+    </table></div></div>`;
+}
+
+// ── ④ 매체별 요약 ──
+function acMediaSection(rows,prevRows){
+  const cur=new Map(), prv=new Map();
+  const add=(map,r)=>{let o=map.get(r.media);if(!o){o={cost:0,db:0};map.set(r.media,o);}if(r.cost!=null)o.cost+=r.cost;if(r.db!=null)o.db+=r.db;};
+  rows.forEach(r=>add(cur,r));prevRows.forEach(r=>add(prv,r));
+  let tot=0;cur.forEach(o=>{tot+=o.cost;});
+  const list=[...cur.entries()].sort((a,b)=>b[1].cost-a[1].cost);
+  const tr=list.map(pair=>{
+    const md=pair[0], o=pair[1], p=prv.get(md);
+    const cpa=o.db>0?o.cost/o.db:null, pcpa=p&&p.db>0?p.cost/p.db:null;
+    const share=tot?o.cost/tot*100:0;
+    return `<tr><td><b>${md}</b></td><td>${acMoney(o.cost)}</td>
+      <td>${share.toFixed(1)}%<div class="ac-bar"><i style="width:${Math.min(100,share)}%"></i></div></td>
+      <td>${acN(o.db)}</td><td><b>${acMoney(cpa)}</b></td>
+      <td>${p?acMoney(p.cost):'-'}</td><td>${acMoney(pcpa)}</td>
+      <td>${(pcpa&&cpa)?`<span style="color:${cpa>pcpa?'#dc2626':'#2563eb'}">${cpa>pcpa?'▲':'▼'} ${Math.abs((cpa-pcpa)/pcpa*100).toFixed(1)}%</span>`:'-'}</td></tr>`;
+  }).join('');
+  return `<div class="sp-section"><h3>매체별 요약 <span class="sub">전기 = 직전 동일 길이 기간 · 단가 증감은 낮아질수록 파랑(개선)</span></h3>
+    <div class="ac-wrap"><table class="ac-tbl">
+      <thead><tr><th>매체</th><th>광고비</th><th>비중</th><th>DB수</th><th>DB단가</th><th>전기 광고비</th><th>전기 단가</th><th>단가 증감</th></tr></thead>
+      <tbody>${tr||'<tr><td colspan="8" style="text-align:center;color:#94a3b8">데이터 없음</td></tr>'}</tbody></table></div></div>`;
+}
+
+// ── ⑤ 월별 요약 ──
+function acMonthSection(){
+  const ms=acMonthStats();
+  const yms=[...ms.keys()].sort();
+  const tr=yms.map(ym=>{const o=ms.get(ym);
+    return `<tr><td><b>${ym.slice(0,4)}년 ${+ym.slice(5,7)}월</b></td><td>${o.days}일</td><td>${acMoney(o.cost)}</td><td>${acN(o.db)}</td>
+      <td><b>${acMoney(o.cpa)}</b></td><td>${acMoney(o.avgDay)}</td><td>${acN(o.days?o.db/o.days:null)}</td></tr>`;}).join('');
+  return `<div class="sp-section"><h3>월별 요약 <span class="sub">매체·패키지 필터 반영 · 기간 필터와 무관하게 누적 전체</span></h3>
+    <div class="ac-wrap"><table class="ac-tbl"><thead><tr><th>월</th><th>데이터 일수</th><th>광고비</th><th>DB수</th><th>평균 DB단가</th><th>일평균 광고비</th><th>일평균 DB수</th></tr></thead>
+      <tbody>${tr||'<tr><td colspan="7" style="text-align:center;color:#94a3b8">데이터 없음</td></tr>'}</tbody></table></div></div>`;
+}
+
+// ── ⑥ 보고서 기재 월 누적 DB단가 ──
+function acCumSection(){
+  const cum=acModel.cum||[];
+  if(!cum.length)return '';
+  const yms=[...new Set(cum.map(c=>c.ym))].sort().reverse();
+  if(!acCumMonth||yms.indexOf(acCumMonth)<0)acCumMonth=yms[0];
+  const rows=cum.filter(c=>c.ym===acCumMonth);
+  const medias=[...new Set(rows.map(c=>c.media))].filter(m=>acFilter.media.has(m)).sort((a,b)=>acOrd(acModel.mOrd,a)-acOrd(acModel.mOrd,b));
+  const pkgs=[...new Set(rows.map(c=>c.pkg))].filter(p=>acFilter.pkg.has(p)).sort((a,b)=>acOrd(acModel.pOrd,a)-acOrd(acModel.pOrd,b));   // 열 순서는 전역 평균 순번
+  const map=new Map(rows.map(c=>[`${c.media}|${c.pkg}`,c]));
+  let asOf='';rows.forEach(c=>{if((c.asOf||'')>asOf)asOf=c.asOf||'';});
+  const body=medias.map(md=>`<tr><td><b>${md}</b></td>${pkgs.map(p=>{const c=map.get(`${md}|${p}`);
+    return (c&&c.cpa!=null)?`<td><b>${acMoney(c.cpa)}</b></td>`:'<td class="ac-empty">-</td>';}).join('')}</tr>`).join('');
+  return `<div class="sp-section"><h3>월 누적 DB단가 <span class="sub">보고서에 기재된 누적 단가 (기준일 ${asOf||'-'})</span>
+      <select class="ac-sel" onchange="acCumMonth=this.value;acRender()" style="margin-left:auto">${yms.map(y=>`<option value="${y}" ${y===acCumMonth?'selected':''}>${y.slice(0,4)}년 ${+y.slice(5,7)}월</option>`).join('')}</select></h3>
+    <div class="ac-wrap"><table class="ac-tbl"><thead><tr><th>매체</th>${pkgs.map(p=>`<th>${p}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+
+// ── 차트 ──
+function acRenderChart(rows,days){
+  const cv=document.getElementById('acChartCanvas');if(!cv||typeof Chart==='undefined')return;
+  if(acChart){acChart.destroy();acChart=null;}
+  const medias=acModel.medias.filter(m=>acFilter.media.has(m));
+  const byDM=new Map();
+  for(const r of rows){const k=`${r.d}|${r.media}`;let o=byDM.get(k);if(!o){o={cost:0,db:0};byDM.set(k,o);}if(r.cost!=null)o.cost+=r.cost;if(r.db!=null)o.db+=r.db;}
+  const cpa=days.map(d=>{let c=0,b=0;medias.forEach(m=>{const o=byDM.get(`${d}|${m}`);if(o){c+=o.cost;b+=o.db;}});return b>0?Math.round(c/b):null;});
+  const ds=medias.map((m,i)=>({type:'bar',label:m,data:days.map(d=>{const o=byDM.get(`${d}|${m}`);return o?Math.round(o.cost):0;}),
+    backgroundColor:AC_COLORS[i%AC_COLORS.length],stack:'c',yAxisID:'y',order:2}));
+  ds.push({type:'line',label:'DB단가',data:cpa,borderColor:'#0f172a',backgroundColor:'#0f172a',borderWidth:2,pointRadius:3,tension:.25,yAxisID:'y1',order:1});
+  acChart=new Chart(cv,{data:{labels:days.map(acDayLabel),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'-':c.parsed.y.toLocaleString()}원`}}},
+      scales:{y:{stacked:true,beginAtZero:true,ticks:{callback:v=>(v/10000).toLocaleString()+'만'},title:{display:true,text:'광고비'}},
+        y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{callback:v=>Math.round(v/1000)+'천'},title:{display:true,text:'DB단가'}},
+        x:{stacked:true,ticks:{maxRotation:60,minRotation:0,font:{size:10}}}}}});
+}
+
+// ── 엑셀 다운로드 ──
+async function acDownloadExcel(){
+  if(typeof XLSX==='undefined'){alert('엑셀 라이브러리를 불러오지 못했습니다.');return;}
+  const bd=()=>{const s={style:'thin',color:{rgb:'D9D9D9'}};return {top:s,bottom:s,left:s,right:s};};
+  const HS={font:{bold:true,color:{rgb:'FFFFFF'},sz:11},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border:bd()};
+  const wb=XLSX.utils.book_new();
+  const mk=(aoa,name,widths)=>{
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    for(let C=range.s.c;C<=range.e.c;C++){const a=XLSX.utils.encode_cell({r:0,c:C});if(ws[a])ws[a].s=HS;}
+    for(let R=1;R<=range.e.r;R++)for(let C=range.s.c;C<=range.e.c;C++){
+      const a=XLSX.utils.encode_cell({r:R,c:C});if(!ws[a])continue;
+      const isNum=typeof ws[a].v==='number';
+      ws[a].s={border:bd(),alignment:{horizontal:isNum?'right':'left'}};
+      if(isNum)ws[a].z='#,##0';
+    }
+    ws['!cols']=widths.map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  };
+  const dRows=acExportDailyRows().filter(r=>!acExportSkipDash||r.cpa!=null);
+  mk([['일자','매체','패키지','광고비','DB수','DB단가']].concat(dRows.map(r=>[r.d,r.media,r.pkg,r.cost==null?'-':r.cost,r.db==null?'-':r.db,r.cpa==null?'-':Math.round(r.cpa)])),'당일',[12,10,10,14,8,12]);
+  const cRows=acExportCumRows().filter(r=>!acExportSkipDash||r.cpa!=null);
+  mk([['일자','매체','패키지','DB단가']].concat(cRows.map(r=>[r.d,r.media,r.pkg,r.cpa==null?'-':Math.round(r.cpa)])),'월누적',[12,10,10,12]);
+  const ms=acMonthStats();
+  mk([['월','데이터 일수','광고비','DB수','평균 DB단가','일평균 광고비']].concat([...ms.keys()].sort().map(ym=>{const o=ms.get(ym);
+    return [ym,o.days,Math.round(o.cost),o.db,o.cpa==null?'-':Math.round(o.cpa),o.avgDay==null?'-':Math.round(o.avgDay)];})),'월별요약',[10,11,15,10,13,15]);
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  let blob;
+  try{
+    const zip=await JSZip.loadAsync(buf);
+    for(const path of Object.keys(zip.files)){
+      if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){
+        const xml=await zip.file(path).async('string');
+        zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));
+      }
+    }
+    blob=await zip.generateAsync({type:'blob'});
+  }catch(e){blob=new Blob([buf],{type:'application/octet-stream'});}
+  const last=acLastReport();
+  const tag=((acExportScope==='last'&&last)?last.end:(acFilter.end||'')).replace(/-/g,'');
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`WM_광고비_${tag}.xlsx`;
+  a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+
+// ── 모달 / 이력 ──
+function acOpenModal(view){
+  document.getElementById('acModalOverlay').classList.add('open');
+  document.getElementById('acModalInput').classList.toggle('hidden',view==='manage');
+  document.getElementById('acModalManage').classList.toggle('hidden',view!=='manage');
+  if(view==='manage')acRenderReportList();
+  else setTimeout(()=>{const t=document.getElementById('acPasteBox');if(t)t.focus();},60);
+}
+function acCloseModal(){document.getElementById('acModalOverlay').classList.remove('open');const p=document.getElementById('acParsePreview');if(p)p.innerHTML='';}
+function acRenderReportList(){
+  const el=document.getElementById('acReportList');if(!el)return;
+  const reps=(acReports||[]).slice().sort((a,b)=>(a.end<b.end?1:-1));
+  if(!reps.length){el.innerHTML='<div style="padding:22px;text-align:center;color:#94a3b8">저장된 보고가 없습니다.</div>';return;}
+  el.innerHTML=reps.map(r=>{const g=acAgg(r.daily||[]);
+    return `<div class="fh-item"><span class="fh-name">${r.start}${r.end!==r.start?` ~ ${r.end}`:''}
+      <span class="ac-sub">· ${(r.daily||[]).length}행 · 광고비 ${acMoney(g.cost)}원${(r.warns||[]).length?' <span style="color:#b45309" title="'+r.warns.join(' / ')+'">⚠</span>':''}</span></span>
+      <span class="fh-date">${new Date(r.savedAt||Date.now()).toLocaleDateString('ko-KR')}</span>
+      <button class="btn-del" onclick="acDeleteReport('${r.id}')">×</button></div>`;}).join('');
+}
+async function acDeleteReport(id){
+  if(!confirm('이 보고 데이터를 삭제할까요?'))return;
+  await acIdbDel(id);acReports=acReports.filter(r=>r.id!==id);acModel=null;
+  acRenderReportList();acUpdateHeader();
+  if(acReady())acGenerate(true);
+  else{document.getElementById('acDashboard').classList.add('hidden');document.getElementById('acEmpty').classList.remove('hidden');}
+}
+async function acResetAll(){
+  if(!confirm('광고비 데이터를 전부 삭제합니다. 계속할까요?'))return;
+  await acIdbClear();acReports=[];acModel=null;acRenderReportList();acUpdateHeader();
+  document.getElementById('acDashboard').classList.add('hidden');document.getElementById('acEmpty').classList.remove('hidden');acCloseModal();
+}
+function acUpdateHeader(){
+  const el=document.getElementById('acLastUpdate');if(!el)return;
+  const reps=(acReports||[]).slice().sort((a,b)=>(a.end<b.end?-1:1));
+  const r=reps.length?reps[reps.length-1]:null;
+  el.textContent=r?`최종 보고일자 : ${r.end} · 누적 ${acReports.length}건`:'';
+  const dot=document.getElementById('ac-dot-report');
+  if(dot)dot.classList.toggle('ok',(acReports||[]).length>0);
 }
 
 </script>
