@@ -17202,6 +17202,21 @@ function vcGenerate(){
       }
     }
 
+    // 전체기간 파일에만 있고 일마감에는 없는 고객키 — 모수(최초 계약수)에 들어가지 않는다.
+    //  일마감이 모수의 원천이라 의도된 동작이지만, 특정 날짜의 일마감을 안 올리면
+    //  그날 계약이 통째로 빠진다. 조용히 사라지면 못 찾으므로 경고 + 원장으로 드러낸다.
+    let fullOnly=0;
+    if(hasDaily&&hasFull){
+      for(const[ck,fRow]of Object.entries(fullByKey)){
+        if(dailyByKey[ck])continue;
+        fullOnly++;
+        skipped.push({ck,...mkBase(fRow),appDate:parseDate(fRow[VC_APP.applicationDate]),
+          returnDate:parseDate(fRow[VC_APP.returnDate]),status:'-',cancelDays:null,matched:true,
+          skipReason:'일마감 파일에 없음 (전체기간에만 존재)'});
+      }
+      if(fullOnly>0)warns.push(`전체기간 파일에만 있는 계약 <b>${fullOnly.toLocaleString()}건</b>이 모수에서 빠졌습니다. 해당 신청일의 일마감 파일이 빠지지 않았는지 확인하세요. (검증 원장에서 사유 확인)`);
+    }
+
     // 접수제품 사전 대조 → 신규값은 pending(잠정 포함), '노르드킨'은 자동 제외
     const rawSet=new Set();for(const c of contracts)if(c.productRaw)rawSet.add(c.productRaw);
     vcPending=vcScanNewProducts(rawSet);
@@ -17219,7 +17234,7 @@ function vcGenerate(){
     for(const c of kept){if(c.product&&!seen.has(c.product)){seen.add(c.product);order.push(c.product);}}
 
     vcResult={contracts:kept,skipped,members,productOrder:order,maxAppDate,warns,
-      counts:{daily:Object.keys(dailyByKey).length,full:Object.keys(fullByKey).length}};
+      counts:{daily:Object.keys(dailyByKey).length,full:Object.keys(fullByKey).length,fullOnly}};
     vcEnsureProdStyle(order);   // 제품 색은 productOrder 인덱스 고정 → 필터를 바꿔도 색이 안 흔들린다
     vcUpdateHeader();
     if(!vcDateStart&&!vcDateEnd){
@@ -17940,9 +17955,11 @@ function vcDownloadLedger(){
     +`· 집계 제외 ${s.toLocaleString()}행 (사유 열 확인)\n`
     +`· 원장 합계 ${(k+s).toLocaleString()}행\n\n`
     +`원본 고객키 (중복 제거 후)\n`
-    +`· 일마감 ${(ct.daily||0).toLocaleString()}건  ← 원장 합계와 같아야 합니다\n`
-    +`· 전체기간 ${(ct.full||0).toLocaleString()}건\n\n`
-    +`Excel에서 '집계포함=Y'로 거른 뒤 피벗하면 화면 숫자와 1:1로 맞아야 합니다.`);
+    +`· 일마감 ${(ct.daily||0).toLocaleString()}건\n`
+    +`· 전체기간 ${(ct.full||0).toLocaleString()}건 (그중 일마감에 없는 것 ${(ct.fullOnly||0).toLocaleString()}건)\n`
+    +`· 검산: 일마감 ${(ct.daily||0).toLocaleString()} + 일마감없음 ${(ct.fullOnly||0).toLocaleString()} = ${((ct.daily||0)+(ct.fullOnly||0)).toLocaleString()} → 원장 합계와 같아야 합니다\n\n`
+    +`특정 고객키가 왜 빠졌는지 보려면 CSV에서 그 키를 찾아 '집계제외 사유' 열을 보세요.\n`
+    +`아예 없으면 두 파일 어디에도 그 고객키가 없다는 뜻입니다.`);
 }
 
 // ═══════════════════════════════════════════
