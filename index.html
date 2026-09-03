@@ -796,18 +796,23 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
 .vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
 .vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
-/* ── 센터·코디 멀티선택 ── */
-.vc-sel-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+/* ── 센터·코디 멀티선택 (날짜 필터와 같은 행) ── */
 .vc-msel{position:relative}
 .vc-msel-btn{padding:6px 12px;font-size:12px;font-weight:700;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;white-space:nowrap}
 .vc-msel-btn:hover{border-color:#94a3b8}
 .vc-msel-btn.on{border-color:#4361ee;background:#eef2ff;color:#3730a3}
 .vc-msel-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;width:250px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 28px rgba(15,23,42,.14);overflow:hidden}
-.vc-msel-head{display:flex;gap:6px;padding:8px;border-bottom:1px solid #eef1f6;background:#f8fafc}
-.vc-msel-head button{flex:1;padding:4px 6px;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;color:#475569}
+.vc-msel-head{padding:8px;border-bottom:1px solid #eef1f6;background:#f8fafc}
+.vc-msel-search{width:100%;box-sizing:border-box;padding:6px 9px;font-size:12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;margin-bottom:6px}
+.vc-msel-search:focus{outline:none;border-color:#4361ee;box-shadow:0 0 0 2px rgba(67,97,238,.14)}
+.vc-msel-head-btns{display:flex;gap:6px}
+.vc-msel-head button{flex:1;padding:4px 6px;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;color:#475569;white-space:nowrap}
+.vc-msel-head button:hover{border-color:#94a3b8;background:#f1f5f9}
 .vc-msel-list{max-height:280px;overflow-y:auto}
 .vc-msel-item{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;cursor:pointer}
 .vc-msel-item:hover{background:#f8fafc}
+/* 전역 .hidden{display:none}은 뒤에 오는 .vc-msel-item{display:flex}에 밀린다 → 명시적으로 이긴다 */
+.vc-msel-item.hidden{display:none}
 .vc-msel-item span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vc-msel-n{color:#94a3b8;font-size:11px;font-variant-numeric:tabular-nums}
 .vc-msel-empty{padding:14px 10px;font-size:12px;color:#94a3b8;text-align:center}
@@ -1536,14 +1541,7 @@ tr.vc-left:hover{opacity:.75}
         <button class="cd-quick-btn" data-type="12m" onclick="vcQuick('12m')">12개월</button>
         <button class="cd-quick-btn" data-type="all" onclick="vcQuick('all')">전체</button>
       </div>
-      <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
-        <button class="btn btn-primary btn-sm" id="vcEstBtn" onclick="vcToggleEst()">동일기간추정</button>
-        <button class="btn btn-success btn-sm" onclick="vcDownloadExcel()">Excel 다운로드</button>
-      </div>
-    </div>
-
-    <!-- 센터·코디 멀티선택 (기간·제품 서브탭과 AND로 걸린다) -->
-    <div class="vc-sel-bar">
+      <!-- 센터·코디 멀티선택 — 기간·제품 서브탭과 AND로 걸린다 -->
       <div class="vc-msel">
         <button class="vc-msel-btn" id="vcCenterBtn" onclick="vcToggleSelPanel('center')">센터 전체 ▾</button>
         <div class="vc-msel-panel hidden" id="vcCenterPanel"></div>
@@ -1554,6 +1552,10 @@ tr.vc-left:hover{opacity:.75}
       </div>
       <button class="vc-msel-clear hidden" id="vcSelClear" onclick="vcClearSel()">필터 해제</button>
       <span class="vc-sel-summary" id="vcSelSummary"></span>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" id="vcEstBtn" onclick="vcToggleEst()">동일기간추정</button>
+        <button class="btn btn-success btn-sm" onclick="vcDownloadExcel()">Excel 다운로드</button>
+      </div>
     </div>
 
     <div id="vcPendingBanner" class="est-banner hidden" style="cursor:pointer" onclick="vcOpenProdModal()"></div>
@@ -16742,6 +16744,7 @@ let vcProdKeys=[];        // 파일관리 사전 편집 행 ↔ 원문값 매핑
 let vcCenterSel=new Set(), vcCodiSel=new Set();   // 빈 Set = 전체
 let vcDateFiltered=[], vcViewData=[];             // 셀렉트 패널 모수 / 개인별 드릴다운 재렌더용
 let vcOpenPerson=null, vcDrillUnit='week';        // 개인별 펼친 코디 · 드릴 집계단위(week|month)
+let vcSelQuery={center:'',codi:''};                // 셀렉트 패널 검색어 (패널 재렌더 시 유지)
 let vcPending=[];         // 아직 판정하지 않은 접수제품 원문값 (잠정 포함으로 집계)
 let vcDateStart=null, vcDateEnd=null, vcCurrentView='all', vcEstMode=false;
 let vcCalYear, vcCalMonth, vcCalPhase='start', vcCalTempStart=null, vcCalTempEnd=null;
@@ -17288,31 +17291,59 @@ function vcRenderSelPanel(which){
   const panel=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
   const sel=which==='center'?vcCenterSel:vcCodiSel;
   const items=vcSelSource(which);
+  const q=vcSelQuery[which]||'';
   let h=`<div class="vc-msel-head">
-    <button onclick="vcSelAll('${which}',true)">전체선택</button>
-    <button onclick="vcSelAll('${which}',false)">해제</button>
+    <input class="vc-msel-search" id="vcSearch-${which}" type="search" placeholder="${which==='center'?'센터':'코디'} 검색" value="${vcEsc(q)}" oninput="vcSelSearch('${which}',this.value)" onclick="event.stopPropagation()">
+    <div class="vc-msel-head-btns">
+      <button onclick="vcSelAll('${which}',true)" title="검색 결과에만 적용됩니다">보이는 항목 전체선택</button>
+      <button onclick="vcSelAll('${which}',false)">해제</button>
+    </div>
   </div><div class="vc-msel-list">`;
   if(!items.length)h+='<div class="vc-msel-empty">해당 기간에 데이터가 없습니다</div>';
   for(const it of items){
     h+=`<label class="vc-msel-item"><input type="checkbox" data-vcsel="${which}" data-vcval="${vcEsc(it.k)}"${sel.has(it.k)?' checked':''}> <span>${vcEsc(it.k)}</span><span class="vc-msel-n">${it.n.toLocaleString()}</span></label>`;
   }
+  h+='<div class="vc-msel-empty hidden" data-vcnohit>검색 결과가 없습니다</div>';
   panel.innerHTML=h+'</div>';
+  if(q)vcSelSearch(which,q);
+}
+// 목록을 다시 그리지 않고 표시만 껐다 켠다 — 재렌더하면 입력 포커스가 날아간다
+function vcSelSearch(which,q){
+  vcSelQuery[which]=q;
+  const panel=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
+  if(!panel)return;
+  const needle=String(q||'').trim().toLowerCase();
+  let hit=0;
+  panel.querySelectorAll('.vc-msel-item').forEach(el=>{
+    const txt=(el.dataset.vckey||(el.dataset.vckey=el.querySelector('input').dataset.vcval)).toLowerCase();
+    const show=!needle||txt.includes(needle);
+    el.classList.toggle('hidden',!show);
+    if(show)hit++;
+  });
+  const none=panel.querySelector('[data-vcnohit]');
+  if(none)none.classList.toggle('hidden',hit>0);
 }
 function vcToggleSelPanel(which){
   const me=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
   const other=document.getElementById(which==='center'?'vcCodiPanel':'vcCenterPanel');
   if(other)other.classList.add('hidden');
-  if(me.classList.contains('hidden')){vcRenderSelPanel(which);me.classList.remove('hidden');}
+  if(me.classList.contains('hidden')){
+    vcRenderSelPanel(which);me.classList.remove('hidden');
+    const s=document.getElementById('vcSearch-'+which);if(s)s.focus();
+  }
   else me.classList.add('hidden');
 }
+// 전체선택/해제는 '지금 검색으로 걸러져 보이는 항목'에만 적용한다
 function vcSelAll(which,on){
   const sel=which==='center'?vcCenterSel:vcCodiSel;
-  sel.clear();
-  if(on)for(const it of vcSelSource(which))sel.add(it.k);
+  const panel=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
+  const visible=panel?[...panel.querySelectorAll('.vc-msel-item:not(.hidden) input[data-vcval]')].map(i=>i.dataset.vcval)
+                    :vcSelSource(which).map(it=>it.k);
+  if(on)visible.forEach(v=>sel.add(v));else visible.forEach(v=>sel.delete(v));
   if(which==='center')vcCodiSel.clear();     // 센터를 바꾸면 코디 목록 자체가 달라진다
   vcRenderSelPanel(which);vcFilterAndRender();
 }
-function vcClearSel(){vcCenterSel.clear();vcCodiSel.clear();vcFilterAndRender();}
+function vcClearSel(){vcCenterSel.clear();vcCodiSel.clear();vcSelQuery={center:'',codi:''};vcFilterAndRender();}
 document.addEventListener('change',e=>{
   const t=e.target;
   if(!t||!t.dataset||!t.dataset.vcsel)return;
