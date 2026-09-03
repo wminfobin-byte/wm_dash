@@ -16676,7 +16676,6 @@ const VC_APP={customerKey:3,refundPkg:5,manager:13,inflowDate:14,applicationDate
 const VC_SYNC_COLS=[VC_APP.customerKey,VC_APP.refundPkg,VC_APP.manager,VC_APP.applicationDate,VC_APP.classification,VC_APP.product,VC_APP.returnDate];
 const VC_EXCLUDE_WORDS=['노르드킨'];      // 접수제품에 이 단어가 있으면 노티 없이 자동 제외
 const VC_PERIODS=CD_PERIODS;              // 취소기간 구간은 WM과 동일 (cd에서 공용)
-const VC_CENTER_ORDER=CD_CENTER_ORDER;
 
 const VC_MEMBER_KEY='vc_member_history';
 const VC_TYPES=['app-daily','app','attend'];
@@ -16770,20 +16769,35 @@ function vcStripSuffix(raw){
   do{prev=s;s=s.replace(VC_DRIVE_SUFFIX,'').trim();}while(s&&s!==prev);
   return s;
 }
-// 규칙을 고치면 이 값을 올릴 것 — 이미 사전에 저장된 표시명은 자동 반영되지 않으므로
-// vcLoadFiles가 1회 마이그레이션한다(사용자가 그 뒤에 수동으로 나눈 건 보존).
-const VC_LABEL_RULE_VER=2;
+// 이름만 바뀐 동일 제품 — 문자열 규칙으로는 유도할 수 없어 사전에 박아둔다(원문 → 표시명).
+// 비아지오 표기를 정본으로 삼는다. 반대 방향으로 쓰고 싶으면 파일 관리에서 표시명을 고치면 된다.
+const VC_ALIAS={
+  '캐리 EZ 삼륜 전기자전거':'비아지오 삼륜 전기자전거_G3',
+  '전동 스쿠터_TYPE2':'비아지오 전동 스쿠터_T2',
+};
+function vcAliasKey(s){return String(s==null?'':s).trim().replace(/\s+/g,' ');}
+function vcAliasOf(raw){return VC_ALIAS[vcAliasKey(raw)]||null;}
+// 규칙(접미 정규화·별칭)을 고치면 이 값을 올릴 것 — 이미 사전에 저장된 표시명은
+// 자동 반영되지 않으므로 vcLoadFiles/vcRestoreSync가 1회 마이그레이션한다.
+// (버전을 올린 뒤 사용자가 수동으로 고친 표시명은 그대로 보존된다)
+const VC_LABEL_RULE_VER=3;
 function vcMigrateLabels(){
   let changed=false;
   for(const raw of Object.keys(vcProducts)){
-    const e=vcProducts[raw];if(!e||!e.label)continue;
+    const e=vcProducts[raw];if(!e)continue;
+    const al=vcAliasOf(raw)||vcAliasOf(vcStripSuffix(raw));
+    if(al){if(e.label!==al){e.label=al;changed=true;}continue;}
+    if(!e.label)continue;
     const nl=vcStripSuffix(e.label);
     if(nl&&nl!==e.label){e.label=nl;changed=true;}
   }
   return changed;
 }
 function vcAutoExcluded(raw){const s=String(raw==null?'':raw);return VC_EXCLUDE_WORDS.some(w=>s.includes(w));}
-function vcDefaultLabel(raw){return vcStripSuffix(raw)||String(raw==null?'':raw).trim();}
+function vcDefaultLabel(raw){
+  const base=vcStripSuffix(raw)||String(raw==null?'':raw).trim();
+  return vcAliasOf(raw)||vcAliasOf(base)||base;
+}
 function vcEntry(raw){return Object.prototype.hasOwnProperty.call(vcProducts,raw)?vcProducts[raw]:null;}
 function vcIncluded(raw){const e=vcEntry(raw);if(e)return !!e.include;return !vcAutoExcluded(raw);}   // 미판정 = 잠정 포함
 function vcLabelOf(raw){const e=vcEntry(raw);return (e&&e.label)?e.label:vcDefaultLabel(raw);}
@@ -17306,12 +17320,19 @@ function vcRenderWeekly(data,grouped){
 }
 
 // ── 센터별 ──
+//  WM 센터 목록(CD_CENTER_ORDER)을 쓰면 이름이 겹치는 노원·군자만 '주요 센터'로
+//  굵게 나와 총계 행과 구분이 안 됐다. Via 센터는 데이터에서 직접 뽑고,
+//  굵게 강조하는 행은 총계 하나뿐이다.
+function vcCenterOrder(data){
+  const n={};
+  for(const c of data){const k=c.center||'기타';n[k]=(n[k]||0)+1;}
+  return Object.keys(n).sort((a,b)=>n[b]-n[a]||a.localeCompare(b,'ko'));
+}
 function vcRenderCenter(data){
   const byC={};const total=vcNewBucket();
   for(const c of data){const k=c.center||'기타';if(!byC[k])byC[k]=vcNewBucket();vcAddToBucket(byC[k],c);vcAddToBucket(total,c);}
   let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`+vcTR('전체',total,true);
-  for(const center of VC_CENTER_ORDER){const b=byC[center];if(!b||!b.initial)continue;html+=vcTR(vcEsc(center),b,true,14);delete byC[center];}
-  for(const[center,b]of Object.entries(byC)){if(!b.initial)continue;html+=vcTR(vcEsc(center),b,false,14);}
+  for(const center of vcCenterOrder(data)){const b=byC[center];if(!b||!b.initial)continue;html+=vcTR(vcEsc(center),b,false,14);}
   html+='</tbody></table>';document.getElementById('vcCenterTable').innerHTML=html;
 }
 
@@ -17331,7 +17352,8 @@ function vcRenderPerson(data){
   for(const c of data){const k=c.cleanName;
     if(!byP[k])byP[k]={...vcNewBucket(),center:c.center,left:c.left};
     vcAddToBucket(byP[k],c);}
-  const ci=k=>{const i=VC_CENTER_ORDER.indexOf(k);return i>=0?i:99;};
+  const order=vcCenterOrder(data);
+  const ci=k=>{const i=order.indexOf(k||'기타');return i>=0?i:99;};
   // 재직자 먼저, 그 안에서 센터 순 → 계약수 많은 순. 퇴사자는 아래로 몰아 흐리게 보여준다.
   const sorted=Object.entries(byP).filter(([,d])=>d.initial>0).sort((a,b)=>{
     let d=(a[1].left?1:0)-(b[1].left?1:0);if(d)return d;
