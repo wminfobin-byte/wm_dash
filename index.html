@@ -856,6 +856,15 @@ tr.vc-drill-row>td{padding:0!important;background:#f8fafc!important}
 .vc-drill-total td{background:#eef2f7;font-weight:700}
 .vc-drill-empty{padding:16px;font-size:12px;color:#94a3b8}
 .vc-drill-name .vc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.12)}
+/* 매체 / 비매체 행 색 (제품과 달리 두 값 고정이라 CSS에 박아둔다) */
+.vc-media-y{background:#e0f2fe!important}
+.vc-media-y.bold-row{background:#bae6fd!important}
+.vc-media-n{background:#f5f5f4!important}
+.vc-media-n.bold-row{background:#e7e5e4!important}
+.cd-wide-table tr.vc-media-y td:first-child{background:#e0f2fe}
+.cd-wide-table tr.vc-media-y.bold-row td:first-child{background:#bae6fd}
+.cd-wide-table tr.vc-media-n td:first-child{background:#f5f5f4}
+.cd-wide-table tr.vc-media-n.bold-row td:first-child{background:#e7e5e4}
 /* 서브탭 앞 제품 색 점 (실제 색은 vcEnsureProdStyle이 인라인으로 준다) */
 #vcSubtabs .vc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.12)}
 /* 개인별 표의 퇴사자 행 — 이름·수치 모두 흐리게 */
@@ -1530,6 +1539,7 @@ tr.vc-left:hover{opacity:.75}
       <span class="cd-nav-top" onclick="vcScrollToTop()" title="맨 위로">&#9650;</span>
       <span class="cd-nav-item active" data-target="vcNavKpi" onclick="vcNavTo('vcNavKpi')">KPI</span>
       <span class="cd-nav-item" data-target="vcNavMonthly" onclick="vcNavTo('vcNavMonthly')">월별</span>
+      <span class="cd-nav-item" data-target="vcNavMedia" onclick="vcNavTo('vcNavMedia')">매체별</span>
       <span class="cd-nav-item" data-target="vcNavWeekly" onclick="vcNavTo('vcNavWeekly')">주차별</span>
       <span class="cd-nav-item" data-target="vcNavCenter" onclick="vcNavTo('vcNavCenter')">센터별</span>
       <span class="cd-nav-item" data-target="vcNavProduct" onclick="vcNavTo('vcNavProduct')">제품별</span>
@@ -1595,6 +1605,11 @@ tr.vc-left:hover{opacity:.75}
     <div id="vcNavMonthly" class="table-section">
       <h3>월별 취소율 <span class="table-sub" id="vcMonthlySub">제품별</span></h3>
       <div class="cd-wide-table" id="vcMonthlyTable"></div>
+    </div>
+
+    <div id="vcNavMedia" class="table-section">
+      <h3>월별 취소율 <span class="table-sub">매체 / 비매체 (Q열 분류 기준)</span></h3>
+      <div class="cd-wide-table" id="vcMediaTable"></div>
     </div>
 
     <div id="vcNavWeekly" class="table-section">
@@ -16757,6 +16772,16 @@ const VC_DB_NAME='viaCancelDashboard', VC_DB_VER=1;
 const VC_APP={customerKey:3,refundPkg:5,manager:13,inflowDate:14,applicationDate:15,classification:16,product:20,distributeDate:34,returnDate:35};
 const VC_SYNC_COLS=[VC_APP.customerKey,VC_APP.refundPkg,VC_APP.manager,VC_APP.applicationDate,VC_APP.classification,VC_APP.product,VC_APP.returnDate];
 const VC_EXCLUDE_WORDS=['노르드킨'];      // 접수제품에 이 단어가 있으면 노티 없이 자동 제외
+// 매체/비매체는 Q열 분류(classification) 문자열로만 가른다. 매체를 세분하지는 않는다.
+//  공란이거나 아래 단어가 들어 있으면 비매체, 나머지는 전부 매체.
+//  새 비매체 코드가 생기면 이 목록에만 추가하면 된다(소문자로).
+const VC_NONMEDIA_WORDS=['homepage_in','bike_c','youtuber'];
+const VC_MEDIA_ORDER=['매체','비매체'];
+function vcMediaOf(cls){
+  const s=String(cls==null?'':cls).trim().toLowerCase();
+  if(!s)return '비매체';
+  return VC_NONMEDIA_WORDS.some(w=>s.includes(w))?'비매체':'매체';
+}
 const VC_PERIODS=CD_PERIODS;              // 취소기간 구간은 WM과 동일 (cd에서 공용)
 
 const VC_MEMBER_KEY='vc_member_history';
@@ -17097,7 +17122,7 @@ function vcLookupKeys(){
   const el=document.getElementById('vcLookupResult');
   const keys=[...new Set((document.getElementById('vcLookupInput').value||'').split(/[\s,]+/).map(s=>s.trim()).filter(Boolean))];
   if(!keys.length){el.innerHTML='<div class="fh-empty">고객키를 입력하세요</div>';return;}
-  const cols=[['담당자 N',VC_APP.manager],['신청일 P',VC_APP.applicationDate],['환급패키지 F',VC_APP.refundPkg],['접수제품 U',VC_APP.product],['반품일 AJ',VC_APP.returnDate]];
+  const cols=[['담당자 N',VC_APP.manager],['신청일 P',VC_APP.applicationDate],['환급패키지 F',VC_APP.refundPkg],['분류 Q',VC_APP.classification],['접수제품 U',VC_APP.product],['반품일 AJ',VC_APP.returnDate]];
   const label={'app-daily':'일마감','app':'전체기간'};
   let html='';
   for(const key of keys){
@@ -17255,8 +17280,9 @@ function vcGenerate(){
       const mi=hit||{};
       // 최신 명단에 없는 이름(=이력에만 남은 사람)은 퇴사자. 명단 자체가 없으면 판정하지 않는다.
       const left=attendFile?!(hit&&!hit.resigned):false;
+      const cls=str(row[VC_APP.classification]);
       return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',left,
-        productRaw:str(row[VC_APP.product]),refundPkg:str(row[VC_APP.refundPkg])};
+        productRaw:str(row[VC_APP.product]),refundPkg:str(row[VC_APP.refundPkg]),cls,media:vcMediaOf(cls)};
     };
 
     // 검증 원장(vcLedger)에는 집계에서 빠진 행까지 사유와 함께 담는다 — 판정 규칙을 눈으로 대조하기 위해.
@@ -17552,6 +17578,7 @@ function vcFilterAndRender(){
   vcRenderKPI(view);
   vcRenderInsights(view);
   vcRenderMonthly(view,isAll);
+  vcRenderMonthlyMedia(view);
   vcRenderWeekly(view,isAll);
   vcRenderCenter(view);
   if(isAll)vcRenderProduct(view);
@@ -17588,31 +17615,42 @@ function vcRenderKPI(data){
     <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약유지</div><div class="kv">${m.toLocaleString()} / ${n>0?pct2(m/n):'-'}</div></div>`;
 }
 
-// ── 월별 (전체 뷰: 제품별 그룹으로 접힘 / 제품 뷰: 월 행만) ──
-function vcRenderMonthly(data,grouped){
-  const byM={},byPM={};
+// ── 월별 ──
+//  같은 표를 축만 바꿔 두 번 쓴다: ① 제품별 ② 매체/비매체별.
+//  g=null 이면 전체+월 행만(제품 서브탭 뷰), g가 있으면 그룹 헤더로 접힌다.
+function vcMonthlyHtml(data,g){
+  const byM={},byGM={};
   for(const c of data){
     if(!c.appDate)continue;
     const mk=`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;
     if(!byM[mk])byM[mk]=vcNewBucket();vcAddToBucket(byM[mk],c);
-    if(grouped){const k=`${c.product}|${mk}`;if(!byPM[k])byPM[k]=vcNewBucket();vcAddToBucket(byPM[k],c);}
+    if(g){const k=`${g.of(c)}|${mk}`;if(!byGM[k])byGM[k]=vcNewBucket();vcAddToBucket(byGM[k],c);}
   }
   const months=Object.keys(byM).sort();
   const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
+  const allGid=(g?g.gid:'vmo')+'-all';
   let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`;
-  html+=vcMWHeaderTR('전체',total,'vmo-all');
-  months.forEach(mk=>{const b=byM[mk];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,'vmo-all');}});
-  if(grouped){
-    vcVisibleProducts(data).forEach((p,idx)=>{
-      const bt=vcNewBucket();months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b)vcMergeBuckets(bt,b);});
+  html+=vcMWHeaderTR('전체',total,allGid);
+  months.forEach(mk=>{const b=byM[mk];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,allGid);}});
+  if(g){
+    g.list.forEach((key,idx)=>{
+      const bt=vcNewBucket();months.forEach(mk=>{const b=byGM[`${key}|${mk}`];if(b)vcMergeBuckets(bt,b);});
       if(!bt.initial)return;
-      const gid='vmo-p'+idx;
-      const pc=vcProdClass(p);
-      html+=vcMWHeaderTR(vcEsc(p),bt,gid,pc);
-      months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b&&b.initial>0){const m=mk.split("-")[1];html+=vcMWChildTR(`${+m}월`,b,gid,pc);}});
+      const gid=g.gid+idx,cls=g.cls?g.cls(key):'';
+      html+=vcMWHeaderTR(vcEsc(key),bt,gid,cls);
+      months.forEach(mk=>{const b=byGM[`${key}|${mk}`];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,gid,cls);}});
     });
   }
-  html+='</tbody></table>';document.getElementById('vcMonthlyTable').innerHTML=html;
+  return html+'</tbody></table>';
+}
+function vcRenderMonthly(data,grouped){
+  document.getElementById('vcMonthlyTable').innerHTML=vcMonthlyHtml(data,
+    grouped?{of:c=>c.product,list:vcVisibleProducts(data),gid:'vmo-p',cls:vcProdClass}:null);
+}
+// 매체/비매체는 제품 서브탭과 무관하게 항상 두 줄로 접힌다
+function vcRenderMonthlyMedia(data){
+  document.getElementById('vcMediaTable').innerHTML=vcMonthlyHtml(data,
+    {of:c=>c.media||'매체',list:VC_MEDIA_ORDER,gid:'vmm-p',cls:m=>m==='매체'?'vc-media-y':'vc-media-n'});
 }
 
 // ── 주차별 (주차 키/라벨은 WM 취소율과 동일 규칙 재사용) ──
@@ -17985,7 +18023,7 @@ function vcComputeEstimation(){
 // ═══════════════════════════════════════════
 async function vcDownloadExcel(){
   if(!vcResult){alert('먼저 신청자관리 파일을 업로드하세요.');return;}
-  const dims=[['vcMonthlyTable','월별 취소율'],['vcWeeklyTable','주차별 취소율'],['vcCenterTable','센터별 취소율'],['vcProductTable','제품별 취소율'],['vcPersonTable','개인별 취소율']];
+  const dims=[['vcMonthlyTable','월별 취소율(제품)'],['vcMediaTable','월별 취소율(매체)'],['vcWeeklyTable','주차별 취소율'],['vcCenterTable','센터별 취소율'],['vcProductTable','제품별 취소율'],['vcPersonTable','개인별 취소율']];
   const wb=XLSX.utils.book_new();let added=0;
   for(const[id,label]of dims){
     const cont=document.getElementById(id);
@@ -18028,11 +18066,11 @@ function vcDownloadLedger(){
   if(!vcResult){alert('먼저 대시보드를 생성하세요.');return;}
   const iso=d=>d?cdFmtISO(d):'';
   const head=['고객키','담당자(N열 원문)','코디명','센터','퇴사','신청일(P열)','반품일(AJ열)',
-    '환급패키지(F열)','접수제품(U열 원문)','표시명','상태','취소일수','모수 출처','전체기간파일 매칭','집계포함','집계제외 사유'];
+    '환급패키지(F열)','분류(Q열 원문)','매체구분','접수제품(U열 원문)','표시명','상태','취소일수','모수 출처','전체기간파일 매칭','집계포함','집계제외 사유'];
   const line=(c,inc,reason)=>[
     c.ck,c.manager,c.cleanName,c.center,c.left?'Y':'',
     iso(c.appDate),iso(c.returnDate),
-    c.refundPkg||'',c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
+    c.refundPkg||'',c.cls||'',c.media||'',c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
     c.status,c.cancelDays==null?'':c.cancelDays,c.src||'',
     c.matched?'Y':'N',inc?'Y':'N',reason||''
   ].map(vcCsvCell).join(',');
@@ -18067,7 +18105,7 @@ function vcNavTo(targetId){
 }
 function vcScrollToTop(){window.scrollTo({top:0,behavior:'smooth'});}
 (function vcInitNavScroll(){
-  const navKeys=['vcNavKpi','vcNavMonthly','vcNavWeekly','vcNavCenter','vcNavProduct','vcNavPerson'];
+  const navKeys=['vcNavKpi','vcNavMonthly','vcNavMedia','vcNavWeekly','vcNavCenter','vcNavProduct','vcNavPerson'];
   window.addEventListener('scroll',()=>{
     const page=document.getElementById('page-via-cancel');
     const isVc=page&&page.classList.contains('active');
