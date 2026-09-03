@@ -796,6 +796,21 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
 .vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
 .vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
+/* ── 고객키 조회 (진단) ── */
+.fh-meta{font-size:11px;color:#94a3b8;font-weight:500;margin-left:6px}
+.vc-lk{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden}
+.vc-lk-key{padding:8px 12px;background:#f1f5f9;font-size:12px;font-weight:800;font-family:ui-monospace,Menlo,Consolas,monospace}
+.vc-lk-scroll{overflow-x:auto}
+.vc-lk-tbl{border-collapse:collapse;width:100%}
+.vc-lk-tbl th,.vc-lk-tbl td{border-top:1px solid #eef1f6;padding:6px 10px;font-size:12px;text-align:left;white-space:nowrap}
+.vc-lk-tbl th{background:#f8fafc;font-size:11px;color:#475569;font-weight:700}
+.vc-lk-tbl i{color:#cbd5e1;font-style:normal}
+.vc-lk-f b{display:block;font-size:11px}
+.vc-lk-f span{display:block;font-size:10px;color:#94a3b8;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.vc-lk-verdict{padding:8px 12px;font-size:12px;border-top:1px solid #eef1f6}
+.vc-lk-verdict.ok{background:#f0fdf4;color:#15803d}
+.vc-lk-verdict.bad{background:#fef2f2;color:#b91c1c}
+.vc-lk-hint{margin-top:4px;font-size:11px;color:#64748b;line-height:1.5}
 /* ── 센터·코디 멀티선택 (날짜 필터와 같은 행) ── */
 .vc-msel{position:relative}
 .vc-msel-btn{padding:6px 12px;font-size:12px;font-weight:700;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;white-space:nowrap}
@@ -1466,6 +1481,14 @@ tr.vc-left:hover{opacity:.75}
     </div>
     <div id="vcModalManage" class="hidden">
       <h2>파일 관리 — Via 취소율</h2>
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px">고객키 조회</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:8px">특정 계약이 왜 안 잡히는지 확인합니다. 업로드된 원본 행을 그대로 찾아 보여줍니다. (여러 개는 줄바꿈·쉼표로 구분)</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px">
+        <textarea id="vcLookupInput" rows="3" placeholder="WC1784011363486vQRYl" style="flex:1;font-size:12px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;resize:vertical;font-family:inherit"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="vcLookupKeys()" style="flex-shrink:0">조회</button>
+      </div>
+      <div id="vcLookupResult" style="margin-bottom:20px"></div>
+      <div style="font-size:14px;font-weight:800;margin-bottom:8px">업로드 파일</div>
       <div class="file-history" id="vcFileHistory"></div>
       <div style="margin-top:20px;font-size:14px;font-weight:800">접수제품 사전</div>
       <div style="font-size:12px;color:var(--gray);margin:4px 0 8px">U열 접수제품 원문값 → 표시명 / 포함 여부. 여기서 바로 바꿀 수 있습니다.</div>
@@ -16975,6 +16998,23 @@ function vcOpenModal(v){
 }
 function vcCloseModal(){document.getElementById('vcModalOverlay').classList.remove('open');}
 
+// 워크북의 '모든 시트'를 읽어 한 AOA로 합친다.
+//  첫 시트만 읽으면 월별 시트로 합쳐 올린 파일의 2번째 시트부터가 통째로 사라진다
+//  (고객키가 어느 파일에도 없는 것처럼 보이는 원인).
+//  시트마다 헤더 유무가 다를 수 있어, 첫 행의 고객키 칸이 키처럼 안 보이면 헤더로 보고 버린다.
+function vcLooksKey(v){const s=String(v==null?'':v).trim();return s.length>=8&&/\d/.test(s)&&!/[가-힣]/.test(s);}
+function vcParseWorkbook(wb){
+  let header=null;const rows=[];
+  for(const name of wb.SheetNames){
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:'',raw:false});
+    if(!a.length)continue;
+    let start=0;
+    if(!vcLooksKey(a[0]&&a[0][VC_APP.customerKey])){if(!header)header=a[0];start=1;}
+    for(let i=start;i<a.length;i++)rows.push(a[i]);
+  }
+  return [header||[],...rows];   // 인제스트 루프가 i=1부터 도므로 헤더 한 줄을 앞에 둔다
+}
+
 VC_TYPES.forEach(type=>{
   const input=document.getElementById(`file-vc-${type}`);
   const box=document.getElementById(`box-vc-${type}`);
@@ -16989,10 +17029,9 @@ VC_TYPES.forEach(type=>{
         document.getElementById(`fname-vc-${type}`).textContent=f.name;
         const buf=await f.arrayBuffer();
         const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
-        const ws=wb.Sheets[wb.SheetNames[0]];
         const parsed=type==='attend'
-          ?XLSX.utils.sheet_to_json(ws,{defval:''})
-          :XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+          ?XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''})
+          :vcParseWorkbook(wb);
         if(type==='attend'){
           for(const o of vcFiles.filter(x=>x.type==='attend'))await vcIdbDelete(o.id);
           vcFiles=vcFiles.filter(x=>x.type!=='attend');
@@ -17000,7 +17039,7 @@ VC_TYPES.forEach(type=>{
           const same=vcFiles.find(x=>x.type===type&&x.fileName===f.name);
           if(same){await vcIdbDelete(same.id);vcFiles=vcFiles.filter(x=>x.id!==same.id);}
         }
-        const rec={type,fileName:f.name,uploadTime:Date.now(),data:parsed};
+        const rec={type,fileName:f.name,uploadTime:Date.now(),data:parsed,sheets:wb.SheetNames.slice()};
         rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
       }
       prog.classList.remove('loading');prog.classList.add('done');box.classList.add('loaded');
@@ -17042,11 +17081,58 @@ function vcRenderFileHistory(){
     html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${files.length}건 (${t.policy})</div>`;
     if(!files.length)html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';
     else files.forEach((f,i)=>{const a=i===0;
-      html+=`<div class="fh-item${a?' active':''}"><span class="fh-name">${vcEsc(f.fileName)}</span>${a?'<span class="fh-active-badge">최신</span>':''}<span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span><button class="btn-del" onclick="vcDeleteFile(${f.id})">&times;</button></div>`;
+      const sh=Array.isArray(f.sheets)?f.sheets.length:0;
+      const rows=Array.isArray(f.data)?Math.max(0,f.data.length-1):0;
+      const meta=t.key==='attend'?'':` <span class="fh-meta">${rows.toLocaleString()}행${sh?` · ${sh}시트`:' · 시트정보 없음(재업로드 권장)'}</span>`;
+      html+=`<div class="fh-item${a?' active':''}"><span class="fh-name">${vcEsc(f.fileName)}${meta}</span>${a?'<span class="fh-active-badge">최신</span>':''}<span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span><button class="btn-del" onclick="vcDeleteFile(${f.id})">&times;</button></div>`;
     });html+='</div>';
   }
   document.getElementById('vcFileHistory').innerHTML=html;
 }
+// ── 고객키 조회 (진단) ──
+//  "이 계약이 왜 안 잡히지?"를 추측 없이 끝내기 위한 도구.
+//  업로드된 원본 AOA를 직접 훑어 어느 파일 몇 행에 있는지, 판정 컬럼 값이 뭔지,
+//  최종적으로 집계에 들어갔는지(사유 포함)를 한 화면에 보여준다.
+function vcLookupKeys(){
+  const el=document.getElementById('vcLookupResult');
+  const keys=[...new Set((document.getElementById('vcLookupInput').value||'').split(/[\s,]+/).map(s=>s.trim()).filter(Boolean))];
+  if(!keys.length){el.innerHTML='<div class="fh-empty">고객키를 입력하세요</div>';return;}
+  const cols=[['담당자 N',VC_APP.manager],['신청일 P',VC_APP.applicationDate],['환급패키지 F',VC_APP.refundPkg],['접수제품 U',VC_APP.product],['반품일 AJ',VC_APP.returnDate]];
+  const label={'app-daily':'일마감','app':'전체기간'};
+  let html='';
+  for(const key of keys){
+    const hits=[];
+    for(const f of vcFiles){
+      if(f.type==='attend'||!Array.isArray(f.data))continue;
+      for(let i=1;i<f.data.length;i++){
+        if(str(f.data[i][VC_APP.customerKey])!==key)continue;
+        hits.push({type:f.type,fileName:f.fileName,row:i+1,data:f.data[i]});
+      }
+    }
+    html+=`<div class="vc-lk"><div class="vc-lk-key">${vcEsc(key)}</div>`;
+    if(!hits.length){
+      html+=`<div class="vc-lk-verdict bad">업로드된 어느 파일에도 이 고객키가 없습니다.
+        <div class="vc-lk-hint">→ 해당 파일을 아직 안 올렸거나, 고객키가 D열(4번째 열)이 아니거나, 워크북의 다른 시트에 있는데 읽히지 않은 경우입니다. 파일 목록의 시트 수를 확인하세요.</div></div>`;
+    }else{
+      html+='<div class="vc-lk-scroll"><table class="vc-lk-tbl"><thead><tr><th>파일</th><th>행</th>'
+        +cols.map(c=>`<th>${c[0]}</th>`).join('')+'</tr></thead><tbody>';
+      for(const h of hits){
+        html+=`<tr><td class="vc-lk-f"><b>${label[h.type]||h.type}</b><span>${vcEsc(h.fileName)}</span></td><td>${h.row}</td>`
+          +cols.map(c=>`<td>${vcEsc(str(h.data[c[1]]))||'<i>(빈칸)</i>'}</td>`).join('')+'</tr>';
+      }
+      html+='</tbody></table></div>';
+      const inKept=(vcResult&&vcResult.contracts||[]).find(c=>c.ck===key);
+      const inSkip=(vcResult&&vcResult.skipped||[]).find(c=>c.ck===key);
+      if(inKept)html+=`<div class="vc-lk-verdict ok">집계에 <b>포함</b>됨 · 상태 <b>${inKept.status}</b> · 제품 <b>${vcEsc(inKept.product||'')}</b> · 신청일 <b>${cdFmtISO(inKept.appDate)||'없음'}</b>
+        <div class="vc-lk-hint">화면에 안 보이면 기간·센터·코디 필터나 제품 서브탭에 걸린 것입니다.${inKept.appDate?'':' 신청일(P열)이 비어 있어 기간 필터에서는 항상 제외됩니다.'}</div></div>`;
+      else if(inSkip)html+=`<div class="vc-lk-verdict bad">집계에서 <b>제외</b>됨 — 사유: <b>${vcEsc(inSkip.skipReason||'')}</b></div>`;
+      else html+='<div class="vc-lk-verdict bad">원본에는 있으나 집계 대상에 없습니다. 대시보드를 다시 생성해 보세요.</div>';
+    }
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+
 async function vcDeleteFile(id){if(!confirm('삭제하시겠습니까?'))return;await vcIdbDelete(id);vcFiles=vcFiles.filter(f=>f.id!==id);vcRenderFileHistory();vcUpdateUploadStatus();vcUpdateStatusDots();}
 
 // ═══════════════════════════════════════════
@@ -17169,7 +17255,8 @@ function vcGenerate(){
       const mi=hit||{};
       // 최신 명단에 없는 이름(=이력에만 남은 사람)은 퇴사자. 명단 자체가 없으면 판정하지 않는다.
       const left=attendFile?!(hit&&!hit.resigned):false;
-      return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',left,productRaw:str(row[VC_APP.product])};
+      return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',left,
+        productRaw:str(row[VC_APP.product]),refundPkg:str(row[VC_APP.refundPkg])};
     };
 
     // 검증 원장(vcLedger)에는 집계에서 빠진 행까지 사유와 함께 담는다 — 판정 규칙을 눈으로 대조하기 위해.
@@ -17934,11 +18021,11 @@ function vcDownloadLedger(){
   if(!vcResult){alert('먼저 대시보드를 생성하세요.');return;}
   const iso=d=>d?cdFmtISO(d):'';
   const head=['고객키','담당자(N열 원문)','코디명','센터','퇴사','신청일(P열)','반품일(AJ열)',
-    '접수제품(U열 원문)','표시명','상태','취소일수','전체기간파일 매칭','집계포함','집계제외 사유'];
+    '환급패키지(F열)','접수제품(U열 원문)','표시명','상태','취소일수','전체기간파일 매칭','집계포함','집계제외 사유'];
   const line=(c,inc,reason)=>[
     c.ck,c.manager,c.cleanName,c.center,c.left?'Y':'',
     iso(c.appDate),iso(c.returnDate),
-    c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
+    c.refundPkg||'',c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
     c.status,c.cancelDays==null?'':c.cancelDays,
     c.matched?'Y':'N',inc?'Y':'N',reason||''
   ].map(vcCsvCell).join(',');
