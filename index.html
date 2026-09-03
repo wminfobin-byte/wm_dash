@@ -16951,7 +16951,7 @@ function vcUpdateUploadStatus(){
 function vcUpdateStatusDots(){VC_TYPES.forEach(t=>{const d=document.getElementById(`vc-dot-${t}`);if(d)d.classList.toggle('ok',vcGetFilesByType(t).length>0);});}
 function vcUpdateHeader(){
   const el=document.getElementById('vcLastUpdate');if(!el)return;
-  el.textContent=vcResult&&vcResult.maxAppDate?`최종 신청일자 : ${cdFmtISO(vcResult.maxAppDate)}`:'';
+  el.textContent=vcResult&&vcResult.maxAppDate?`최종 업데이트 일자 : ${cdFmtISO(vcResult.maxAppDate)}`:'';
 }
 
 function vcRenderFileHistory(){
