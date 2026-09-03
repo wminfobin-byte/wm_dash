@@ -796,6 +796,8 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
 .vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
 .vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
+/* 서브탭 앞 제품 색 점 (실제 색은 vcEnsureProdStyle이 인라인으로 준다) */
+#vcSubtabs .vc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.12)}
 /* 개인별 표의 퇴사자 행 — 이름·수치 모두 흐리게 */
 tr.vc-left{opacity:.45}
 tr.vc-left:hover{opacity:.75}
@@ -17150,6 +17152,7 @@ function vcGenerate(){
     for(const c of kept){if(c.product&&!seen.has(c.product)){seen.add(c.product);order.push(c.product);}}
 
     vcResult={contracts:kept,members,productOrder:order,maxAppDate,warns};
+    vcEnsureProdStyle(order);   // 제품 색은 productOrder 인덱스 고정 → 필터를 바꿔도 색이 안 흔들린다
     vcUpdateHeader();
     if(!vcDateStart&&!vcDateEnd){
       const now=new Date();vcDateStart=new Date(now.getFullYear(),now.getMonth()-2,1);vcDateEnd=now;
@@ -17179,10 +17182,10 @@ function vcTH(){
   VC_PERIODS.forEach((p,i)=>{h+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   h+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th>';return h;
 }
-function vcTR(label,b,bold,indent){
+function vcTR(label,b,bold,indent,cls){
   const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx,tc=px+cx;
   const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
-  let h=`<tr style="${bold?'font-weight:800;background:#f8f9fc':''}">
+  let h=`<tr class="${cls||''}${bold?' bold-row':''}" style="${bold?'font-weight:800;background:#f8f9fc':''}">
     <td class="text-left" style="padding-left:${indent||14}px;white-space:nowrap">${label}</td>
     <td>${vcNum(n)}</td>
     <td class="cd-sep">${vcNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
@@ -17191,12 +17194,13 @@ function vcTR(label,b,bold,indent){
   VC_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;h+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${vcNum(v)}</td><td>${pct2(r)}</td>`;});
   h+=`<td class="cd-sep">${vcNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
 }
-function vcMWHeaderTR(label,b,gid){
+function vcMWHeaderTR(label,b,gid,cls){
   const arrow=`<span class="cd-mw-arrow" data-vcmw-arrow="${gid}" style="display:inline-block;margin-right:6px;transition:transform .2s;transform:rotate(90deg)">▶</span>`;
-  return vcTR(arrow+label,b,true,14).replace(/^<tr /,`<tr class="cd-mw-header" data-vcmw-header="${gid}" onclick="vcToggleMW('${gid}')" `);
+  return vcTR(arrow+label,b,true,14,`cd-mw-header ${cls||''}`)
+    .replace(/^<tr /,`<tr data-vcmw-header="${gid}" onclick="vcToggleMW('${gid}')" `);
 }
-function vcMWChildTR(label,b,gid){
-  return vcTR(label,b,false,28).replace(/^<tr /,`<tr class="cd-mw-child vc-mw-child-${gid}" `);
+function vcMWChildTR(label,b,gid,cls){
+  return vcTR(label,b,false,28,`cd-mw-child vc-mw-child-${gid} ${cls||''}`);
 }
 function vcToggleMW(gid){
   const children=document.querySelectorAll('.vc-mw-child-'+gid);
@@ -17210,6 +17214,32 @@ function vcToggleMW(gid){
 // ═══════════════════════════════════════════
 //  필터 + 렌더링
 // ═══════════════════════════════════════════
+// ── 제품별 행 색 ──
+//  WM은 브랜드가 4개로 고정이라 CSS에 박아뒀지만(cd-brand-*), Via는 접수제품이
+//  사전을 통해 계속 늘어난다. 그래서 productOrder 인덱스로 팔레트를 배정하고
+//  CSS를 런타임에 <style id="vcProdColorStyle">로 주입한다.
+//  [연한색(하위 월/주차 행), 진한색(제품 그룹 헤더 행 = .bold-row)]
+const VC_PROD_COLORS=[
+  ['#e3f2fd','#bbdefb'],['#e8f5e9','#d0ecd2'],['#f3e8ff','#e8d5ff'],['#fff3e0','#ffe8c8'],
+  ['#fce4ec','#f8bbd0'],['#e0f7fa','#b2ebf2'],['#fffde7','#fff59d'],['#efebe9','#d7ccc8'],
+  ['#e8eaf6','#c5cae9'],['#f1f8e9','#dcedc8'],['#fbe9e7','#ffccbc'],['#eceff1','#cfd8dc'],
+];
+function vcProdColor(i){return VC_PROD_COLORS[i%VC_PROD_COLORS.length];}
+function vcProdClass(p){const i=vcResult?vcResult.productOrder.indexOf(p):-1;return i>=0?'vc-p'+i:'';}
+function vcEnsureProdStyle(labels){
+  let st=document.getElementById('vcProdColorStyle');
+  if(!st){st=document.createElement('style');st.id='vcProdColorStyle';document.head.appendChild(st);}
+  let css='';
+  labels.forEach((l,i)=>{
+    const[light,dark]=vcProdColor(i);
+    css+=`.vc-p${i}{background:${light}!important}\n`;
+    css+=`.vc-p${i}.bold-row{background:${dark}!important}\n`;
+    // 첫 열이 sticky일 때 흰 배경으로 덮이지 않도록 같은 색을 다시 깔아준다
+    css+=`.cd-wide-table tr.vc-p${i} td:first-child{background:${light}}\n`;
+    css+=`.cd-wide-table tr.vc-p${i}.bold-row td:first-child{background:${dark}}\n`;
+  });
+  st.textContent=css;
+}
 function vcVisibleProducts(data){
   const has=new Set(data.map(c=>c.product));
   const out=vcResult.productOrder.filter(p=>has.has(p));
@@ -17245,7 +17275,12 @@ function vcRenderSubtabs(data){
   const labels=vcVisibleProducts(data);
   if(vcCurrentView!=='all'&&labels.indexOf(vcCurrentView)<0)vcCurrentView='all';
   let h=`<div class="cd-subtab${vcCurrentView==='all'?' active':''}" data-vcview="all">전체</div>`;
-  for(const l of labels)h+=`<div class="cd-subtab${vcCurrentView===l?' active':''}" data-vcview="${vcEsc(l)}">${vcEsc(l)}</div>`;
+  for(const l of labels){
+    // 탭 앞의 점 = 표에서 그 제품 행에 깔리는 색 (같은 색으로 눈이 따라가게)
+    const i=vcResult.productOrder.indexOf(l);
+    const dot=i>=0?`<span class="vc-dot" style="background:${vcProdColor(i)[1]}"></span>`:'';
+    h+=`<div class="cd-subtab${vcCurrentView===l?' active':''}" data-vcview="${vcEsc(l)}">${dot}${vcEsc(l)}</div>`;
+  }
   document.getElementById('vcSubtabs').innerHTML=h;
 }
 document.addEventListener('click',e=>{
@@ -17286,8 +17321,9 @@ function vcRenderMonthly(data,grouped){
       const bt=vcNewBucket();months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b)vcMergeBuckets(bt,b);});
       if(!bt.initial)return;
       const gid='vmo-p'+idx;
-      html+=vcMWHeaderTR(vcEsc(p),bt,gid);
-      months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,gid);}});
+      const pc=vcProdClass(p);
+      html+=vcMWHeaderTR(vcEsc(p),bt,gid,pc);
+      months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b&&b.initial>0){const m=mk.split("-")[1];html+=vcMWChildTR(`${+m}월`,b,gid,pc);}});
     });
   }
   html+='</tbody></table>';document.getElementById('vcMonthlyTable').innerHTML=html;
@@ -17312,8 +17348,9 @@ function vcRenderWeekly(data,grouped){
       const bt=vcNewBucket();weeks.forEach(wk=>{const b=byPW[`${p}|${wk}`];if(b)vcMergeBuckets(bt,b);});
       if(!bt.initial)return;
       const gid='vwk-p'+idx;
-      html+=vcMWHeaderTR(vcEsc(p),bt,gid);
-      weeks.forEach(wk=>{const b=byPW[`${p}|${wk}`];if(b&&b.initial>0)html+=vcMWChildTR(cdWeekLabel(wk),b,gid);});
+      const pc=vcProdClass(p);
+      html+=vcMWHeaderTR(vcEsc(p),bt,gid,pc);
+      weeks.forEach(wk=>{const b=byPW[`${p}|${wk}`];if(b&&b.initial>0)html+=vcMWChildTR(cdWeekLabel(wk),b,gid,pc);});
     });
   }
   html+='</tbody></table>';document.getElementById('vcWeeklyTable').innerHTML=html;
@@ -17341,8 +17378,8 @@ function vcRenderProduct(data){
   const byP={};const total=vcNewBucket();
   for(const c of data){const k=c.product||'미지정';if(!byP[k])byP[k]=vcNewBucket();vcAddToBucket(byP[k],c);vcAddToBucket(total,c);}
   let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`+vcTR('전체',total,true);
-  for(const p of vcResult.productOrder){const b=byP[p];if(!b||!b.initial)continue;html+=vcTR(vcEsc(p),b,true,14);delete byP[p];}
-  for(const[p,b]of Object.entries(byP)){if(!b.initial)continue;html+=vcTR(vcEsc(p),b,false,14);}
+  for(const p of vcResult.productOrder){const b=byP[p];if(!b||!b.initial)continue;html+=vcTR(vcEsc(p),b,true,14,vcProdClass(p));delete byP[p];}
+  for(const[p,b]of Object.entries(byP)){if(!b.initial)continue;html+=vcTR(vcEsc(p),b,false,14,vcProdClass(p));}
   html+='</tbody></table>';document.getElementById('vcProductTable').innerHTML=html;
 }
 
