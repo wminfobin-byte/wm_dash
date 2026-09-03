@@ -1608,8 +1608,10 @@ tr.vc-left:hover{opacity:.75}
     </div>
 
     <div id="vcNavMedia" class="table-section">
-      <h3>월별 취소율 <span class="table-sub">매체 / 비매체 (Q열 분류 기준)</span></h3>
-      <div class="cd-wide-table" id="vcMediaTable"></div>
+      <h3 style="cursor:pointer;user-select:none" onclick="vcToggleMedia()">
+        <span><span id="vcMediaArrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>월별 취소율 <span class="table-sub">매체 / 비매체 (Q열 분류 기준)</span></span>
+      </h3>
+      <div class="cd-wide-table hidden" id="vcMediaTable"></div>
     </div>
 
     <div id="vcNavWeekly" class="table-section">
@@ -17805,6 +17807,13 @@ document.addEventListener('click',e=>{
   vcOpenPerson=(vcOpenPerson===name)?null:name;
   vcRenderPerson(vcViewData);
 });
+// 매체/비매체는 보조 축이라 개인별과 마찬가지로 접은 상태로 시작한다
+function vcToggleMedia(){
+  const el=document.getElementById('vcMediaTable');
+  const arrow=document.getElementById('vcMediaArrow');
+  const closed=el.classList.toggle('hidden');
+  arrow.style.transform=closed?'rotate(0deg)':'rotate(90deg)';
+}
 function vcTogglePerson(){
   const el=document.getElementById('vcPersonTable');
   const arrow=document.getElementById('vcPersonArrow');
