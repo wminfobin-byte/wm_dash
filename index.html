@@ -1555,6 +1555,7 @@ tr.vc-left:hover{opacity:.75}
       <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
         <button class="btn btn-primary btn-sm" id="vcEstBtn" onclick="vcToggleEst()">동일기간추정</button>
         <button class="btn btn-success btn-sm" onclick="vcDownloadExcel()">Excel 다운로드</button>
+        <button class="btn btn-outline btn-sm" onclick="vcDownloadLedger()" title="판정 결과를 행 단위로 뽑아 원본 파일과 대조하는 용도 (필터 무시, 전건)">검증 원장</button>
       </div>
     </div>
 
@@ -17171,20 +17172,25 @@ function vcGenerate(){
       return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',left,productRaw:str(row[VC_APP.product])};
     };
 
-    const contracts=[];
+    // 검증 원장(vcLedger)에는 집계에서 빠진 행까지 사유와 함께 담는다 — 판정 규칙을 눈으로 대조하기 위해.
+    const contracts=[],skipped=[];
     if(hasDaily){
       for(const[ck,dRow]of Object.entries(dailyByKey)){
-        if(parseDate(dRow[VC_APP.returnDate]))continue;      // 일마감 시점에 이미 반품 처리된 건은 제외
+        const dRet=parseDate(dRow[VC_APP.returnDate]);
         const appDate=parseDate(dRow[VC_APP.applicationDate]);
-        let status='유지',cancelDays=null;
+        if(dRet){   // 일마감 시점에 이미 반품 처리된 건은 집계에서 제외
+          skipped.push({ck,...mkBase(dRow),appDate,returnDate:dRet,status:'일마감반품',matched:!!fullByKey[ck],cancelDays:null,skipReason:'일마감 반품일 있음'});
+          continue;
+        }
+        let status='유지',cancelDays=null,returnDate=null;
         const fRow=fullByKey[ck];
         if(hasFull&&!fRow){status='배송전취소';}
         else if(fRow){
           const fr=parseDate(fRow[VC_APP.returnDate]);
-          if(fr){status='취소';const od=appDate||parseDate(fRow[VC_APP.applicationDate]);
+          if(fr){status='취소';returnDate=fr;const od=appDate||parseDate(fRow[VC_APP.applicationDate]);
             if(od){cancelDays=Math.ceil((fr-od)/864e5);if(cancelDays<0)cancelDays=null;}}
         }
-        contracts.push({ck,...mkBase(dRow),appDate,status,cancelDays});
+        contracts.push({ck,...mkBase(dRow),appDate,status,cancelDays,returnDate,matched:!!fRow});
       }
     }else{
       for(const[ck,fRow]of Object.entries(fullByKey)){
@@ -17192,7 +17198,7 @@ function vcGenerate(){
         const rd=parseDate(fRow[VC_APP.returnDate]);
         let status='유지',cancelDays=null;
         if(rd){status='취소';if(appDate){cancelDays=Math.ceil((rd-appDate)/864e5);if(cancelDays<0)cancelDays=null;}}
-        contracts.push({ck,...mkBase(fRow),appDate,status,cancelDays});
+        contracts.push({ck,...mkBase(fRow),appDate,status,cancelDays,returnDate:rd,matched:true});
       }
     }
 
@@ -17202,6 +17208,7 @@ function vcGenerate(){
 
     const kept=contracts.filter(c=>vcIncluded(c.productRaw));
     for(const c of kept)c.product=vcLabelOf(c.productRaw)||'미지정';
+    for(const c of contracts)if(!vcIncluded(c.productRaw))skipped.push({...c,skipReason:'제외 제품'});
     const dropped=contracts.length-kept.length;
     if(dropped>0)warns.push(`제외 제품 ${dropped.toLocaleString()}건은 전체 집계에서 뺐습니다.`);
 
@@ -17211,7 +17218,8 @@ function vcGenerate(){
       const l=e.label||vcDefaultLabel(raw);if(l&&!seen.has(l)){seen.add(l);order.push(l);}}
     for(const c of kept){if(c.product&&!seen.has(c.product)){seen.add(c.product);order.push(c.product);}}
 
-    vcResult={contracts:kept,members,productOrder:order,maxAppDate,warns};
+    vcResult={contracts:kept,skipped,members,productOrder:order,maxAppDate,warns,
+      counts:{daily:Object.keys(dailyByKey).length,full:Object.keys(fullByKey).length}};
     vcEnsureProdStyle(order);   // 제품 색은 productOrder 인덱스 고정 → 필터를 바꿔도 색이 안 흔들린다
     vcUpdateHeader();
     if(!vcDateStart&&!vcDateEnd){
@@ -17894,6 +17902,47 @@ async function vcDownloadExcel(){
     const blob=await zip.generateAsync({type:'blob'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;a.click();URL.revokeObjectURL(url);
   }catch(e){console.error(e);XLSX.writeFile(wb,fname);}
+}
+
+// ═══════════════════════════════════════════
+//  검증 원장 CSV — 화면 숫자를 뜯어보기 위한 행 단위 덤프
+//   대시보드가 이미 두 파일을 고객키로 조인해뒀으니, 그 판정 결과를 그대로 뱉어
+//   Excel에서는 조인 없이 피벗·VLOOKUP만으로 대조할 수 있게 한다.
+//   기간/센터/코디/제품 필터를 무시하고 전건을 내보낸다(Excel에서 걸러 보는 게 빠름).
+//   집계에서 빠진 행도 사유(집계제외)와 함께 담는다.
+// ═══════════════════════════════════════════
+function vcCsvCell(v){
+  const s=(v==null?'':String(v));
+  return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+}
+function vcDownloadLedger(){
+  if(!vcResult){alert('먼저 대시보드를 생성하세요.');return;}
+  const iso=d=>d?cdFmtISO(d):'';
+  const head=['고객키','담당자(N열 원문)','코디명','센터','퇴사','신청일(P열)','반품일(AJ열)',
+    '접수제품(U열 원문)','표시명','상태','취소일수','전체기간파일 매칭','집계포함','집계제외 사유'];
+  const line=(c,inc,reason)=>[
+    c.ck,c.manager,c.cleanName,c.center,c.left?'Y':'',
+    iso(c.appDate),iso(c.returnDate),
+    c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
+    c.status,c.cancelDays==null?'':c.cancelDays,
+    c.matched?'Y':'N',inc?'Y':'N',reason||''
+  ].map(vcCsvCell).join(',');
+  const rows=[head.map(vcCsvCell).join(',')];
+  for(const c of vcResult.contracts)rows.push(line(c,true,''));
+  for(const c of (vcResult.skipped||[]))rows.push(line(c,false,c.skipReason||'제외'));
+  // BOM을 붙여야 Excel이 UTF-8 한글을 깨지 않고 연다
+  const blob=new Blob(['﻿'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=`Via취소율_검증원장_${cdFmtISO(new Date())}.csv`;a.click();URL.revokeObjectURL(url);
+  const k=vcResult.contracts.length,s=(vcResult.skipped||[]).length,ct=vcResult.counts||{};
+  alert(`검증 원장을 내려받았습니다.\n\n`
+    +`· 집계 포함 ${k.toLocaleString()}행 (= 전체 기간 '최초 계약수')\n`
+    +`· 집계 제외 ${s.toLocaleString()}행 (사유 열 확인)\n`
+    +`· 원장 합계 ${(k+s).toLocaleString()}행\n\n`
+    +`원본 고객키 (중복 제거 후)\n`
+    +`· 일마감 ${(ct.daily||0).toLocaleString()}건  ← 원장 합계와 같아야 합니다\n`
+    +`· 전체기간 ${(ct.full||0).toLocaleString()}건\n\n`
+    +`Excel에서 '집계포함=Y'로 거른 뒤 피벗하면 화면 숫자와 1:1로 맞아야 합니다.`);
 }
 
 // ═══════════════════════════════════════════
