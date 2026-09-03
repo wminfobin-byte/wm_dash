@@ -796,6 +796,46 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
 .vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
 .vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
+/* ── 센터·코디 멀티선택 ── */
+.vc-sel-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.vc-msel{position:relative}
+.vc-msel-btn{padding:6px 12px;font-size:12px;font-weight:700;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;white-space:nowrap}
+.vc-msel-btn:hover{border-color:#94a3b8}
+.vc-msel-btn.on{border-color:#4361ee;background:#eef2ff;color:#3730a3}
+.vc-msel-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;width:250px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 28px rgba(15,23,42,.14);overflow:hidden}
+.vc-msel-head{display:flex;gap:6px;padding:8px;border-bottom:1px solid #eef1f6;background:#f8fafc}
+.vc-msel-head button{flex:1;padding:4px 6px;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;color:#475569}
+.vc-msel-list{max-height:280px;overflow-y:auto}
+.vc-msel-item{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;cursor:pointer}
+.vc-msel-item:hover{background:#f8fafc}
+.vc-msel-item span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vc-msel-n{color:#94a3b8;font-size:11px;font-variant-numeric:tabular-nums}
+.vc-msel-empty{padding:14px 10px;font-size:12px;color:#94a3b8;text-align:center}
+.vc-msel-clear{padding:6px 10px;font-size:11px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#b91c1c;cursor:pointer;font-weight:700}
+.vc-sel-summary{font-size:12px;color:#64748b}
+/* ── 개인별 드릴다운 (제품 × 기간) ── */
+.vc-exp{display:inline-block;margin-right:6px;color:#94a3b8;cursor:pointer;transition:transform .18s;font-size:11px}
+.vc-exp:hover{color:#4361ee}
+.vc-exp.open{transform:rotate(90deg);color:#4361ee}
+tr.vc-drill-row>td{padding:0!important;background:#f8fafc!important}
+.vc-drill{padding:12px 16px 16px}
+.vc-drill-head{display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:8px;flex-wrap:wrap}
+.vc-drill-sub{font-size:11px;color:#94a3b8;font-weight:500}
+.vc-drill-unit{margin-left:auto;display:flex;gap:4px}
+.vc-drill-unit button{padding:3px 10px;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;color:#475569}
+.vc-drill-unit button.on{border-color:#4361ee;background:#4361ee;color:#fff;font-weight:700}
+.vc-drill-scroll{overflow-x:auto}
+.vc-drill-tbl{border-collapse:collapse;background:#fff;min-width:100%}
+.vc-drill-tbl th,.vc-drill-tbl td{border:1px solid #e5e9f0;padding:6px 10px;font-size:12px;white-space:nowrap;text-align:center}
+.vc-drill-tbl th{background:#eef2f7;font-size:11px;font-weight:700;color:#475569}
+.vc-drill-name{text-align:left!important;font-weight:700}
+.vc-dc b{display:block;font-size:12px;font-variant-numeric:tabular-nums}
+.vc-dc span{display:block;font-size:10px;color:#94a3b8;font-variant-numeric:tabular-nums}
+.vc-dc.empty{color:#cbd5e1}
+.vc-drill-tbl .vc-dt{background:#f8fafc}
+.vc-drill-total td{background:#eef2f7;font-weight:700}
+.vc-drill-empty{padding:16px;font-size:12px;color:#94a3b8}
+.vc-drill-name .vc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.12)}
 /* 서브탭 앞 제품 색 점 (실제 색은 vcEnsureProdStyle이 인라인으로 준다) */
 #vcSubtabs .vc-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.12)}
 /* 개인별 표의 퇴사자 행 — 이름·수치 모두 흐리게 */
@@ -1500,6 +1540,20 @@ tr.vc-left:hover{opacity:.75}
         <button class="btn btn-primary btn-sm" id="vcEstBtn" onclick="vcToggleEst()">동일기간추정</button>
         <button class="btn btn-success btn-sm" onclick="vcDownloadExcel()">Excel 다운로드</button>
       </div>
+    </div>
+
+    <!-- 센터·코디 멀티선택 (기간·제품 서브탭과 AND로 걸린다) -->
+    <div class="vc-sel-bar">
+      <div class="vc-msel">
+        <button class="vc-msel-btn" id="vcCenterBtn" onclick="vcToggleSelPanel('center')">센터 전체 ▾</button>
+        <div class="vc-msel-panel hidden" id="vcCenterPanel"></div>
+      </div>
+      <div class="vc-msel">
+        <button class="vc-msel-btn" id="vcCodiBtn" onclick="vcToggleSelPanel('codi')">코디 전체 ▾</button>
+        <div class="vc-msel-panel hidden" id="vcCodiPanel"></div>
+      </div>
+      <button class="vc-msel-clear hidden" id="vcSelClear" onclick="vcClearSel()">필터 해제</button>
+      <span class="vc-sel-summary" id="vcSelSummary"></span>
     </div>
 
     <div id="vcPendingBanner" class="est-banner hidden" style="cursor:pointer" onclick="vcOpenProdModal()"></div>
@@ -16685,6 +16739,9 @@ const VC_TYPES=['app-daily','app','attend'];
 let vcIdb=null, vcFiles=[], vcLoaded=false, vcResult=null;
 let vcProducts={};        // 접수제품 원문 → {label, include}  (클라우드 싱크 대상)
 let vcProdKeys=[];        // 파일관리 사전 편집 행 ↔ 원문값 매핑 (인덱스로만 전달)
+let vcCenterSel=new Set(), vcCodiSel=new Set();   // 빈 Set = 전체
+let vcDateFiltered=[], vcViewData=[];             // 셀렉트 패널 모수 / 개인별 드릴다운 재렌더용
+let vcOpenPerson=null, vcDrillUnit='week';        // 개인별 펼친 코디 · 드릴 집계단위(week|month)
 let vcPending=[];         // 아직 판정하지 않은 접수제품 원문값 (잠정 포함으로 집계)
 let vcDateStart=null, vcDateEnd=null, vcCurrentView='all', vcEstMode=false;
 let vcCalYear, vcCalMonth, vcCalPhase='start', vcCalTempStart=null, vcCalTempEnd=null;
@@ -17214,6 +17271,81 @@ function vcToggleMW(gid){
 // ═══════════════════════════════════════════
 //  필터 + 렌더링
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+//  센터·코디 멀티선택 (nc 탭과 같은 관용구 — 빈 Set = 전체)
+//   기간 → 센터·코디 → 제품 서브탭 순으로 AND 적용되므로
+//   '박숙자 × A모델 × 5월 4주차' 같은 조합이 주차별 표에서 바로 읽힌다.
+// ═══════════════════════════════════════════
+function vcSelSource(which){
+  // 센터 목록은 기간만 반영, 코디 목록은 선택된 센터까지 반영해 좁힌다
+  let src=vcDateFiltered||[];
+  if(which==='codi'&&vcCenterSel.size)src=src.filter(c=>vcCenterSel.has(c.center||'기타'));
+  const n={};
+  for(const c of src){const k=which==='center'?(c.center||'기타'):c.cleanName;if(!k)continue;n[k]=(n[k]||0)+1;}
+  return Object.keys(n).sort((a,b)=>n[b]-n[a]||a.localeCompare(b,'ko')).map(k=>({k,n:n[k]}));
+}
+function vcRenderSelPanel(which){
+  const panel=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
+  const sel=which==='center'?vcCenterSel:vcCodiSel;
+  const items=vcSelSource(which);
+  let h=`<div class="vc-msel-head">
+    <button onclick="vcSelAll('${which}',true)">전체선택</button>
+    <button onclick="vcSelAll('${which}',false)">해제</button>
+  </div><div class="vc-msel-list">`;
+  if(!items.length)h+='<div class="vc-msel-empty">해당 기간에 데이터가 없습니다</div>';
+  for(const it of items){
+    h+=`<label class="vc-msel-item"><input type="checkbox" data-vcsel="${which}" data-vcval="${vcEsc(it.k)}"${sel.has(it.k)?' checked':''}> <span>${vcEsc(it.k)}</span><span class="vc-msel-n">${it.n.toLocaleString()}</span></label>`;
+  }
+  panel.innerHTML=h+'</div>';
+}
+function vcToggleSelPanel(which){
+  const me=document.getElementById(which==='center'?'vcCenterPanel':'vcCodiPanel');
+  const other=document.getElementById(which==='center'?'vcCodiPanel':'vcCenterPanel');
+  if(other)other.classList.add('hidden');
+  if(me.classList.contains('hidden')){vcRenderSelPanel(which);me.classList.remove('hidden');}
+  else me.classList.add('hidden');
+}
+function vcSelAll(which,on){
+  const sel=which==='center'?vcCenterSel:vcCodiSel;
+  sel.clear();
+  if(on)for(const it of vcSelSource(which))sel.add(it.k);
+  if(which==='center')vcCodiSel.clear();     // 센터를 바꾸면 코디 목록 자체가 달라진다
+  vcRenderSelPanel(which);vcFilterAndRender();
+}
+function vcClearSel(){vcCenterSel.clear();vcCodiSel.clear();vcFilterAndRender();}
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(!t||!t.dataset||!t.dataset.vcsel)return;
+  const which=t.dataset.vcsel,val=t.dataset.vcval;
+  const sel=which==='center'?vcCenterSel:vcCodiSel;
+  if(t.checked)sel.add(val);else sel.delete(val);
+  if(which==='center'){vcCodiSel.clear();const p=document.getElementById('vcCodiPanel');if(p&&!p.classList.contains('hidden'))vcRenderSelPanel('codi');}
+  vcFilterAndRender();
+});
+document.addEventListener('click',e=>{
+  if(e.target.closest&&e.target.closest('.vc-msel'))return;
+  ['vcCenterPanel','vcCodiPanel'].forEach(id=>{const p=document.getElementById(id);if(p)p.classList.add('hidden');});
+});
+function vcSelBtnLabel(which,sel){
+  const name=which==='center'?'센터':'코디';
+  if(!sel.size)return `${name} 전체 ▾`;
+  if(sel.size===1)return `${name}: ${[...sel][0]} ▾`;
+  return `${name} ${sel.size}개 ▾`;
+}
+function vcRenderSelBar(){
+  document.getElementById('vcCenterBtn').textContent=vcSelBtnLabel('center',vcCenterSel);
+  document.getElementById('vcCodiBtn').textContent=vcSelBtnLabel('codi',vcCodiSel);
+  document.getElementById('vcCenterBtn').classList.toggle('on',vcCenterSel.size>0);
+  document.getElementById('vcCodiBtn').classList.toggle('on',vcCodiSel.size>0);
+  const any=vcCenterSel.size>0||vcCodiSel.size>0;
+  document.getElementById('vcSelClear').classList.toggle('hidden',!any);
+  const parts=[];
+  if(vcCenterSel.size)parts.push(`센터 ${[...vcCenterSel].join(', ')}`);
+  if(vcCodiSel.size)parts.push(`코디 ${[...vcCodiSel].join(', ')}`);
+  if(vcCurrentView!=='all')parts.push(`제품 ${vcCurrentView}`);
+  document.getElementById('vcSelSummary').textContent=parts.length?parts.join(' · '):'';
+}
+
 // ── 제품별 행 색 ──
 //  WM은 브랜드가 4개로 고정이라 CSS에 박아뒀지만(cd-brand-*), Via는 접수제품이
 //  사전을 통해 계속 늘어난다. 그래서 productOrder 인덱스로 팔레트를 배정하고
@@ -17255,9 +17387,15 @@ function vcFilterAndRender(){
       if(vcDateEnd){const e=new Date(vcDateEnd);e.setHours(23,59,59);if(c.appDate>e)return false;}
       return true;});
   }
+  // 센터·코디 선택은 기간 다음, 제품 서브탭 앞에 걸린다 (빈 Set = 전체)
+  vcDateFiltered=data;
+  if(vcCenterSel.size)data=data.filter(c=>vcCenterSel.has(c.center||'기타'));
+  if(vcCodiSel.size)data=data.filter(c=>vcCodiSel.has(c.cleanName));
+  vcRenderSelBar();
   vcRenderSubtabs(data);
   const isAll=vcCurrentView==='all';
   const view=isAll?data:data.filter(c=>c.product===vcCurrentView);
+  vcViewData=view;
   const sub=isAll?'제품별':vcCurrentView;
   document.getElementById('vcMonthlySub').textContent=sub;
   document.getElementById('vcWeeklySub').textContent=sub;
@@ -17414,9 +17552,73 @@ function vcRenderPerson(data){
   };
   const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
   html+=row('전체','',total,true,false);
-  for(const[name,b]of sorted)html+=row(vcEsc(name),vcEsc(b.center||''),b,false,!!b.left);
+  const COLS=11+VC_PERIODS.length*2;
+  for(const[name,b]of sorted){
+    const open=vcOpenPerson===name;
+    const arrow=`<span class="vc-exp${open?' open':''}" data-vcperson="${vcEsc(name)}" title="제품 × 기간으로 펼쳐보기">▶</span>`;
+    html+=row(arrow+vcEsc(name),vcEsc(b.center||''),b,false,!!b.left);
+    if(open)html+=`<tr class="vc-drill-row"><td colspan="${COLS}">${vcPersonDrill(name,data)}</td></tr>`;
+  }
   html+='</tbody></table>';document.getElementById('vcPersonTable').innerHTML=html;
 }
+// ── 개인별 드릴다운: 한 코디의 제품 × 기간 취소율 ──
+//  '박숙자님의 A모델 5월 4주차' 같은 조합을 한 화면에서 읽기 위한 표.
+//  셀 = 취소율 / (취소수 · 최초계약수). 모수가 작아도 그대로 보여준다.
+function vcPersonDrill(name,data){
+  const rows=data.filter(c=>c.cleanName===name&&c.appDate);
+  if(!rows.length)return '<div class="vc-drill-empty">해당 조건에 데이터가 없습니다</div>';
+  const unit=vcDrillUnit;
+  const keyOf=c=>unit==='week'?cdWeekKey(c.appDate):`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;
+  const labOf=k=>unit==='week'?cdWeekLabel(k):`${+k.split('-')[1]}월`;
+  const cols=[...new Set(rows.map(keyOf))].sort();
+  const prods=[...new Set(rows.map(c=>c.product||'미지정'))]
+    .sort((a,b)=>vcResult.productOrder.indexOf(a)-vcResult.productOrder.indexOf(b));
+  const cell={},rowT={},colT={};const grand=vcNewBucket();
+  for(const c of rows){
+    const p=c.product||'미지정',k=keyOf(c),ck=p+'|'+k;
+    if(!cell[ck])cell[ck]=vcNewBucket();vcAddToBucket(cell[ck],c);
+    if(!rowT[p])rowT[p]=vcNewBucket();vcAddToBucket(rowT[p],c);
+    if(!colT[k])colT[k]=vcNewBucket();vcAddToBucket(colT[k],c);
+    vcAddToBucket(grand,c);
+  }
+  const cellHtml=b=>{
+    if(!b||!b.initial)return '<td class="vc-dc empty">-</td>';
+    const n=b.initial,tc=b.preCx+b.cancel;
+    return `<td class="vc-dc"><b style="color:${cdRateColor(n>0?tc/n:0)}">${pct2(n>0?tc/n:0)}</b><span>${vcNum(tc)} / ${vcNum(n)}</span></td>`;
+  };
+  let h=`<div class="vc-drill">
+    <div class="vc-drill-head">
+      <b>${vcEsc(name)}</b> — 제품 × ${unit==='week'?'주차':'월'}별 취소율
+      <span class="vc-drill-sub">셀 = 취소율 · 취소수 / 최초계약수</span>
+      <span class="vc-drill-unit">
+        <button class="${unit==='week'?'on':''}" onclick="vcSetDrillUnit('week')">주차</button>
+        <button class="${unit==='month'?'on':''}" onclick="vcSetDrillUnit('month')">월</button>
+      </span>
+    </div>
+    <div class="vc-drill-scroll"><table class="vc-drill-tbl"><thead><tr><th>제품</th>`;
+  for(const k of cols)h+=`<th>${vcEsc(labOf(k))}</th>`;
+  h+='<th class="vc-dt">합계</th></tr></thead><tbody>';
+  for(const p of prods){
+    const i=vcResult.productOrder.indexOf(p);
+    const dot=i>=0?`<span class="vc-dot" style="background:${vcProdColor(i)[1]}"></span>`:'';
+    h+=`<tr><td class="vc-drill-name">${dot}${vcEsc(p)}</td>`;
+    for(const k of cols)h+=cellHtml(cell[p+'|'+k]);
+    h+=cellHtml(rowT[p]).replace('vc-dc','vc-dc vc-dt')+'</tr>';
+  }
+  h+='<tr class="vc-drill-total"><td class="vc-drill-name">합계</td>';
+  for(const k of cols)h+=cellHtml(colT[k]);
+  h+=cellHtml(grand).replace('vc-dc','vc-dc vc-dt')+'</tr>';
+  return h+'</tbody></table></div></div>';
+}
+function vcSetDrillUnit(u){if(vcDrillUnit===u)return;vcDrillUnit=u;vcRenderPerson(vcViewData);}
+document.addEventListener('click',e=>{
+  const t=e.target.closest&&e.target.closest('#vcPersonTable [data-vcperson]');
+  if(!t)return;
+  e.stopPropagation();
+  const name=t.dataset.vcperson;
+  vcOpenPerson=(vcOpenPerson===name)?null:name;
+  vcRenderPerson(vcViewData);
+});
 function vcTogglePerson(){
   const el=document.getElementById('vcPersonTable');
   const arrow=document.getElementById('vcPersonArrow');
@@ -17639,8 +17841,13 @@ async function vcDownloadExcel(){
   const wb=XLSX.utils.book_new();let added=0;
   for(const[id,label]of dims){
     const cont=document.getElementById(id);
-    const tbl=cont&&cont.querySelector('table');
+    let tbl=cont&&cont.querySelector('table');
     if(!tbl||!tbl.rows||!tbl.rows.length)continue;
+    // 개인별 드릴다운 행은 중첩 표라 table_to_sheet가 어긋난다 → 복제본에서 걷어내고 변환
+    if(tbl.querySelector('.vc-drill-row')){
+      tbl=tbl.cloneNode(true);
+      tbl.querySelectorAll('.vc-drill-row').forEach(r=>r.remove());
+    }
     const ws=XLSX.utils.table_to_sheet(tbl);
     cdStyleWs(ws,tbl);
     XLSX.utils.book_append_sheet(wb,ws,label);added++;
