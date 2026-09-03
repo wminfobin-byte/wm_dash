@@ -231,6 +231,27 @@ gd는 `{files,results}` 객체라 그룹 분할 대상이 아니므로 `files` �
 - **화면**: 기간·빠른기간 + 매체/패키지 칩 필터 → KPI 4종(총광고비·총DB·평균단가·일평균, 전기 대비) → 일자별 추이 차트(매체 스택 막대 + 단가 선) → 일자별 표(펼치면 매체·패키지 상세, **월누적·월 일평균 열은 기간 필터와 무관하게 그 달 전체 기준**) → 매체×패키지 매트릭스 → 매체별 요약 → 월별 요약 → 보고서 기재 월 누적 단가.
 - **핵심 함수**: `acParseReport`/`acCompute`/`acMonthStats`/`acRender`(+`acExportSection`·`acDailySection`·`acMatrixSection`·`acMediaSection`·`acMonthSection`·`acCumSection`)/`acTsv`/`acDownloadExcel`(당일·월누적·월별요약 3시트)/`acSavePaste`/`acRestoreSync`. 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin) + 헤더 `headerRight-ad-cost`.
 
+## Via 취소율 탭 (vc* 네임스페이스)
+
+기존 취소율 탭은 **WM 취소율**로 이름을 바꿨고(`cancel-dash`/`cd*`), 그 옆에 비아지오 전용 **Via 취소율**(`via-cancel`/`vc*`)을 새로 뒀다. 지표·표 구성은 WM과 같지만 **RAW 파일 레이아웃이 다르고, 상품 분류 축이 매체코드가 아니라 U열 접수제품**이다. 별도 IndexedDB(`viaCancelDashboard` v1, `files`+`meta` 스토어), 클라우드 싱크 `payload.vc`(파일) + `payload.vcProducts`(접수제품 사전).
+
+- **업로드 3종**: `app-daily`(신청자관리 일마감·누적·다중선택) / `app`(신청자관리 전체기간·파일명 기준) / `attend`(**Via 전용 명단**·덮어쓰기). 고객관리(브레인키) 슬롯 없음.
+- **컬럼 (`VC_APP`, 0-indexed)**: 고객키 D(3)·환급패키지 F(5)·담당자 N(13)·유입일 O(14)·**신청일(오더일) P(15)**·분류 Q(16)·**접수제품 U(20)**·분배일 AI(34)·**반품일 AJ(35)**.
+  **※ 반품일이 WM(AQ=42)과 다르다.** Via의 AQ는 `반품방어금액`이라 `CD_APP`을 재사용하면 취소가 전부 오판정된다. 분배일도 WM은 AP(41), Via는 AI(34).
+- **기간 분리 = 파일명이 아니라 각 행의 P열 신청일**. 1월~현재를 한 파일로 통째 올려도 월별·주차별로 알아서 쪼개진다. 여러 파일로 나눠 올려도 고객키로 병합(나중 업로드가 이김).
+- **취소 판정 (WM과 동일 3단계)**: 일마감에 반품일 있으면 제외 → 전체기간에 고객키 없음 = `배송전취소` → 전체기간에 반품일 있음 = `취소`(취소일수 = 반품일 − 신청일) → 그 외 `유지`. 전체기간 파일이 없으면 배송전취소를 판정할 수 없으므로 전부 `유지`로 두고 경고한다(없는 파일 탓에 전건이 배송전취소로 찍히는 사고 방지).
+- **접수제품 사전 (`vcProducts`: 원문 → `{label, include}`)** — 제품 목록을 코드에 박지 않는다:
+  - `노르드킨` **부분 문자열 포함 → 자동 제외**(노티 없음, `VC_EXCLUDE_WORDS`).
+  - 표시명 기본값 = 뒤에 붙은 대괄호 접미를 뗀 값(`vcStripSuffix`). `V6_블랙[PAS]`·`V6_블랙[스로틀]` → 둘 다 `V6_블랙`으로 자동 수렴(같은 모델, 스로틀/파스 차이일 뿐).
+  - **처음 보는 값은 판정 모달(`vcOpenProdModal`)** 로 업로드한 사람에게 노티 → `포함`/`제외` + 표시명 select(기존 라벨을 고르면 **병합**, `신규`면 접미 뗀 값). 미룰 경우 상단 배너(`vcPendingBanner`)로 계속 알린다.
+  - **미판정 = 잠정 포함**, **제외 = 완전 제외**(KPI·월별·주차별·센터별·개인별 전부에서 그 행을 뺀다).
+  - 사전은 IDB `meta` 스토어 + 싱크로 전파돼 다른 PC에서도 같은 판정이 유지된다. 파일 관리 모달에서 표시명/포함 여부를 직접 고칠 수 있다(행은 **인덱스**로 넘긴다 — 원문값을 onchange 인자로 넣으면 HTML 엔티티가 왕복하며 어긋난다).
+- **화면**: 기간 필터+빠른기간 → **서브탭 `전체 | 제품A | 제품B …`**(접수제품 표시명에서 자동 생성, 데이터에 있는 것만) → KPI 5종 → AI 인사이트 → 월별 / 주차별 / 센터별 / **제품별**(WM의 '종류별' 자리) / 개인별.
+  **전체 뷰의 월별·주차별은 제품별 그룹으로 접힌다**(WM이 구분=브랜드로 접던 자리를 제품이 대체). 제품 서브탭에서는 그 제품만 필터되고 월/주차 행만 나오며 제품별 섹션은 숨긴다.
+- **개인별**은 센터 > 그룹 순 정렬(구분/브랜드 축 없음). 명단이 없으면 담당자명의 `(R_센터)` 표기로 센터를 채우고 경고한다.
+- **공용 재사용**: 취소기간 구간(`CD_PERIODS`), 주차 키·라벨(`cdWeekKey`/`cdWeekLabel`), 취소율 색(`cdRateColor`), 엑셀 스타일(`cdStyleWs`)은 cd에서 그대로 쓴다. 동일기간추정(`vcComputeEstimation`)·Excel 5시트 다운로드도 WM과 같은 방식.
+- **핵심 함수**: `vcLoadFiles`/`vcGenerate`(계약 빌드 + 사전 대조)/`vcFilterAndRender`/`vcRenderSubtabs`/`vcRenderMonthly`·`vcRenderWeekly`(grouped 플래그로 제품 그룹 on/off)/`vcRenderCenter`/`vcRenderProduct`/`vcRenderPerson`/`vcRenderInsights`/`vcScanNewProducts`/`vcSavePending`/`vcCollectSync`·`vcRestoreSync`. 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin·admin) + 헤더 `headerRight-via-cancel`(`syncBtn12`).
+
 ## 원격 변경 감지 (동기화 반영 지연 해소, 2026-08-29)
 
 이전에는 **로그인·새로고침 때만** `autoSyncDownload`가 돌아서, 다른 PC가 업로드해도 켜 둔 화면은 갱신을 알 방법이 없었다(체감 수십 분 지연). `wmSyncStartPoll`이 로그인 직후 시작돼 **60초마다 + 탭 복귀·창 포커스 시** 매니페스트(`sync_manifest.json`, 수백 바이트)만 찍어 `ts`를 로컬 `sync_last_ts`와 비교한다.

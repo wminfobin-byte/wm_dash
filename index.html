@@ -782,6 +782,13 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .ac-warn{margin-top:12px;padding:11px 14px;border:1px solid #fde68a;background:#fffbeb;border-radius:9px;font-size:12.5px;color:#92400e;line-height:1.7}
 .ac-ok{margin-top:12px;padding:11px 14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;font-size:12.5px;color:#166534;line-height:1.7}
 .ac-pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:#eef2ff;color:#4361ee}
+/* ═══════════ Via 취소율 (vc) — 접수제품 사전 편집 행 ═══════════ */
+.vc-prod-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #eef1f6}
+.vc-prod-row:last-child{border-bottom:none}
+.vc-prod-raw{flex:1;min-width:0;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
+.vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
+.vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
 </style>
 </head>
 <body>
@@ -831,6 +838,19 @@ table.ac-tbl.ac-inner thead th{background:#475569}
     <button class="btn-header" onclick="cdOpenModal('manage')">파일 관리</button>
     <div class="header-sep"></div>
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn2">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
+  <div class="header-right" id="headerRight-via-cancel" style="display:none">
+    <div class="status-dots" title="파일 상태: 신청자 일마감 / 신청자 전체 / 명단">
+      <div class="status-dot" id="vc-dot-app-daily"></div>
+      <div class="status-dot" id="vc-dot-app"></div>
+      <div class="status-dot" id="vc-dot-attend"></div>
+    </div>
+    <span id="vcLastUpdate" style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap"></span>
+    <button class="btn-header" onclick="vcOpenModal('upload')">파일 업로드</button>
+    <button class="btn-header" onclick="vcOpenModal('manage')">파일 관리</button>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn12">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="header-right" id="headerRight-daily-perf" style="display:none">
@@ -952,7 +972,8 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 <!-- Tab Navigation -->
 <div class="tab-nav">
   <div class="tab-item active" data-page="grade-dash" onclick="switchPage('grade-dash')">차등성과</div>
-  <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">취소율</div>
+  <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">WM 취소율</div>
+  <div class="tab-item" data-page="via-cancel" onclick="switchPage('via-cancel')">Via 취소율</div>
   <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
@@ -1093,7 +1114,7 @@ table.ac-tbl.ac-inner thead th{background:#475569}
   <div class="modal">
     <button class="modal-close" onclick="cdCloseModal()">&times;</button>
     <div id="cdModalUpload">
-      <h2>파일 업로드 — 취소율</h2>
+      <h2>파일 업로드 — WM 취소율</h2>
       <div class="upload-grid">
         <div class="upload-box" id="box-cd-app-daily">
           <input type="file" accept=".xlsx,.xls" id="file-cd-app-daily">
@@ -1140,7 +1161,7 @@ table.ac-tbl.ac-inner thead th{background:#475569}
       </div>
     </div>
     <div id="cdModalManage" class="hidden">
-      <h2>파일 관리 — 취소율</h2>
+      <h2>파일 관리 — WM 취소율</h2>
       <div class="file-history" id="cdFileHistory"></div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cdCloseModal()">닫기</button>
@@ -1152,7 +1173,7 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 <div class="container">
   <div id="cdEmptyState" style="text-align:center;padding:80px 20px;color:var(--gray)">
     <div style="font-size:48px;margin-bottom:16px;opacity:.5">📉</div>
-    <div style="font-size:18px;font-weight:700;margin-bottom:8px">취소율 대시보드</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">WM 취소율 대시보드</div>
     <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 신청자(일마감 + 전체) + 명단 업로드 → 대시보드 생성</div>
   </div>
 
@@ -1340,6 +1361,174 @@ table.ac-tbl.ac-inner thead th{background:#475569}
   <button class="cd-top-btn" id="cdTopBtn" onclick="cdScrollToTop()" title="맨 위로"><span class="cd-top-arrow">&#9650;</span><span>TOP</span></button>
 </div>
 </div><!-- /page-cancel-dash -->
+
+<!-- ═══ Page: Via 취소율 ═══ -->
+<div class="page" id="page-via-cancel">
+
+<div class="modal-overlay" id="vcModalOverlay" onclick="if(event.target===this)vcCloseModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="vcCloseModal()">&times;</button>
+    <div id="vcModalUpload">
+      <h2>파일 업로드 — Via 취소율</h2>
+      <div class="upload-grid">
+        <div class="upload-box" id="box-vc-app-daily">
+          <input type="file" accept=".xlsx,.xls" id="file-vc-app-daily" multiple>
+          <div class="icon">📝</div>
+          <div class="label">신청자관리</div>
+          <div class="desc">일마감 기준 업데이트</div>
+          <span class="upload-badge by-name">누적 저장</span>
+          <div class="filename" id="fname-vc-app-daily"></div>
+          <div class="badge-count hidden" id="count-vc-app-daily"></div>
+          <div class="progress-bar hidden" id="prog-vc-app-daily"><div class="progress-fill"></div></div>
+        </div>
+        <div class="upload-box" id="box-vc-app">
+          <input type="file" accept=".xlsx,.xls" id="file-vc-app" multiple>
+          <div class="icon">📝</div>
+          <div class="label">신청자관리</div>
+          <div class="desc">신청일 기준 조회 기간 전체</div>
+          <span class="upload-badge by-name">파일명 기준 저장</span>
+          <div class="filename" id="fname-vc-app"></div>
+          <div class="badge-count hidden" id="count-vc-app"></div>
+          <div class="progress-bar hidden" id="prog-vc-app"><div class="progress-fill"></div></div>
+        </div>
+        <div class="upload-box" id="box-vc-attend">
+          <input type="file" accept=".xls,.xlsx,.html" id="file-vc-attend">
+          <div class="icon">👥</div>
+          <div class="label">명단</div>
+          <div class="desc">Via 전용 명단</div>
+          <span class="upload-badge overwrite">덮어쓰기</span>
+          <div class="filename" id="fname-vc-attend"></div>
+          <div class="progress-bar hidden" id="prog-vc-attend"><div class="progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="vcCloseModal()">닫기</button>
+        <button class="btn btn-primary" id="vcBtnGenerate" disabled>대시보드 생성</button>
+      </div>
+    </div>
+    <div id="vcModalManage" class="hidden">
+      <h2>파일 관리 — Via 취소율</h2>
+      <div class="file-history" id="vcFileHistory"></div>
+      <div style="margin-top:20px;font-size:14px;font-weight:800">접수제품 사전</div>
+      <div style="font-size:12px;color:var(--gray);margin:4px 0 8px">U열 접수제품 원문값 → 표시명 / 포함 여부. 여기서 바로 바꿀 수 있습니다.</div>
+      <div class="file-history" id="vcProductList"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="vcCloseModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 신규 접수제품 판정 모달 -->
+<div class="modal-overlay" id="vcProdOverlay" onclick="if(event.target===this)vcCloseProdModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="vcCloseProdModal()">&times;</button>
+    <h2>새 접수제품 확인 <span id="vcProdCount" style="font-size:14px;color:var(--gray);font-weight:600"></span></h2>
+    <div style="font-size:13px;color:var(--gray);margin-bottom:14px;line-height:1.6">
+      업로드한 파일에 <b>처음 보는 접수제품</b>이 있습니다. 비아지오 제품이면 <b>포함</b>, 아니면 <b>제외</b>를 골라주세요.<br>
+      포함하면 표시명대로 하위 탭이 생깁니다. 이미 있는 표시명을 고르면 <b>같은 제품으로 병합</b>됩니다 (예: <code>V6_블랙[PAS]</code> · <code>V6_블랙[스로틀]</code> → <code>V6_블랙</code>).<br>
+      <span style="color:var(--warning)">판정 전까지는 잠정 포함으로 집계됩니다.</span>
+    </div>
+    <div id="vcProdPendingList"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="vcCloseProdModal()">나중에</button>
+      <button class="btn btn-primary" onclick="vcSavePending()">저장하고 반영</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div id="vcEmptyState" style="text-align:center;padding:80px 20px;color:var(--gray)">
+    <div style="font-size:48px;margin-bottom:16px;opacity:.5">📉</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">Via 취소율 대시보드</div>
+    <div style="font-size:14px">우측 상단 <b>파일 업로드</b> → 신청자(일마감 + 전체) + 명단 업로드 → 대시보드 생성</div>
+  </div>
+
+  <div id="vcDashboard" class="hidden">
+    <div class="cd-navbar" id="vcNavbar">
+      <span class="cd-nav-top" onclick="vcScrollToTop()" title="맨 위로">&#9650;</span>
+      <span class="cd-nav-item active" data-target="vcNavKpi" onclick="vcNavTo('vcNavKpi')">KPI</span>
+      <span class="cd-nav-item" data-target="vcNavMonthly" onclick="vcNavTo('vcNavMonthly')">월별</span>
+      <span class="cd-nav-item" data-target="vcNavWeekly" onclick="vcNavTo('vcNavWeekly')">주차별</span>
+      <span class="cd-nav-item" data-target="vcNavCenter" onclick="vcNavTo('vcNavCenter')">센터별</span>
+      <span class="cd-nav-item" data-target="vcNavProduct" onclick="vcNavTo('vcNavProduct')">제품별</span>
+      <span class="cd-nav-item" data-target="vcNavPerson" onclick="vcNavTo('vcNavPerson')">개인별</span>
+      <span class="cd-nav-sep"></span>
+      <button class="cd-nav-est" id="vcNavEstBtn" onclick="vcToggleEst()">동일기간추정</button>
+    </div>
+
+    <div class="cd-filter-bar">
+      <div class="cd-date-wrap">
+        <div class="cd-date-range" onclick="vcToggleCalendar()">
+          <span id="vcDateDisplay">전체 기간</span> <span style="font-size:16px">📅</span>
+        </div>
+        <div id="vcCalendar" class="cd-calendar hidden">
+          <div class="cd-cal-header">
+            <button onclick="event.stopPropagation();vcCalPrev()">&lt;</button>
+            <span id="vcCalTitle"></span>
+            <button onclick="event.stopPropagation();vcCalNext()">&gt;</button>
+          </div>
+          <div class="cd-cal-grid" id="vcCalGrid"></div>
+          <div class="cd-cal-footer">
+            <span id="vcCalRange">시작일을 선택하세요</span>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();vcCalApply()">적용</button>
+          </div>
+        </div>
+      </div>
+      <div class="cd-quick-btns">
+        <button class="cd-quick-btn" data-type="thisMonth" onclick="vcQuick('thisMonth')">이번달</button>
+        <button class="cd-quick-btn" data-type="lastMonth" onclick="vcQuick('lastMonth')">지난달</button>
+        <button class="cd-quick-btn active" data-type="3m" onclick="vcQuick('3m')">3개월</button>
+        <button class="cd-quick-btn" data-type="6m" onclick="vcQuick('6m')">6개월</button>
+        <button class="cd-quick-btn" data-type="12m" onclick="vcQuick('12m')">12개월</button>
+        <button class="cd-quick-btn" data-type="all" onclick="vcQuick('all')">전체</button>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" id="vcEstBtn" onclick="vcToggleEst()">동일기간추정</button>
+        <button class="btn btn-success btn-sm" onclick="vcDownloadExcel()">Excel 다운로드</button>
+      </div>
+    </div>
+
+    <div id="vcPendingBanner" class="est-banner hidden" style="cursor:pointer" onclick="vcOpenProdModal()"></div>
+
+    <div class="cd-subtabs" id="vcSubtabs"></div>
+
+    <div class="est-banner hidden" id="vcEstBanner">추정모드 ON — 과거 취소 패턴 기반으로 미래 취소를 추정한 수치입니다</div>
+
+    <div id="vcNavKpi"></div>
+    <div class="kpi-grid" id="vcKpiGrid"></div>
+    <div id="vcInsightPanel"></div>
+
+    <div id="vcNavMonthly" class="table-section">
+      <h3>월별 취소율 <span class="table-sub" id="vcMonthlySub">제품별</span></h3>
+      <div class="cd-wide-table" id="vcMonthlyTable"></div>
+    </div>
+
+    <div id="vcNavWeekly" class="table-section">
+      <h3>주차별 취소율 <span class="table-sub" id="vcWeeklySub">제품별</span></h3>
+      <div class="cd-wide-table" id="vcWeeklyTable"></div>
+    </div>
+
+    <div id="vcNavCenter" class="table-section">
+      <h3>센터별 취소율</h3>
+      <div class="cd-wide-table" id="vcCenterTable"></div>
+    </div>
+
+    <div id="vcNavProduct" class="table-section">
+      <h3>제품별 취소율 <span class="table-sub">접수제품(U열) 기준</span></h3>
+      <div class="cd-wide-table" id="vcProductTable"></div>
+    </div>
+
+    <div id="vcNavPerson" class="table-section">
+      <h3 style="cursor:pointer;user-select:none" onclick="vcTogglePerson()">
+        <span><span id="vcPersonArrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율 <span class="table-sub">센터 &gt; 그룹 순</span></span>
+      </h3>
+      <div class="cd-wide-table hidden" id="vcPersonTable"></div>
+    </div>
+  </div>
+  <button class="cd-top-btn" id="vcTopBtn" onclick="vcScrollToTop()" title="맨 위로"><span class="cd-top-arrow">&#9650;</span><span>TOP</span></button>
+</div>
+</div><!-- /page-via-cancel -->
 
 <div class="modal-overlay" id="iaModalOverlay" onclick="if(event.target===this)iaCloseModal()">
   <div class="modal">
@@ -2544,8 +2733,8 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
-  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -2576,6 +2765,7 @@ function applyAuth(){
     if(authUser.tabs.includes('talkis-perf') && typeof tzLoadFiles==='function') await tzLoadFiles();
     if(authUser.tabs.includes('naesaegim-call') && typeof ncLoadFiles==='function') await ncLoadFiles();
     if(authUser.tabs.includes('ad-cost') && typeof acLoadFiles==='function') await acLoadFiles();
+    if(authUser.tabs.includes('via-cancel') && typeof vcLoadFiles==='function') await vcLoadFiles();
     await autoSyncDownload();
     if(typeof wmSyncStartPoll==='function') wmSyncStartPoll();
   })();
@@ -2619,7 +2809,10 @@ async function autoSyncDownload(){
     const ncOk=!ncAccess||ncHasLocal||!payload.nc;
     const acHasLocal=typeof acReports!=='undefined'&&acReports&&acReports.length>0;
     const acOk=!acAccess||acHasLocal||!payload.ac;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk)return;
+    const vcAccess=authUser&&authUser.tabs.includes('via-cancel');
+    const vcHasLocal=typeof vcFiles!=='undefined'&&vcFiles&&vcFiles.length>0;
+    const vcOk=!vcAccess||vcHasLocal||!payload.vc;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk&&vcOk)return;
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
@@ -2707,6 +2900,10 @@ async function autoSyncDownload(){
     // 광고비 복원 (없거나 원격이 더 새로운 경우)
     if(payload.ac&&acAccess&&(!acHasLocal||remoteNewer)&&typeof acRestoreSync==='function'){
       await acRestoreSync(payload.ac);
+    }
+    // Via 취소율 복원 (없거나 원격이 더 새로운 경우)
+    if(payload.vc&&vcAccess&&(!vcHasLocal||remoteNewer)&&typeof vcRestoreSync==='function'){
+      await vcRestoreSync(payload.vc,payload.vcProducts);
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -2913,8 +3110,8 @@ function showSyncActions(token){
   if(ck)ck.checked=localStorage.getItem(WM_AUTOPULL_KEY)!=='0';
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -3024,7 +3221,7 @@ function wmSyncToggleAutoPull(on){localStorage.setItem(WM_AUTOPULL_KEY,on?'1':'0
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -3104,6 +3301,14 @@ async function doSyncUpload(token){
         acSync=acCollectSync();
       }
     }catch(e){console.warn('ac sync collect 실패',e);}
+    // Via 취소율 (파일 배열 + 접수제품 사전은 별도 슬라이스 — 사전은 수백 바이트라 분할 대상이 아니다)
+    let vcSync=[],vcProdSync=null;
+    try{
+      if(typeof vcCollectSync==='function'){
+        if((!vcFiles||!vcFiles.length)&&typeof vcLoadFiles==='function'){ if(!vcLoaded) await vcLoadFiles(); }
+        vcSync=vcCollectSync();vcProdSync=vcCollectProducts();
+      }
+    }catch(e){console.warn('vc sync collect 실패',e);}
     // 바이트 → base64 (spread 연산자 스택 초과 방지, 8KB 단위)
     const bytesToB64=(bytes)=>{let bin='';for(let i=0;i<bytes.length;i+=8192){bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));}return btoa(bin);};
     const headers={Authorization:`token ${token}`,'Content-Type':'application/json'};
@@ -3113,11 +3318,11 @@ async function doSyncUpload(token){
     //  v2는 슬라이스 하나를 통째로 JSON.stringify 했는데, nc(CTI 150만행+DB 50만행)가 192MB까지 커지면서
     //  문자열 하나만으로 UTF-16 기준 ~384MB를 잡아 Out of Memory가 났다.
     //  → 배열 슬라이스는 SLICE_GROUP_BYTES 예상치를 넘지 않게 나눠 담아, 한 번에 만드는 문자열을 작게 유지한다.
-    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ac:acSync,ls:lsData};
-    const SLICE_ORDER=['ng','ngResults','cd','gd','sp','tb','tz','nc','ac','ls'];
+    const payloadObj={ng:ngFiles,ngResults,cd:cdFiles,vc:vcSync,vcProducts:vcProdSync,gd:gdData,sp:spSync,tb:tbSync,tz:tzSync,nc:ncSync,ac:acSync,ls:lsData};
+    const SLICE_ORDER=['ng','ngResults','cd','vc','vcProducts','gd','sp','tb','tz','nc','ac','ls'];
     // 슬라이스별 행 인코더(있으면 그룹 stringify 직전에 적용) — nc는 CTI/DB를 사전 인터닝으로 압축한다
     // nc는 CTI의 dur(미사용)까지 떨어내는 전용 인코더, 나머지는 공용 인코더(wmEncFile)
-    const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null,tz:wmEncFile,tb:wmEncFile,sp:wmEncFile,cd:wmEncFile,ng:wmEncFile};
+    const SLICE_ENCODE={nc:(typeof ncEncFile==='function')?ncEncFile:null,tz:wmEncFile,tb:wmEncFile,sp:wmEncFile,cd:wmEncFile,vc:wmEncFile,ng:wmEncFile};
     // 파일 1건의 JSON 크기 추정(정확할 필요 없음 — stringify를 미리 돌리면 그 자체로 메모리를 먹는다)
     const estBytes=(it,key)=>{
       if(!it||typeof it!=='object')return 64;
@@ -3230,7 +3435,7 @@ async function fetchSyncPayload(){
         if(!seen.has(s.key)){payload[s.key]=part;seen.add(s.key);}
         else if(Array.isArray(payload[s.key])&&Array.isArray(part))payload[s.key]=payload[s.key].concat(part);
       }
-      for(const k of ['tz','tb','sp','cd','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
+      for(const k of ['tz','tb','sp','cd','vc','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
       if(payload.gd&&Array.isArray(payload.gd.files))payload.gd.files=payload.gd.files.map(wmDecFile);
       if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
       return payload;
@@ -3242,7 +3447,7 @@ async function fetchSyncPayload(){
         const zip=await JSZip.loadAsync(buf);
         payload[s.key]=JSON.parse(await zip.file('d').async('string'));   // 슬라이스 단위 파싱 → 메모리 피크 억제
       }
-      for(const k of ['tz','tb','sp','cd','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
+      for(const k of ['tz','tb','sp','cd','vc','ng'])if(payload[k])payload[k]=wmDecSlice(payload[k]);
       if(payload.gd&&Array.isArray(payload.gd.files))payload.gd.files=payload.gd.files.map(wmDecFile);
       if(typeof ncDecodeSync==='function'&&payload.nc)payload.nc=ncDecodeSync(payload.nc);
       return payload;
@@ -3343,6 +3548,9 @@ async function doSyncDownloadManual(){
     }
     if(payload.ac&&authUser&&authUser.tabs.includes('ad-cost')&&typeof acRestoreSync==='function'){
       await acRestoreSync(payload.ac);
+    }
+    if(payload.vc&&authUser&&authUser.tabs.includes('via-cancel')&&typeof vcRestoreSync==='function'){
+      await vcRestoreSync(payload.vc,payload.vcProducts);
     }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
     if(payload.ngResults&&payload.ngResults.length>0){
@@ -3490,6 +3698,9 @@ function switchPage(pageId){
   if(hrNc) hrNc.style.display = pageId==='naesaegim-call' ? 'flex' : 'none';
   const hrAc=document.getElementById('headerRight-ad-cost');
   if(hrAc) hrAc.style.display = pageId==='ad-cost' ? 'flex' : 'none';
+  const hrVc=document.getElementById('headerRight-via-cancel');
+  if(hrVc) hrVc.style.display = pageId==='via-cancel' ? 'flex' : 'none';
+  if(pageId==='via-cancel' && typeof vcOnShow==='function') vcOnShow();
   if(pageId==='naesaegim-call' && typeof ncOnShow==='function') ncOnShow();
   if(pageId==='ad-cost' && typeof acOnShow==='function') acOnShow();
   if(pageId==='daily-perf' && typeof dpShow==='function') dpShow();
@@ -16438,6 +16649,958 @@ function acUpdateHeader(){
   if(dot)dot.classList.toggle('ok',(acReports||[]).length>0);
 }
 
+
+// ════════════════════════════════════════════════════════════
+//  Via 취소율 (vc* 네임스페이스) — 비아지오 접수제품별 취소율
+//  WM 취소율(cd*)과 지표·표 구성은 같지만 RAW 파일 레이아웃이 다르고,
+//  상품 분류 축이 '분류(매체코드)'가 아니라 'U열 접수제품'이다.
+//  입력 3종: 신청자관리 일마감 / 신청자관리 전체기간 / Via 전용 명단
+//  저장: IndexedDB(viaCancelDashboard) + 클라우드 싱크 payload.vc / payload.vcProducts
+// ════════════════════════════════════════════════════════════
+const VC_DB_NAME='viaCancelDashboard', VC_DB_VER=1;
+// Via 신청자관리 컬럼 (0-indexed).
+//  ※ WM(CD_APP)과 레이아웃이 다르다. 특히 반품일이 WM은 AQ(42), Via는 AJ(35)다.
+//    Via의 AQ는 '반품방어금액'이라 CD_APP을 그대로 쓰면 취소가 전부 오판정된다.
+const VC_APP={customerKey:3,refundPkg:5,manager:13,inflowDate:14,applicationDate:15,classification:16,product:20,distributeDate:34,returnDate:35};
+const VC_SYNC_COLS=[VC_APP.customerKey,VC_APP.refundPkg,VC_APP.manager,VC_APP.applicationDate,VC_APP.classification,VC_APP.product,VC_APP.returnDate];
+const VC_EXCLUDE_WORDS=['노르드킨'];      // 접수제품에 이 단어가 있으면 노티 없이 자동 제외
+const VC_PERIODS=CD_PERIODS;              // 취소기간 구간은 WM과 동일 (cd에서 공용)
+const VC_CENTER_ORDER=CD_CENTER_ORDER;
+const VC_GROUP_ORDER=CD_GROUP_ORDER;
+const VC_MEMBER_KEY='vc_member_history';
+const VC_TYPES=['app-daily','app','attend'];
+
+let vcIdb=null, vcFiles=[], vcLoaded=false, vcResult=null;
+let vcProducts={};        // 접수제품 원문 → {label, include}  (클라우드 싱크 대상)
+let vcProdKeys=[];        // 파일관리 사전 편집 행 ↔ 원문값 매핑 (인덱스로만 전달)
+let vcPending=[];         // 아직 판정하지 않은 접수제품 원문값 (잠정 포함으로 집계)
+let vcDateStart=null, vcDateEnd=null, vcCurrentView='all', vcEstMode=false;
+let vcCalYear, vcCalMonth, vcCalPhase='start', vcCalTempStart=null, vcCalTempEnd=null;
+
+function vcEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── IndexedDB ──
+function vcOpenIDB(){return new Promise((res,rej)=>{const q=indexedDB.open(VC_DB_NAME,VC_DB_VER);
+  q.onupgradeneeded=()=>{const db=q.result;
+    if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});
+    if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta',{keyPath:'k'});};
+  q.onsuccess=()=>{vcIdb=q.result;res();};q.onerror=()=>rej(q.error);});}
+function vcIdbAdd(d){return new Promise((res,rej)=>{const tx=vcIdb.transaction('files','readwrite');const q=tx.objectStore('files').add(d);q.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(q.result);};q.onerror=()=>rej(q.error);});}
+function vcIdbGetAll(){return new Promise((res,rej)=>{const tx=vcIdb.transaction('files','readonly');const q=tx.objectStore('files').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>rej(q.error);});}
+function vcIdbDelete(id){return new Promise((res,rej)=>{const tx=vcIdb.transaction('files','readwrite');const q=tx.objectStore('files').delete(id);q.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res();};q.onerror=()=>rej(q.error);});}
+function vcMetaPut(k,v){return new Promise((res,rej)=>{const tx=vcIdb.transaction('meta','readwrite');tx.objectStore('meta').put({k,v});tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+function vcMetaGet(k){return new Promise((res,rej)=>{const tx=vcIdb.transaction('meta','readonly');const q=tx.objectStore('meta').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});}
+
+function vcGetFilesByType(t){return vcFiles.filter(f=>f.type===t).sort((a,b)=>b.uploadTime-a.uploadTime);}
+function vcGetLatest(t){return vcGetFilesByType(t)[0]||null;}
+function vcReady(){return vcGetFilesByType('app-daily').length>0||vcGetFilesByType('app').length>0;}
+
+async function vcLoadFiles(){
+  try{
+    if(!vcIdb)await vcOpenIDB();
+    vcFiles=await vcIdbGetAll();
+    const m=await vcMetaGet('products');
+    vcProducts=(m&&m.v)||{};
+    vcLoaded=true;vcUpdateStatusDots();vcUpdateUploadStatus();vcUpdateHeader();
+  }catch(e){console.error('Via 취소율 IDB 로드:',e);}
+}
+
+// ── 클라우드 싱크 (payload.vc = 파일 배열 / payload.vcProducts = 접수제품 사전) ──
+function vcCollectSync(){
+  return (vcFiles||[]).map(f=>{
+    if(f.type==='attend')return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data};
+    const cols=VC_SYNC_COLS;
+    const slim=(f.data||[]).map((row,i)=>i===0?row:cols.map(c=>row[c]!=null?row[c]:''));
+    return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols};
+  });
+}
+function vcCollectProducts(){return vcProducts||{};}
+async function vcRestoreSync(arr,prods){
+  if(!Array.isArray(arr))return;
+  if(!vcIdb)await vcOpenIDB();
+  for(const f of vcFiles)await vcIdbDelete(f.id);
+  vcFiles=[];
+  for(const f of arr){
+    if(!f)continue;
+    let data=f.data;
+    if(f.cols&&Array.isArray(data)&&data.length>1){
+      data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});
+    }
+    const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
+    rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
+  }
+  if(prods&&typeof prods==='object'&&!Array.isArray(prods)){vcProducts=prods;await vcMetaPut('products',vcProducts);}
+  vcLoaded=true;vcResult=null;
+  vcUpdateStatusDots();vcUpdateUploadStatus();vcUpdateHeader();
+  if(typeof currentPage!=='undefined'&&currentPage==='via-cancel')vcOnShow();
+}
+
+// ═══════════════════════════════════════════
+//  접수제품 사전 (U열 원문 → 표시명 / 포함여부)
+//   · '노르드킨' 포함 = 자동 제외 (노티 없음)
+//   · 뒤에 붙은 [PAS] / [스로틀] 같은 대괄호 접미는 떼어낸 값이 기본 표시명 →
+//     V6_블랙[PAS]·V6_블랙[스로틀]이 자동으로 같은 'V6_블랙'으로 추천된다
+//   · 처음 보는 값은 pending(잠정 포함)으로 두고 업로드한 사람에게 판정 모달을 띄운다
+// ═══════════════════════════════════════════
+function vcStripSuffix(raw){return String(raw==null?'':raw).replace(/\s*[\[(（][^\])）]*[\])）]\s*$/,'').trim();}
+function vcAutoExcluded(raw){const s=String(raw==null?'':raw);return VC_EXCLUDE_WORDS.some(w=>s.includes(w));}
+function vcDefaultLabel(raw){return vcStripSuffix(raw)||String(raw==null?'':raw).trim();}
+function vcEntry(raw){return Object.prototype.hasOwnProperty.call(vcProducts,raw)?vcProducts[raw]:null;}
+function vcIncluded(raw){const e=vcEntry(raw);if(e)return !!e.include;return !vcAutoExcluded(raw);}   // 미판정 = 잠정 포함
+function vcLabelOf(raw){const e=vcEntry(raw);return (e&&e.label)?e.label:vcDefaultLabel(raw);}
+function vcAllLabels(){
+  const out=[],seen=new Set();
+  for(const raw of Object.keys(vcProducts)){const e=vcProducts[raw];if(!e||!e.include)continue;
+    const l=e.label||vcDefaultLabel(raw);if(l&&!seen.has(l)){seen.add(l);out.push(l);}}
+  return out;
+}
+function vcScanNewProducts(rawSet){
+  const pend=[];let autoChanged=false;
+  for(const raw of rawSet){
+    if(!raw||vcEntry(raw))continue;
+    if(vcAutoExcluded(raw)){vcProducts[raw]={label:'',include:false,auto:true};autoChanged=true;continue;}
+    pend.push(raw);
+  }
+  if(autoChanged)vcSaveProducts();
+  return pend;
+}
+async function vcSaveProducts(){try{if(!vcIdb)await vcOpenIDB();await vcMetaPut('products',vcProducts);if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}catch(e){console.error('접수제품 사전 저장:',e);}}
+
+function vcOpenProdModal(){
+  if(!vcPending.length){alert('판정할 새 접수제품이 없습니다.');return;}
+  const labels=vcAllLabels();
+  document.getElementById('vcProdCount').textContent=`${vcPending.length}건`;
+  let h='';
+  vcPending.forEach((raw,i)=>{
+    const def=vcDefaultLabel(raw);
+    const match=labels.indexOf(def)>=0?def:'';
+    const opts=labels.map(l=>`<option value="${vcEsc(l)}"${l===match?' selected':''}>${vcEsc(l)} (병합)</option>`).join('')
+      +`<option value="__new__"${match?'':' selected'}>신규 · ${vcEsc(def)}</option>`;
+    h+=`<div class="vc-prod-row">
+      <div class="vc-prod-raw" title="${vcEsc(raw)}">${vcEsc(raw)}</div>
+      <label class="vc-prod-opt"><input type="radio" name="vcp${i}" value="in" checked onchange="vcPendRowToggle(${i})"> 포함</label>
+      <label class="vc-prod-opt"><input type="radio" name="vcp${i}" value="out" onchange="vcPendRowToggle(${i})"> 제외</label>
+      <select id="vcpLabel${i}" class="vc-prod-sel">${opts}</select>
+    </div>`;
+  });
+  document.getElementById('vcProdPendingList').innerHTML=h;
+  document.getElementById('vcProdOverlay').classList.add('open');
+}
+function vcPendRowToggle(i){
+  const sel=document.querySelector(`input[name="vcp${i}"]:checked`);
+  const lv=document.getElementById('vcpLabel'+i);
+  if(lv)lv.disabled=!(sel&&sel.value==='in');
+}
+function vcCloseProdModal(){document.getElementById('vcProdOverlay').classList.remove('open');}
+async function vcSavePending(){
+  vcPending.forEach((raw,i)=>{
+    const sel=document.querySelector(`input[name="vcp${i}"]:checked`);
+    const inc=!sel||sel.value==='in';
+    const lv=document.getElementById('vcpLabel'+i);
+    const label=(!lv||lv.value==='__new__')?vcDefaultLabel(raw):lv.value;
+    vcProducts[raw]=inc?{label,include:true}:{label:'',include:false};
+  });
+  vcPending=[];
+  await vcSaveProducts();
+  vcCloseProdModal();
+  vcGenerate();
+}
+function vcRenderPendingBanner(){
+  const el=document.getElementById('vcPendingBanner');if(!el)return;
+  if(!vcPending.length){el.classList.add('hidden');return;}
+  el.classList.remove('hidden');
+  el.innerHTML=`새 접수제품 ${vcPending.length}개가 아직 판정되지 않았습니다 (잠정 포함 중) — 클릭해서 비아지오 제품 여부를 정해주세요`;
+}
+
+// 파일 관리 모달의 사전 편집
+function vcRenderProductList(){
+  const el=document.getElementById('vcProductList');if(!el)return;
+  const raws=Object.keys(vcProducts).sort();
+  if(!raws.length&&!vcPending.length){el.innerHTML='<div class="fh-empty">아직 등록된 접수제품이 없습니다</div>';return;}
+  let h='';
+  if(vcPending.length){
+    h+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type cont">⚠ 미판정</span> ${vcPending.length}건 (잠정 포함)</div>`;
+    vcPending.forEach(raw=>{h+=`<div class="fh-item"><span class="fh-name">${vcEsc(raw)}</span><button class="btn btn-primary btn-sm" onclick="vcOpenProdModal()">판정</button></div>`;});
+    h+='</div>';
+  }
+  h+='<div class="fh-group"><div class="fh-group-title"><span class="fh-type db">📦 등록됨</span> '+raws.length+'건</div>';
+  // 원문값을 onchange 인자로 직접 넘기면 엔티티 이스케이프가 왕복하며 어긋난다 → 인덱스로만 넘긴다
+  vcProdKeys=raws;
+  raws.forEach((raw,i)=>{
+    const e=vcProducts[raw];
+    h+=`<div class="fh-item">
+      <span class="fh-name" title="${vcEsc(raw)}">${vcEsc(raw)}</span>
+      <input class="vc-prod-input" value="${vcEsc(e.label||'')}" placeholder="표시명" onchange="vcEditProduct(${i},'label',this.value)">
+      <label class="vc-prod-opt"><input type="checkbox" ${e.include?'checked':''} onchange="vcEditProduct(${i},'include',this.checked)"> 포함</label>
+    </div>`;
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+async function vcEditProduct(idx,field,val){
+  const raw=vcProdKeys[idx];
+  if(!raw||!vcProducts[raw])return;
+  if(field==='label')vcProducts[raw].label=String(val||'').trim();
+  else vcProducts[raw].include=!!val;
+  await vcSaveProducts();
+  vcRenderProductList();
+  if(vcResult)vcGenerate();
+}
+
+// ═══════════════════════════════════════════
+//  Modal / 업로드 / 파일 관리
+// ═══════════════════════════════════════════
+function vcOpenModal(v){
+  document.getElementById('vcModalUpload').classList.toggle('hidden',v!=='upload');
+  document.getElementById('vcModalManage').classList.toggle('hidden',v!=='manage');
+  document.getElementById('vcModalOverlay').classList.add('open');
+  if(v==='manage'){vcRenderFileHistory();vcRenderProductList();}
+  if(v==='upload')vcUpdateUploadStatus();
+}
+function vcCloseModal(){document.getElementById('vcModalOverlay').classList.remove('open');}
+
+VC_TYPES.forEach(type=>{
+  const input=document.getElementById(`file-vc-${type}`);
+  const box=document.getElementById(`box-vc-${type}`);
+  if(!input||!box)return;
+  input.addEventListener('change',async e=>{
+    const files=Array.from(e.target.files||[]);if(!files.length)return;
+    const prog=document.getElementById(`prog-vc-${type}`);
+    prog.classList.remove('hidden','done');prog.classList.add('loading');
+    try{
+      if(!vcIdb)await vcOpenIDB();
+      for(const f of files){
+        document.getElementById(`fname-vc-${type}`).textContent=f.name;
+        const buf=await f.arrayBuffer();
+        const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const parsed=type==='attend'
+          ?XLSX.utils.sheet_to_json(ws,{defval:''})
+          :XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+        if(type==='attend'){
+          for(const o of vcFiles.filter(x=>x.type==='attend'))await vcIdbDelete(o.id);
+          vcFiles=vcFiles.filter(x=>x.type!=='attend');
+        }else{
+          const same=vcFiles.find(x=>x.type===type&&x.fileName===f.name);
+          if(same){await vcIdbDelete(same.id);vcFiles=vcFiles.filter(x=>x.id!==same.id);}
+        }
+        const rec={type,fileName:f.name,uploadTime:Date.now(),data:parsed};
+        rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
+      }
+      prog.classList.remove('loading');prog.classList.add('done');box.classList.add('loaded');
+      vcUpdateUploadStatus();vcUpdateStatusDots();
+    }catch(err){prog.classList.remove('loading');alert(`처리 오류: ${err.message}`);console.error(err);}
+    input.value='';
+  });
+  box.addEventListener('dragover',e=>{e.preventDefault();box.classList.add('dragover');});
+  box.addEventListener('dragleave',()=>box.classList.remove('dragover'));
+  box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('dragover');if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;input.dispatchEvent(new Event('change'));}});
+});
+
+function vcUpdateUploadStatus(){
+  for(const type of VC_TYPES){
+    const files=vcGetFilesByType(type);const box=document.getElementById(`box-vc-${type}`);
+    if(!box)continue;
+    if(files.length>0){box.classList.add('loaded');
+      const fn=document.getElementById(`fname-vc-${type}`);if(fn)fn.textContent=files[0].fileName;
+      const c=document.getElementById(`count-vc-${type}`);if(c&&files.length>1){c.textContent=files.length+'건';c.classList.remove('hidden');}
+    }
+  }
+  const btn=document.getElementById('vcBtnGenerate');
+  if(btn)btn.disabled=!vcReady();
+}
+function vcUpdateStatusDots(){VC_TYPES.forEach(t=>{const d=document.getElementById(`vc-dot-${t}`);if(d)d.classList.toggle('ok',vcGetFilesByType(t).length>0);});}
+function vcUpdateHeader(){
+  const el=document.getElementById('vcLastUpdate');if(!el)return;
+  el.textContent=vcResult&&vcResult.maxAppDate?`최종 신청일자 : ${cdFmtISO(vcResult.maxAppDate)}`:'';
+}
+
+function vcRenderFileHistory(){
+  const types=[
+    {key:'app-daily',label:'신청자 일마감',cls:'gc',icon:'📝',policy:'누적 저장'},
+    {key:'app',label:'신청자 전체기간',cls:'cont',icon:'📝',policy:'파일명 기준'},
+    {key:'attend',label:'명단 (Via)',cls:'attend',icon:'👥',policy:'덮어쓰기'},
+  ];
+  let html='';
+  for(const t of types){const files=vcGetFilesByType(t.key);
+    html+=`<div class="fh-group"><div class="fh-group-title"><span class="fh-type ${t.cls}">${t.icon} ${t.label}</span> ${files.length}건 (${t.policy})</div>`;
+    if(!files.length)html+='<div class="fh-empty">업로드된 파일이 없습니다</div>';
+    else files.forEach((f,i)=>{const a=i===0;
+      html+=`<div class="fh-item${a?' active':''}"><span class="fh-name">${vcEsc(f.fileName)}</span>${a?'<span class="fh-active-badge">최신</span>':''}<span class="fh-date">${fmtDateTime(new Date(f.uploadTime))}</span><button class="btn-del" onclick="vcDeleteFile(${f.id})">&times;</button></div>`;
+    });html+='</div>';
+  }
+  document.getElementById('vcFileHistory').innerHTML=html;
+}
+async function vcDeleteFile(id){if(!confirm('삭제하시겠습니까?'))return;await vcIdbDelete(id);vcFiles=vcFiles.filter(f=>f.id!==id);vcRenderFileHistory();vcUpdateUploadStatus();vcUpdateStatusDots();}
+
+// ═══════════════════════════════════════════
+//  명단 (이력 보존 — 퇴사자도 과거 실적을 유지)
+// ═══════════════════════════════════════════
+function vcGetMembers(attendData){
+  let history={};try{history=JSON.parse(localStorage.getItem(VC_MEMBER_KEY))||{};}catch(e){}
+  const current={};
+  for(const r of (attendData||[])){
+    const name=str(r['이름']);if(!name)continue;
+    current[name]={brand:str(r['담당']),center:str(r['센터']),group:str(r['그룹']),team:str(r['팀'])};
+  }
+  const merged={...current};
+  for(const[name,info]of Object.entries(history)){if(!merged[name])merged[name]={...info,resigned:true};}
+  localStorage.setItem(VC_MEMBER_KEY,JSON.stringify(current));
+  return merged;
+}
+
+// ═══════════════════════════════════════════
+//  날짜 필터 + 달력
+// ═══════════════════════════════════════════
+function vcFmtDate(d){if(!d)return'';return`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;}
+function vcSetDateRange(s,e){vcDateStart=s;vcDateEnd=e;document.getElementById('vcDateDisplay').textContent=(!s&&!e)?'전체 기간':`${vcFmtDate(s)} ~ ${vcFmtDate(e)}`;if(vcResult)vcFilterAndRender();}
+function vcQuick(type){
+  const now=new Date();let s,e;
+  if(type==='thisMonth'){s=new Date(now.getFullYear(),now.getMonth(),1);e=now;}
+  else if(type==='lastMonth'){s=new Date(now.getFullYear(),now.getMonth()-1,1);e=new Date(now.getFullYear(),now.getMonth(),0);}
+  else if(type==='3m'){s=new Date(now.getFullYear(),now.getMonth()-2,1);e=now;}
+  else if(type==='6m'){s=new Date(now.getFullYear(),now.getMonth()-5,1);e=now;}
+  else if(type==='12m'){s=new Date(now.getFullYear(),now.getMonth()-11,1);e=now;}
+  else{s=null;e=null;}
+  vcSetDateRange(s,e);
+  document.querySelectorAll('#page-via-cancel .cd-quick-btn').forEach(b=>b.classList.remove('active'));
+  const btn=document.querySelector(`#page-via-cancel .cd-quick-btn[data-type="${type}"]`);if(btn)btn.classList.add('active');
+  vcCloseCalendar();
+}
+function vcToggleCalendar(){
+  const cal=document.getElementById('vcCalendar');
+  if(cal.classList.contains('hidden')){
+    const now=new Date();vcCalYear=now.getFullYear();vcCalMonth=now.getMonth();
+    vcCalPhase='start';vcCalTempStart=vcDateStart;vcCalTempEnd=vcDateEnd;
+    vcRenderCalendar();cal.classList.remove('hidden');
+  }else cal.classList.add('hidden');
+}
+function vcCloseCalendar(){document.getElementById('vcCalendar').classList.add('hidden');}
+function vcCalPrev(){vcCalMonth--;if(vcCalMonth<0){vcCalMonth=11;vcCalYear--;}vcRenderCalendar();}
+function vcCalNext(){vcCalMonth++;if(vcCalMonth>11){vcCalMonth=0;vcCalYear++;}vcRenderCalendar();}
+function vcRenderCalendar(){
+  const first=new Date(vcCalYear,vcCalMonth,1),startDay=first.getDay(),dim=new Date(vcCalYear,vcCalMonth+1,0).getDate();
+  document.getElementById('vcCalTitle').textContent=`${vcCalYear}년 ${vcCalMonth+1}월`;
+  let html='<div class="cd-cal-dow">일</div><div class="cd-cal-dow">월</div><div class="cd-cal-dow">화</div><div class="cd-cal-dow">수</div><div class="cd-cal-dow">목</div><div class="cd-cal-dow">금</div><div class="cd-cal-dow">토</div>';
+  for(let i=0;i<startDay;i++)html+='<div class="cd-cal-day empty"></div>';
+  for(let d=1;d<=dim;d++){
+    const ts=new Date(vcCalYear,vcCalMonth,d).getTime();
+    let cls='cd-cal-day';
+    const sTs=vcCalTempStart?vcCalTempStart.getTime():0,eTs=vcCalTempEnd?vcCalTempEnd.getTime():0;
+    if(sTs&&ts===sTs)cls+=' start';
+    if(eTs&&ts===eTs)cls+=' end';
+    if(sTs&&eTs&&ts>sTs&&ts<eTs)cls+=' in-range';
+    html+=`<div class="${cls}" onclick="event.stopPropagation();vcCalClick(${vcCalYear},${vcCalMonth},${d})">${d}</div>`;
+  }
+  document.getElementById('vcCalGrid').innerHTML=html;
+  const rng=document.getElementById('vcCalRange');
+  if(vcCalTempStart&&vcCalTempEnd)rng.textContent=`${vcFmtDate(vcCalTempStart)} ~ ${vcFmtDate(vcCalTempEnd)}`;
+  else if(vcCalTempStart)rng.textContent=`${vcFmtDate(vcCalTempStart)} ~ (종료일 선택)`;
+  else rng.textContent='시작일을 선택하세요';
+}
+function vcCalClick(y,m,d){
+  const dt=new Date(y,m,d);
+  if(vcCalPhase==='start'){vcCalTempStart=dt;vcCalTempEnd=null;vcCalPhase='end';}
+  else{if(dt<vcCalTempStart){vcCalTempEnd=vcCalTempStart;vcCalTempStart=dt;}else vcCalTempEnd=dt;vcCalPhase='start';}
+  vcRenderCalendar();
+}
+function vcCalApply(){if(vcCalTempStart&&vcCalTempEnd)vcSetDateRange(vcCalTempStart,vcCalTempEnd);vcCloseCalendar();document.querySelectorAll('#page-via-cancel .cd-quick-btn').forEach(b=>b.classList.remove('active'));}
+
+// ═══════════════════════════════════════════
+//  데이터 처리 (Generate)
+//   기간 분리는 파일명이 아니라 각 행의 P열 신청일(applicationDate) 기준이다.
+//   → 1월~현재를 한 파일로 통째 올려도 월별/주차별로 알아서 쪼개진다.
+// ═══════════════════════════════════════════
+function vcGenerate(){
+  try{
+    const dailyFiles=vcGetFilesByType('app-daily');
+    const appFiles=vcGetFilesByType('app');
+    if(!dailyFiles.length&&!appFiles.length){alert('신청자관리(일마감 또는 전체기간) 파일이 필요합니다.');return;}
+    const attendFile=vcGetLatest('attend');
+    const members=attendFile?vcGetMembers(attendFile.data):{};
+    const warns=[];
+    if(!attendFile)warns.push('명단 파일이 없어 센터/그룹은 담당자명의 (R_센터) 표기로만 채웁니다.');
+
+    // 일마감 → 고객키 맵 (여러 파일/여러 달을 한 번에 올려도 고객키로 병합)
+    const dailyByKey={};let maxAppDate=null;
+    for(const f of [...dailyFiles].sort((a,b)=>a.uploadTime-b.uploadTime)){
+      for(let i=1;i<f.data.length;i++){
+        const r=f.data[i];const ck=str(r[VC_APP.customerKey]);if(!ck)continue;
+        dailyByKey[ck]=r;
+        const ad=parseDate(r[VC_APP.applicationDate]);
+        if(ad&&(!maxAppDate||ad>maxAppDate))maxAppDate=ad;
+      }
+    }
+    // 전체기간 → 고객키 맵
+    const fullByKey={};
+    for(const f of [...appFiles].sort((a,b)=>a.uploadTime-b.uploadTime)){
+      for(let i=1;i<f.data.length;i++){
+        const r=f.data[i];const ck=str(r[VC_APP.customerKey]);if(!ck)continue;
+        fullByKey[ck]=r;
+        if(!dailyFiles.length){const ad=parseDate(r[VC_APP.applicationDate]);if(ad&&(!maxAppDate||ad>maxAppDate))maxAppDate=ad;}
+      }
+    }
+    const hasDaily=Object.keys(dailyByKey).length>0;
+    const hasFull=Object.keys(fullByKey).length>0;
+    // 전체기간 파일이 없으면 '일마감에 있는데 전체엔 없다'를 배송전취소로 볼 수 없다 → 전부 유지로 둔다
+    if(hasDaily&&!hasFull)warns.push('전체기간 파일이 없어 배송전 취소를 판정할 수 없습니다. (전부 유지로 집계)');
+
+    const mkBase=(row)=>{
+      const manager=str(row[VC_APP.manager]);
+      const clean=manager.replace(/\(R_[^)]+\)/,'').trim();
+      const center=(manager.match(/\(R_([^)]+)\)/)||[])[1]||'기타';
+      const mi=members[clean]||members[manager]||{};
+      return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',productRaw:str(row[VC_APP.product])};
+    };
+
+    const contracts=[];
+    if(hasDaily){
+      for(const[ck,dRow]of Object.entries(dailyByKey)){
+        if(parseDate(dRow[VC_APP.returnDate]))continue;      // 일마감 시점에 이미 반품 처리된 건은 제외
+        const appDate=parseDate(dRow[VC_APP.applicationDate]);
+        let status='유지',cancelDays=null;
+        const fRow=fullByKey[ck];
+        if(hasFull&&!fRow){status='배송전취소';}
+        else if(fRow){
+          const fr=parseDate(fRow[VC_APP.returnDate]);
+          if(fr){status='취소';const od=appDate||parseDate(fRow[VC_APP.applicationDate]);
+            if(od){cancelDays=Math.ceil((fr-od)/864e5);if(cancelDays<0)cancelDays=null;}}
+        }
+        contracts.push({ck,...mkBase(dRow),appDate,status,cancelDays});
+      }
+    }else{
+      for(const[ck,fRow]of Object.entries(fullByKey)){
+        const appDate=parseDate(fRow[VC_APP.applicationDate]);
+        const rd=parseDate(fRow[VC_APP.returnDate]);
+        let status='유지',cancelDays=null;
+        if(rd){status='취소';if(appDate){cancelDays=Math.ceil((rd-appDate)/864e5);if(cancelDays<0)cancelDays=null;}}
+        contracts.push({ck,...mkBase(fRow),appDate,status,cancelDays});
+      }
+    }
+
+    // 접수제품 사전 대조 → 신규값은 pending(잠정 포함), '노르드킨'은 자동 제외
+    const rawSet=new Set();for(const c of contracts)if(c.productRaw)rawSet.add(c.productRaw);
+    vcPending=vcScanNewProducts(rawSet);
+
+    const kept=contracts.filter(c=>vcIncluded(c.productRaw));
+    for(const c of kept)c.product=vcLabelOf(c.productRaw)||'미지정';
+    const dropped=contracts.length-kept.length;
+    if(dropped>0)warns.push(`제외 제품 ${dropped.toLocaleString()}건은 전체 집계에서 뺐습니다.`);
+
+    // 표시명 순서: 사전 등록 순 → 사전에 없는(미판정) 값은 처음 나온 순
+    const order=[],seen=new Set();
+    for(const raw of Object.keys(vcProducts)){const e=vcProducts[raw];if(!e||!e.include)continue;
+      const l=e.label||vcDefaultLabel(raw);if(l&&!seen.has(l)){seen.add(l);order.push(l);}}
+    for(const c of kept){if(c.product&&!seen.has(c.product)){seen.add(c.product);order.push(c.product);}}
+
+    vcResult={contracts:kept,members,productOrder:order,maxAppDate,warns};
+    vcUpdateHeader();
+    if(!vcDateStart&&!vcDateEnd){
+      const now=new Date();vcDateStart=new Date(now.getFullYear(),now.getMonth()-2,1);vcDateEnd=now;
+      document.getElementById('vcDateDisplay').textContent=`${vcFmtDate(vcDateStart)} ~ ${vcFmtDate(vcDateEnd)}`;
+    }
+    vcFilterAndRender();
+    document.getElementById('vcDashboard').classList.remove('hidden');
+    document.getElementById('vcEmptyState').classList.add('hidden');
+    if(vcPending.length)vcOpenProdModal();      // 새 접수제품 노티
+  }catch(err){alert('오류: '+err.message);console.error(err);}
+}
+
+// ═══════════════════════════════════════════
+//  버킷 / 표 공통
+// ═══════════════════════════════════════════
+function vcNewBucket(){const p={};VC_PERIODS.forEach(x=>p[x.key]=0);return{initial:0,preCx:0,cancel:0,periods:p};}
+function vcAddToBucket(b,c){
+  b.initial++;
+  if(c.status==='배송전취소')b.preCx++;
+  else if(c.status==='취소'){b.cancel++;if(c.cancelDays!=null)for(const p of VC_PERIODS){if(c.cancelDays>=p.min&&c.cancelDays<=p.max)b.periods[p.key]++;}}
+  else if(vcEstMode&&c.estCancelProb>0){b.cancel+=c.estCancelProb;VC_PERIODS.forEach(p=>{b.periods[p.key]+=(c.estPeriods[p.key]||0);});}
+}
+function vcMergeBuckets(t,s){t.initial+=s.initial;t.preCx+=s.preCx;t.cancel+=s.cancel;for(const p of VC_PERIODS)t.periods[p.key]+=(s.periods[p.key]||0);}
+function vcNum(v){return Math.round(v).toLocaleString();}
+function vcTH(){
+  let h='<th>구분</th><th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>';
+  VC_PERIODS.forEach((p,i)=>{h+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
+  h+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th>';return h;
+}
+function vcTR(label,b,bold,indent){
+  const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx,tc=px+cx;
+  const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
+  let h=`<tr style="${bold?'font-weight:800;background:#f8f9fc':''}">
+    <td class="text-left" style="padding-left:${indent||14}px;white-space:nowrap">${label}</td>
+    <td>${vcNum(n)}</td>
+    <td class="cd-sep">${vcNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
+    <td class="cd-sep">${vcNum(px)}</td><td>${pct2(pxR)}</td>
+    <td class="cd-sep">${vcNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
+  VC_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;h+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${vcNum(v)}</td><td>${pct2(r)}</td>`;});
+  h+=`<td class="cd-sep">${vcNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
+}
+function vcMWHeaderTR(label,b,gid){
+  const arrow=`<span class="cd-mw-arrow" data-vcmw-arrow="${gid}" style="display:inline-block;margin-right:6px;transition:transform .2s;transform:rotate(90deg)">▶</span>`;
+  return vcTR(arrow+label,b,true,14).replace(/^<tr /,`<tr class="cd-mw-header" data-vcmw-header="${gid}" onclick="vcToggleMW('${gid}')" `);
+}
+function vcMWChildTR(label,b,gid){
+  return vcTR(label,b,false,28).replace(/^<tr /,`<tr class="cd-mw-child vc-mw-child-${gid}" `);
+}
+function vcToggleMW(gid){
+  const children=document.querySelectorAll('.vc-mw-child-'+gid);
+  const arrow=document.querySelector(`[data-vcmw-arrow="${gid}"]`);
+  if(!children.length)return;
+  const isHidden=children[0].style.display==='none';
+  children.forEach(el=>el.style.display=isHidden?'':'none');
+  if(arrow)arrow.style.transform=isHidden?'rotate(90deg)':'rotate(0deg)';
+}
+
+// ═══════════════════════════════════════════
+//  필터 + 렌더링
+// ═══════════════════════════════════════════
+function vcVisibleProducts(data){
+  const has=new Set(data.map(c=>c.product));
+  const out=vcResult.productOrder.filter(p=>has.has(p));
+  for(const p of has)if(p&&out.indexOf(p)<0)out.push(p);
+  return out;
+}
+function vcFilterAndRender(){
+  if(!vcResult)return;
+  let data=vcResult.contracts;
+  if(vcDateStart||vcDateEnd){
+    data=data.filter(c=>{if(!c.appDate)return false;
+      if(vcDateStart&&c.appDate<vcDateStart)return false;
+      if(vcDateEnd){const e=new Date(vcDateEnd);e.setHours(23,59,59);if(c.appDate>e)return false;}
+      return true;});
+  }
+  vcRenderSubtabs(data);
+  const isAll=vcCurrentView==='all';
+  const view=isAll?data:data.filter(c=>c.product===vcCurrentView);
+  const sub=isAll?'제품별':vcCurrentView;
+  document.getElementById('vcMonthlySub').textContent=sub;
+  document.getElementById('vcWeeklySub').textContent=sub;
+  document.getElementById('vcNavProduct').classList.toggle('hidden',!isAll);
+  vcRenderPendingBanner();
+  vcRenderKPI(view);
+  vcRenderInsights(view);
+  vcRenderMonthly(view,isAll);
+  vcRenderWeekly(view,isAll);
+  vcRenderCenter(view);
+  if(isAll)vcRenderProduct(view);
+  vcRenderPerson(view);
+}
+function vcRenderSubtabs(data){
+  const labels=vcVisibleProducts(data);
+  if(vcCurrentView!=='all'&&labels.indexOf(vcCurrentView)<0)vcCurrentView='all';
+  let h=`<div class="cd-subtab${vcCurrentView==='all'?' active':''}" data-vcview="all">전체</div>`;
+  for(const l of labels)h+=`<div class="cd-subtab${vcCurrentView===l?' active':''}" data-vcview="${vcEsc(l)}">${vcEsc(l)}</div>`;
+  document.getElementById('vcSubtabs').innerHTML=h;
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest&&e.target.closest('#vcSubtabs .cd-subtab');
+  if(!t)return;
+  vcSwitchView(t.dataset.vcview);
+});
+function vcSwitchView(v){if(v===vcCurrentView)return;vcCurrentView=v;if(vcResult)vcFilterAndRender();}
+
+function vcRenderKPI(data){
+  const b=vcNewBucket();data.forEach(c=>vcAddToBucket(b,c));
+  const n=Math.round(b.initial),px=Math.round(b.preCx),cx=Math.round(b.cancel);
+  const m=n-px-cx,tc=px+cx;
+  document.getElementById('vcKpiGrid').innerHTML=`
+    <div class="kpi-card"><div class="kl">최초 계약수</div><div class="kv">${n.toLocaleString()}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소수</div><div class="kv">${tc.toLocaleString()} / ${n>0?pct2(tc/n):'-'}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송전 취소</div><div class="kv">${px.toLocaleString()} / ${n>0?pct2(px/n):'-'}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--warning)"><div class="kl">배송후 취소</div><div class="kv">${cx.toLocaleString()} / ${n>0?pct2(cx/n):'-'}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--success)"><div class="kl">계약유지</div><div class="kv">${m.toLocaleString()} / ${n>0?pct2(m/n):'-'}</div></div>`;
+}
+
+// ── 월별 (전체 뷰: 제품별 그룹으로 접힘 / 제품 뷰: 월 행만) ──
+function vcRenderMonthly(data,grouped){
+  const byM={},byPM={};
+  for(const c of data){
+    if(!c.appDate)continue;
+    const mk=`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;
+    if(!byM[mk])byM[mk]=vcNewBucket();vcAddToBucket(byM[mk],c);
+    if(grouped){const k=`${c.product}|${mk}`;if(!byPM[k])byPM[k]=vcNewBucket();vcAddToBucket(byPM[k],c);}
+  }
+  const months=Object.keys(byM).sort();
+  const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
+  let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`;
+  html+=vcMWHeaderTR('전체',total,'vmo-all');
+  months.forEach(mk=>{const b=byM[mk];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,'vmo-all');}});
+  if(grouped){
+    vcVisibleProducts(data).forEach((p,idx)=>{
+      const bt=vcNewBucket();months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b)vcMergeBuckets(bt,b);});
+      if(!bt.initial)return;
+      const gid='vmo-p'+idx;
+      html+=vcMWHeaderTR(vcEsc(p),bt,gid);
+      months.forEach(mk=>{const b=byPM[`${p}|${mk}`];if(b&&b.initial>0){const m=mk.split('-')[1];html+=vcMWChildTR(`${+m}월`,b,gid);}});
+    });
+  }
+  html+='</tbody></table>';document.getElementById('vcMonthlyTable').innerHTML=html;
+}
+
+// ── 주차별 (주차 키/라벨은 WM 취소율과 동일 규칙 재사용) ──
+function vcRenderWeekly(data,grouped){
+  const byW={},byPW={};
+  for(const c of data){
+    if(!c.appDate)continue;
+    const wk=cdWeekKey(c.appDate);
+    if(!byW[wk])byW[wk]=vcNewBucket();vcAddToBucket(byW[wk],c);
+    if(grouped){const k=`${c.product}|${wk}`;if(!byPW[k])byPW[k]=vcNewBucket();vcAddToBucket(byPW[k],c);}
+  }
+  const weeks=Object.keys(byW).sort();
+  const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
+  let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`;
+  html+=vcMWHeaderTR('전체',total,'vwk-all');
+  weeks.forEach(wk=>{const b=byW[wk];if(b&&b.initial>0)html+=vcMWChildTR(cdWeekLabel(wk),b,'vwk-all');});
+  if(grouped){
+    vcVisibleProducts(data).forEach((p,idx)=>{
+      const bt=vcNewBucket();weeks.forEach(wk=>{const b=byPW[`${p}|${wk}`];if(b)vcMergeBuckets(bt,b);});
+      if(!bt.initial)return;
+      const gid='vwk-p'+idx;
+      html+=vcMWHeaderTR(vcEsc(p),bt,gid);
+      weeks.forEach(wk=>{const b=byPW[`${p}|${wk}`];if(b&&b.initial>0)html+=vcMWChildTR(cdWeekLabel(wk),b,gid);});
+    });
+  }
+  html+='</tbody></table>';document.getElementById('vcWeeklyTable').innerHTML=html;
+}
+
+// ── 센터별 ──
+function vcRenderCenter(data){
+  const byC={};const total=vcNewBucket();
+  for(const c of data){const k=c.center||'기타';if(!byC[k])byC[k]=vcNewBucket();vcAddToBucket(byC[k],c);vcAddToBucket(total,c);}
+  let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`+vcTR('전체',total,true);
+  for(const center of VC_CENTER_ORDER){const b=byC[center];if(!b||!b.initial)continue;html+=vcTR(vcEsc(center),b,true,14);delete byC[center];}
+  for(const[center,b]of Object.entries(byC)){if(!b.initial)continue;html+=vcTR(vcEsc(center),b,false,14);}
+  html+='</tbody></table>';document.getElementById('vcCenterTable').innerHTML=html;
+}
+
+// ── 제품별 (기존 '종류별' 자리) ──
+function vcRenderProduct(data){
+  const byP={};const total=vcNewBucket();
+  for(const c of data){const k=c.product||'미지정';if(!byP[k])byP[k]=vcNewBucket();vcAddToBucket(byP[k],c);vcAddToBucket(total,c);}
+  let html=`<table><thead><tr>${vcTH()}</tr></thead><tbody>`+vcTR('전체',total,true);
+  for(const p of vcResult.productOrder){const b=byP[p];if(!b||!b.initial)continue;html+=vcTR(vcEsc(p),b,true,14);delete byP[p];}
+  for(const[p,b]of Object.entries(byP)){if(!b.initial)continue;html+=vcTR(vcEsc(p),b,false,14);}
+  html+='</tbody></table>';document.getElementById('vcProductTable').innerHTML=html;
+}
+
+// ── 개인별 ──
+function vcRenderPerson(data){
+  const byP={};
+  for(const c of data){const k=c.cleanName;
+    if(!byP[k])byP[k]={...vcNewBucket(),center:c.center,group:c.group};
+    vcAddToBucket(byP[k],c);}
+  const ci=k=>{const i=VC_CENTER_ORDER.indexOf(k);return i>=0?i:99;};
+  const gi=k=>{for(let i=0;i<VC_GROUP_ORDER.length;i++)if(k&&k.includes(VC_GROUP_ORDER[i]))return i;return 99;};
+  const sorted=Object.entries(byP).filter(([,d])=>d.initial>0).sort((a,b)=>{
+    let d=ci(a[1].center)-ci(b[1].center);if(d)return d;
+    d=gi(a[1].group)-gi(b[1].group);if(d)return d;
+    return b[1].initial-a[1].initial;});
+  let html=`<table><thead><tr><th>코디명</th><th>센터</th><th>그룹</th>
+    <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>`;
+  VC_PERIODS.forEach((p,i)=>{html+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
+  html+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
+  const row=(name,center,group,b,bold)=>{
+    const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx,tc=px+cx;
+    const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
+    let h=`<tr${bold?' style="font-weight:800;background:#f8f9fc"':''}><td class="text-left" style="${bold?'':'font-weight:700;'}padding-left:14px">${name}</td><td>${center}</td><td>${group}</td>
+      <td>${vcNum(n)}</td>
+      <td class="cd-sep">${vcNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
+      <td class="cd-sep">${vcNum(px)}</td><td>${pct2(pxR)}</td>
+      <td class="cd-sep">${vcNum(cx)}</td><td style="color:${cdRateColor(cxR)};font-weight:700">${pct2(cxR)}</td>`;
+    VC_PERIODS.forEach((p,i)=>{const v=b.periods[p.key]||0;const r=n>0?v/n:0;h+=`<td class="${(i===0||p.cumul)?'cd-sep':''}">${vcNum(v)}</td><td>${pct2(r)}</td>`;});
+    h+=`<td class="cd-sep">${vcNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
+  };
+  const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
+  html+=row('전체','','',total,true);
+  for(const[name,b]of sorted)html+=row(vcEsc(name),vcEsc(b.center||''),vcEsc(b.group||''),b,false);
+  html+='</tbody></table>';document.getElementById('vcPersonTable').innerHTML=html;
+}
+function vcTogglePerson(){
+  const el=document.getElementById('vcPersonTable');
+  const arrow=document.getElementById('vcPersonArrow');
+  const closed=el.classList.toggle('hidden');
+  arrow.style.transform=closed?'rotate(0deg)':'rotate(90deg)';
+}
+
+// ═══════════════════════════════════════════
+//  AI 인사이트 (WM 취소율과 같은 로테이션 패널, 구분 축만 제품으로)
+// ═══════════════════════════════════════════
+const VC_NAV_MAP={monthly:['vcNavMonthly','vcMonthlyTable'],weekly:['vcNavWeekly','vcWeeklyTable'],center:['vcNavCenter','vcCenterTable'],product:['vcNavProduct','vcProductTable'],person:['vcNavPerson','vcPersonTable']};
+function vcRenderInsights(data){
+  const el=document.getElementById('vcInsightPanel');
+  if(!el)return;
+  const insights=[];
+  const pctF=v=>(v*100).toFixed(1)+'%';
+  for(const w of ((vcResult&&vcResult.warns)||[]))insights.push({type:'warning',label:'데이터 확인',text:w});
+  if(data.length){
+    const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
+    const n=total.initial,px=total.preCx,cx=total.cancel,tc=px+cx;
+    const totalRate=n>0?tc/n:0,pxRate=n>0?px/n:0;
+
+    const byMonth={};
+    for(const c of data){if(!c.appDate)continue;const mk=`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;if(!byMonth[mk])byMonth[mk]=vcNewBucket();vcAddToBucket(byMonth[mk],c);}
+    const months=Object.keys(byMonth).sort();
+    const now=new Date();
+    const curMk=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    if(months.length>=2){
+      const curKey=months[months.length-1],prevKey=months[months.length-2];
+      const cur=byMonth[curKey],prev=byMonth[prevKey];
+      const curR=cur.initial>0?(cur.preCx+cur.cancel)/cur.initial:0,prevR=prev.initial>0?(prev.preCx+prev.cancel)/prev.initial:0;
+      const diff=curR-prevR;
+      const curLabel=curKey.replace(/^\d{4}-0?/,'')+'월',prevLabel=prevKey.replace(/^\d{4}-0?/,'')+'월';
+      const suffix=(curKey===curMk)?' <span style="color:#64748b;font-weight:500">(※ 진행 중 · 취소 추가 발생 가능)</span>':'';
+      if(Math.abs(diff)>0.01){
+        const nav={section:'monthly',keys:[curLabel]};
+        if(diff>0)insights.push({type:'danger',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(diff)} 상승</b>했습니다.${suffix}`,nav});
+        else insights.push({type:'success',label:`${curLabel} 취소율`,text:`<b>${pctF(curR)}</b>로, 전월(${prevLabel} ${pctF(prevR)}) 대비 <b>${pctF(Math.abs(diff))} 개선</b>되었습니다.${suffix}`,nav});
+      }
+    }
+    if(pxRate>0.05)insights.push({type:'warning',label:'배송전 취소',text:`전체의 <b>${pctF(pxRate)}</b> (${Math.round(px)}건). 초기 이탈 방지 대응이 필요합니다.`,nav:{section:'monthly',keys:['전체']}});
+
+    const nonCumul=VC_PERIODS.filter(p=>!p.cumul);
+    let maxP=null,maxPRate=0;
+    for(const p of nonCumul){const v=total.periods[p.key]||0;const r=n>0?v/n:0;if(r>maxPRate){maxPRate=r;maxP=p;}}
+    if(maxP&&maxPRate>0.02)insights.push({type:'info',label:'취소 집중 구간',text:`<b>${maxP.key}</b>에 가장 집중 (전체 대비 <b>${pctF(maxPRate)}</b>). 해당 시점 고객 케어 강화 권장.`,nav:{section:'monthly',keys:['전체']}});
+
+    const early14=total.periods['14일이내']||0;
+    const earlyRatio=cx>0?early14/cx:0;
+    if(earlyRatio>0.5&&cx>=5)insights.push({type:'warning',label:'조기 취소',text:`배송후 취소의 <b>${pctF(earlyRatio)}</b>가 14일 이내 발생. 초기 온보딩 점검을 권장합니다.`,nav:{section:'monthly',keys:['전체']}});
+
+    // 제품별 편차 (WM의 '구분별 편차' 자리)
+    const byProd={};
+    for(const c of data){const k=c.product||'미지정';if(!byProd[k])byProd[k]=vcNewBucket();vcAddToBucket(byProd[k],c);}
+    let worst=null,worstRate=0,best=null,bestRate=1;
+    for(const[k,b]of Object.entries(byProd)){if(b.initial<5)continue;const r=(b.preCx+b.cancel)/b.initial;
+      if(r>worstRate){worstRate=r;worst=k;}if(r<bestRate){bestRate=r;best=k;}}
+    // 제품별 표는 '전체' 뷰에만 있으므로 그 뷰에서만 인사이트를 낸다
+    if(vcCurrentView==='all'&&worst&&best&&worst!==best&&(worstRate-bestRate)>0.05)
+      insights.push({type:'danger',label:'제품별 편차',text:`<b>${vcEsc(worst)}</b>(${pctF(worstRate)}) 최고 / <b>${vcEsc(best)}</b>(${pctF(bestRate)}) 최저. 편차 ${pctF(worstRate-bestRate)}.`,nav:{section:'product',keys:[worst,best]}});
+
+    const byCenter={};
+    for(const c of data){const k=c.center||'기타';if(!byCenter[k])byCenter[k]=vcNewBucket();vcAddToBucket(byCenter[k],c);}
+    const centerRates=Object.entries(byCenter).filter(([,b])=>b.initial>=5).map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial}));
+    if(centerRates.length>=2){
+      const avgCR=centerRates.reduce((s,x)=>s+x.r,0)/centerRates.length;
+      const outliers=centerRates.filter(x=>x.r>avgCR*1.3).sort((a,b)=>b.r-a.r);
+      if(outliers.length)insights.push({type:'warning',label:'센터별 이상치',text:`평균(${pctF(avgCR)}) 대비 높은 센터: ${outliers.map(x=>`<b>${vcEsc(x.k)}</b>(${pctF(x.r)})`).join(', ')}.`,nav:{section:'center',keys:outliers.map(x=>x.k)}});
+    }
+
+    const memberMap=(vcResult&&vcResult.members)||{};
+    const byPerson={};
+    for(const c of data){const k=c.cleanName;if(!byPerson[k])byPerson[k]=vcNewBucket();vcAddToBucket(byPerson[k],c);}
+    const personRates=Object.entries(byPerson)
+      .filter(([k,b])=>b.initial>=5&&(!Object.keys(memberMap).length||(memberMap[k]&&!memberMap[k].resigned)))
+      .map(([k,b])=>({k,r:(b.preCx+b.cancel)/b.initial,cxN:Math.round(b.preCx+b.cancel)}))
+      .sort((a,b)=>b.r-a.r);
+    if(personRates.length>=3&&personRates[0].r>totalRate*1.3){
+      const top3=personRates.slice(0,3);
+      insights.push({type:'info',label:'개인별 상위',text:`${top3.map(x=>`<b>${vcEsc(x.k)}</b>(${pctF(x.r)}, 취소 ${x.cxN}건)`).join(', ')} — 개별 코칭 포인트로 활용하세요.`,nav:{section:'person',keys:top3.map(x=>x.k)}});
+    }
+
+    const late=total.periods['30일이후']||0;
+    const lateRatio=cx>0?late/cx:0;
+    if(lateRatio>0.15&&late>=3)insights.push({type:'info',label:'장기 취소',text:`30일 이후 <b>${Math.round(late)}건</b> (배송후 취소 중 ${pctF(lateRatio)}). 장기 이탈 패턴 분석이 필요합니다.`,nav:{section:'monthly',keys:['전체']}});
+  }
+
+  if(window._vcIns&&window._vcIns.timer)clearInterval(window._vcIns.timer);
+  if(!insights.length){el.innerHTML='';window._vcIns=null;return;}
+  const icons={danger:'!',warning:'!',success:'&#10003;',info:'i'};
+  let dots='';for(let i=0;i<insights.length;i++)dots+=`<span${i===0?' class="active"':''}></span>`;
+  let allHtml='';
+  insights.forEach((ins,i)=>{allHtml+=`<div class="cd-insight-all-item ${ins.type}" onclick="event.stopPropagation();vcInsightGo(${i})"><span class="cd-ins-badge ${ins.type}">${icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span></div>`;});
+  el.innerHTML=`<div class="cd-insight-panel" id="vcIns-panel" onclick="vcInsightGo()" onmouseenter="vcInsightPause()" onmouseleave="vcInsightResume()" title="클릭하면 해당 데이터로 이동">
+    <div class="cd-insight-icon">AI</div>
+    <div class="cd-insight-body" id="vcIns-body"></div>
+    <div class="cd-insight-dots" id="vcIns-dots">${dots}</div>
+    <div class="cd-insight-expand" id="vcIns-expbtn" onclick="event.stopPropagation();vcInsightToggleExpand()" title="전체 보기"><span class="cd-exp-arrow">&#9660;</span></div>
+    <div class="cd-insight-all" id="vcIns-all">${allHtml}</div>
+  </div>`;
+  window._vcIns={items:insights,icons,idx:0,paused:false,expanded:false};
+  vcInsightShow(0,false);
+  window._vcIns.timer=setInterval(vcInsightNext,4000);
+}
+function vcInsightShow(idx,animate){
+  const st=window._vcIns;if(!st)return;
+  const body=document.getElementById('vcIns-body');if(!body)return;
+  const ins=st.items[idx];
+  const content=`<span class="cd-ins-badge ${ins.type}">${st.icons[ins.type]}</span><span><b class="cd-ins-label">${ins.label}</b> : ${ins.text}</span>`;
+  if(!animate){body.innerHTML=`<div class="cd-insight-slide">${content}</div>`;}
+  else{
+    const old=body.querySelector('.cd-insight-slide');
+    if(old)old.classList.add('out-up');
+    const nw=document.createElement('div');nw.className='cd-insight-slide in-down';nw.innerHTML=content;body.appendChild(nw);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>nw.classList.remove('in-down')));
+    if(old)setTimeout(()=>old.remove(),400);
+  }
+  const dotsEl=document.getElementById('vcIns-dots');
+  if(dotsEl)dotsEl.querySelectorAll('span').forEach((d,i)=>d.classList.toggle('active',i===idx));
+}
+function vcInsightNext(){
+  const st=window._vcIns;if(!st||st.items.length<=1)return;
+  st.idx=(st.idx+1)%st.items.length;vcInsightShow(st.idx,true);
+}
+function vcInsightPause(){const st=window._vcIns;if(!st)return;st.paused=true;clearInterval(st.timer);}
+function vcInsightResume(){const st=window._vcIns;if(!st||st.expanded)return;st.paused=false;clearInterval(st.timer);st.timer=setInterval(vcInsightNext,4000);}
+function vcInsightToggleExpand(){
+  const st=window._vcIns;if(!st)return;
+  const panel=document.getElementById('vcIns-panel');if(!panel)return;
+  st.expanded=!st.expanded;panel.classList.toggle('expanded',st.expanded);
+  const btn=document.getElementById('vcIns-expbtn');if(btn)btn.title=st.expanded?'접기':'전체 보기';
+  if(st.expanded){clearInterval(st.timer);st.paused=true;}
+  else{st.paused=false;clearInterval(st.timer);st.timer=setInterval(vcInsightNext,4000);}
+}
+function vcInsightGo(idx){
+  const st=window._vcIns;if(!st)return;
+  const i=(typeof idx==='number')?idx:st.idx;
+  const ins=st.items[i];
+  if(!ins||!ins.nav){vcInsightNext();return;}
+  const map=VC_NAV_MAP[ins.nav.section];if(!map)return;
+  const scrollEl=document.getElementById(map[0]),tableEl=document.getElementById(map[1]);
+  if(!scrollEl||!tableEl)return;
+  if(ins.nav.section==='person'&&tableEl.classList.contains('hidden'))vcTogglePerson();
+  scrollEl.scrollIntoView({behavior:'smooth',block:'start'});
+  const keys=ins.nav.keys||[];
+  setTimeout(()=>{
+    const rows=tableEl.querySelectorAll('tbody tr');
+    rows.forEach(r=>r.classList.remove('cd-ins-hilite'));
+    if(!keys.length)return;
+    const matched=[];
+    for(const r of rows){const first=r.querySelector('td');if(!first)continue;
+      const txt=first.textContent.trim();
+      for(const k of keys){if(txt===k||txt.endsWith(k)||txt.includes(k)){matched.push(r);break;}}}
+    matched.forEach(r=>{if(r.style.display==='none'){const cls=(r.className.match(/vc-mw-child-(\S+)/)||[])[1];if(cls)vcToggleMW(cls);}});
+    matched.forEach(r=>r.classList.add('cd-ins-hilite'));
+    setTimeout(()=>matched.forEach(r=>r.classList.remove('cd-ins-hilite')),2200);
+  },450);
+}
+
+// ═══════════════════════════════════════════
+//  동일기간추정 (WM 취소율과 동일 알고리즘)
+// ═══════════════════════════════════════════
+function vcToggleEst(){
+  if(!vcResult||!vcResult.contracts.length){alert('데이터가 없습니다.');return;}
+  vcEstMode=!vcEstMode;
+  const btn=document.getElementById('vcEstBtn'),navBtn=document.getElementById('vcNavEstBtn'),banner=document.getElementById('vcEstBanner');
+  if(vcEstMode){
+    if(!vcComputeEstimation()){vcEstMode=false;return;}
+    btn.classList.add('est-active');btn.textContent='추정모드 ON';
+    navBtn.classList.add('est-active');navBtn.textContent='추정모드 ON';
+    banner.classList.remove('hidden');
+  }else{
+    btn.classList.remove('est-active');btn.textContent='동일기간추정';
+    navBtn.classList.remove('est-active');navBtn.textContent='동일기간추정';
+    banner.classList.add('hidden');
+    vcResult.contracts.forEach(c=>{c.estCancelProb=0;c.estPeriods={};});
+  }
+  vcFilterAndRender();
+}
+function vcComputeEstimation(){
+  const data=vcResult.contracts,now=new Date(),MAX_DAY=120;
+  const allCancels=data.filter(c=>c.status==='취소'&&c.cancelDays!=null&&c.cancelDays>=0);
+  if(allCancels.length<5){alert('추정에 필요한 취소 데이터가 부족합니다 (최소 5건).');return false;}
+  const dayCounts=new Array(MAX_DAY+1).fill(0);
+  allCancels.forEach(c=>{dayCounts[Math.min(Math.max(c.cancelDays,0),MAX_DAY)]++;});
+  const cumul=[...dayCounts];for(let i=1;i<=MAX_DAY;i++)cumul[i]+=cumul[i-1];
+  const totalCx=cumul[MAX_DAY];
+  const F=cumul.map(v=>totalCx>0?v/totalCx:0);
+  const mature=data.filter(c=>c.appDate&&(now-c.appDate)/864e5>=90);
+  const mCx=mature.filter(c=>c.status==='취소').length;
+  const baseRate=mature.length>30?mCx/mature.length:(data.length>0?allCancels.length/data.length:0);
+  const pDist={};
+  VC_PERIODS.forEach(p=>{if(!p.cumul)pDist[p.key]=allCancels.filter(c=>c.cancelDays>=p.min&&c.cancelDays<=p.max).length/totalCx;});
+  for(const c of data){
+    c.estCancelProb=0;c.estPeriods={};
+    VC_PERIODS.forEach(p=>c.estPeriods[p.key]=0);
+    if(c.status!=='유지'||!c.appDate)continue;
+    const age=Math.max(0,Math.ceil((now-c.appDate)/864e5));
+    const f=F[Math.min(age,MAX_DAY)];
+    const denom=1-baseRate*f;
+    if(denom<=0)continue;
+    const condProb=Math.min(baseRate*(1-f)/denom,1);
+    c.estCancelProb=condProb;
+    let remWeight=0;const weights={};
+    VC_PERIODS.forEach(p=>{if(p.cumul)return;if(age<=p.max){weights[p.key]=pDist[p.key]||0;remWeight+=weights[p.key];}});
+    if(remWeight>0){
+      VC_PERIODS.forEach(p=>{if(p.cumul)return;if(weights[p.key])c.estPeriods[p.key]=condProb*weights[p.key]/remWeight;});
+      VC_PERIODS.forEach(p=>{if(!p.cumul)return;let s=0;VC_PERIODS.forEach(q=>{if(!q.cumul&&q.min>=p.min&&q.max<=p.max)s+=c.estPeriods[q.key];});c.estPeriods[p.key]=s;});
+    }
+  }
+  return true;
+}
+
+// ═══════════════════════════════════════════
+//  Excel 다운로드 (현재 뷰·필터 그대로)
+// ═══════════════════════════════════════════
+async function vcDownloadExcel(){
+  if(!vcResult){alert('먼저 신청자관리 파일을 업로드하세요.');return;}
+  const dims=[['vcMonthlyTable','월별 취소율'],['vcWeeklyTable','주차별 취소율'],['vcCenterTable','센터별 취소율'],['vcProductTable','제품별 취소율'],['vcPersonTable','개인별 취소율']];
+  const wb=XLSX.utils.book_new();let added=0;
+  for(const[id,label]of dims){
+    const cont=document.getElementById(id);
+    const tbl=cont&&cont.querySelector('table');
+    if(!tbl||!tbl.rows||!tbl.rows.length)continue;
+    const ws=XLSX.utils.table_to_sheet(tbl);
+    cdStyleWs(ws,tbl);
+    XLSX.utils.book_append_sheet(wb,ws,label);added++;
+  }
+  if(!added){alert('다운로드할 표가 없습니다.');return;}
+  const viewLabel=vcCurrentView==='all'?'전체':vcCurrentView;
+  const period=((document.getElementById('vcDateDisplay')||{}).textContent||'전체기간').replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,24)||'전체기간';
+  const fname=`Via취소율_${viewLabel}_${period}.xlsx`.replace(/[\\/:*?"<>|]/g,'_');
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;a.click();URL.revokeObjectURL(url);
+  }catch(e){console.error(e);XLSX.writeFile(wb,fname);}
+}
+
+// ═══════════════════════════════════════════
+//  네비게이션 / 진입
+// ═══════════════════════════════════════════
+function vcNavTo(targetId){
+  const el=document.getElementById(targetId);if(!el)return;
+  const navbar=document.getElementById('vcNavbar');
+  const offset=navbar?navbar.offsetHeight+16:60;
+  window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-offset,behavior:'smooth'});
+}
+function vcScrollToTop(){window.scrollTo({top:0,behavior:'smooth'});}
+(function vcInitNavScroll(){
+  const navKeys=['vcNavKpi','vcNavMonthly','vcNavWeekly','vcNavCenter','vcNavProduct','vcNavPerson'];
+  window.addEventListener('scroll',()=>{
+    const page=document.getElementById('page-via-cancel');
+    const isVc=page&&page.classList.contains('active');
+    const topBtn=document.getElementById('vcTopBtn');
+    if(topBtn){if(isVc&&window.scrollY>300)topBtn.classList.add('visible');else topBtn.classList.remove('visible');}
+    const navbar=document.getElementById('vcNavbar');
+    if(!isVc||!navbar||navbar.offsetParent===null)return;
+    const offset=navbar.offsetHeight+20;
+    let activeKey=navKeys[0];
+    for(const key of navKeys){const el=document.getElementById(key);if(el&&el.getBoundingClientRect().top<=offset+10)activeKey=key;}
+    navbar.querySelectorAll('.cd-nav-item[data-target]').forEach(item=>item.classList.toggle('active',item.dataset.target===activeKey));
+  },{passive:true});
+})();
+
+async function vcOnShow(){
+  if(!vcLoaded)await vcLoadFiles();
+  if(!vcReady()){
+    document.getElementById('vcDashboard').classList.add('hidden');
+    document.getElementById('vcEmptyState').classList.remove('hidden');
+    return;
+  }
+  if(!vcResult)vcGenerate();
+  else{
+    vcFilterAndRender();
+    document.getElementById('vcDashboard').classList.remove('hidden');
+    document.getElementById('vcEmptyState').classList.add('hidden');
+  }
+}
+(function vcBindGenerate(){
+  const b=document.getElementById('vcBtnGenerate');
+  if(b)b.addEventListener('click',()=>{vcGenerate();vcCloseModal();});
+})();
+(async function vcInit(){try{await vcLoadFiles();}catch(e){console.error('Via 취소율 초기화:',e);}})();
 </script>
 </body>
 </html>
