@@ -17277,7 +17277,7 @@ function vcGenerate(){
           if(fr){status='취소';returnDate=fr;const od=appDate||parseDate(fRow[VC_APP.applicationDate]);
             if(od){cancelDays=Math.ceil((fr-od)/864e5);if(cancelDays<0)cancelDays=null;}}
         }
-        contracts.push({ck,...mkBase(dRow),appDate,status,cancelDays,returnDate,matched:!!fRow});
+        contracts.push({ck,...mkBase(dRow),appDate,status,cancelDays,returnDate,matched:!!fRow,src:'일마감'});
       }
     }else{
       for(const[ck,fRow]of Object.entries(fullByKey)){
@@ -17285,23 +17285,30 @@ function vcGenerate(){
         const rd=parseDate(fRow[VC_APP.returnDate]);
         let status='유지',cancelDays=null;
         if(rd){status='취소';if(appDate){cancelDays=Math.ceil((rd-appDate)/864e5);if(cancelDays<0)cancelDays=null;}}
-        contracts.push({ck,...mkBase(fRow),appDate,status,cancelDays,returnDate:rd,matched:true});
+        contracts.push({ck,...mkBase(fRow),appDate,status,cancelDays,returnDate:rd,matched:true,src:'전체기간'});
       }
     }
 
-    // 전체기간 파일에만 있고 일마감에는 없는 고객키 — 모수(최초 계약수)에 들어가지 않는다.
-    //  일마감이 모수의 원천이라 의도된 동작이지만, 특정 날짜의 일마감을 안 올리면
-    //  그날 계약이 통째로 빠진다. 조용히 사라지면 못 찾으므로 경고 + 원장으로 드러낸다.
-    let fullOnly=0;
+    // 전체기간 파일에만 있고 일마감에는 없는 고객키 — 일마감에 있었던 것으로 쳐서 모수에 넣는다.
+    //  일마감은 모수의 원천이지만 과거 구간은 일마감 파일 자체가 없을 수 있고,
+    //  그때 실재하는 계약을 통째로 버리면 그 기간이 0건으로 보인다.
+    //  단 '배송전취소'는 일마감↔전체기간 대조로만 판정되므로 이 건들은 취소/유지만 잡힌다.
+    let fullOnly=0,foMin=null,foMax=null;
     if(hasDaily&&hasFull){
       for(const[ck,fRow]of Object.entries(fullByKey)){
         if(dailyByKey[ck])continue;
         fullOnly++;
-        skipped.push({ck,...mkBase(fRow),appDate:parseDate(fRow[VC_APP.applicationDate]),
-          returnDate:parseDate(fRow[VC_APP.returnDate]),status:'-',cancelDays:null,matched:true,
-          skipReason:'일마감 파일에 없음 (전체기간에만 존재)'});
+        const ad=parseDate(fRow[VC_APP.applicationDate]);
+        if(ad){if(!foMin||ad<foMin)foMin=ad;if(!foMax||ad>foMax)foMax=ad;}
+        const rd=parseDate(fRow[VC_APP.returnDate]);
+        let status='유지',cancelDays=null;
+        if(rd){status='취소';if(ad){cancelDays=Math.ceil((rd-ad)/864e5);if(cancelDays<0)cancelDays=null;}}
+        contracts.push({ck,...mkBase(fRow),appDate:ad,status,cancelDays,returnDate:rd,matched:true,src:'전체기간만'});
       }
-      if(fullOnly>0)warns.push(`전체기간 파일에만 있는 계약 <b>${fullOnly.toLocaleString()}건</b>이 모수에서 빠졌습니다. 해당 신청일의 일마감 파일이 빠지지 않았는지 확인하세요. (검증 원장에서 사유 확인)`);
+      if(fullOnly>0){
+        const rng=foMin?` · 신청일 ${cdFmtISO(foMin)} ~ ${cdFmtISO(foMax)}`:'';
+        warns.push(`일마감 파일에 없고 전체기간에만 있는 계약 <b>${fullOnly.toLocaleString()}건</b>${rng}도 모수에 포함했습니다. 다만 이 건들은 대조할 일마감이 없어 <b>배송전 취소를 판정할 수 없고 취소/유지로만</b> 집계됩니다.`);
+      }
     }
 
     // 접수제품 사전 대조 → 신규값은 pending(잠정 포함), '노르드킨'은 자동 제외
@@ -18021,12 +18028,12 @@ function vcDownloadLedger(){
   if(!vcResult){alert('먼저 대시보드를 생성하세요.');return;}
   const iso=d=>d?cdFmtISO(d):'';
   const head=['고객키','담당자(N열 원문)','코디명','센터','퇴사','신청일(P열)','반품일(AJ열)',
-    '환급패키지(F열)','접수제품(U열 원문)','표시명','상태','취소일수','전체기간파일 매칭','집계포함','집계제외 사유'];
+    '환급패키지(F열)','접수제품(U열 원문)','표시명','상태','취소일수','모수 출처','전체기간파일 매칭','집계포함','집계제외 사유'];
   const line=(c,inc,reason)=>[
     c.ck,c.manager,c.cleanName,c.center,c.left?'Y':'',
     iso(c.appDate),iso(c.returnDate),
     c.refundPkg||'',c.productRaw,inc?(c.product||''):vcLabelOf(c.productRaw),
-    c.status,c.cancelDays==null?'':c.cancelDays,
+    c.status,c.cancelDays==null?'':c.cancelDays,c.src||'',
     c.matched?'Y':'N',inc?'Y':'N',reason||''
   ].map(vcCsvCell).join(',');
   const rows=[head.map(vcCsvCell).join(',')];
