@@ -16775,7 +16775,7 @@ const VC_EXCLUDE_WORDS=['노르드킨'];      // 접수제품에 이 단어가 �
 // 매체/비매체는 Q열 분류(classification) 문자열로만 가른다. 매체를 세분하지는 않는다.
 //  공란이거나 아래 단어가 들어 있으면 비매체, 나머지는 전부 매체.
 //  새 비매체 코드가 생기면 이 목록에만 추가하면 된다(소문자로).
-const VC_NONMEDIA_WORDS=['homepage_in','bike_c','youtuber'];
+const VC_NONMEDIA_WORDS=['homepage_in','bike_c','youtuber','callback','tv_b'];
 const VC_MEDIA_ORDER=['매체','비매체'];
 function vcMediaOf(cls){
   const s=String(cls==null?'':cls).trim().toLowerCase();
