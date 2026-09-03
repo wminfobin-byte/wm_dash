@@ -273,11 +273,16 @@ tr.row-h td{background:var(--gh-light)}
 .cd-subtab.active{background:var(--primary);color:#fff}
 
 /* Cancel Dashboard — Layout */
-#page-cancel-dash .container{max-width:100%;padding:28px 40px}
-#page-cancel-dash .kpi-card{padding:14px 18px;border-radius:10px;border-left-width:3px}
-#page-cancel-dash .kpi-card .kv{font-size:22px}
-#page-cancel-dash .kpi-card .kl{font-size:12px;margin-bottom:3px}
-#page-cancel-dash .kpi-card .ks{font-size:11px;margin-top:2px}
+#page-cancel-dash .container,
+#page-via-cancel .container{max-width:100%;padding:28px 40px}
+#page-cancel-dash .kpi-card,
+#page-via-cancel .kpi-card{padding:14px 18px;border-radius:10px;border-left-width:3px}
+#page-cancel-dash .kpi-card .kv,
+#page-via-cancel .kpi-card .kv{font-size:22px}
+#page-cancel-dash .kpi-card .kl,
+#page-via-cancel .kpi-card .kl{font-size:12px;margin-bottom:3px}
+#page-cancel-dash .kpi-card .ks,
+#page-via-cancel .kpi-card .ks{font-size:11px;margin-top:2px}
 
 /* Inflow Analysis Tab */
 #page-inflow .container{max-width:100%;padding:28px 40px}
@@ -483,6 +488,7 @@ tr.row-h td{background:var(--gh-light)}
   body{font-size:14px}
   .container{padding:16px}
   #page-cancel-dash .container,
+  #page-via-cancel .container,
   #page-inflow .container,
   #page-daily-perf .container{padding:16px}
 
@@ -590,6 +596,7 @@ tr.row-h td{background:var(--gh-light)}
   body{font-size:13px}
   .container{padding:12px}
   #page-cancel-dash .container,
+  #page-via-cancel .container,
   #page-inflow .container,
   #page-daily-perf .container{padding:12px}
 
@@ -789,6 +796,10 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 .vc-prod-opt{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;white-space:nowrap;cursor:pointer}
 .vc-prod-sel,.vc-prod-input{font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;max-width:220px}
 .vc-prod-sel:disabled{background:#f1f5f9;color:#94a3b8}
+/* 개인별 표의 퇴사자 행 — 이름·수치 모두 흐리게 */
+tr.vc-left{opacity:.45}
+tr.vc-left:hover{opacity:.75}
+.vc-left-badge{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:4px;background:#e2e8f0;color:#64748b;font-size:10px;font-weight:700;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -1521,7 +1532,7 @@ table.ac-tbl.ac-inner thead th{background:#475569}
 
     <div id="vcNavPerson" class="table-section">
       <h3 style="cursor:pointer;user-select:none" onclick="vcTogglePerson()">
-        <span><span id="vcPersonArrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율 <span class="table-sub">센터 &gt; 그룹 순</span></span>
+        <span><span id="vcPersonArrow" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율 <span class="table-sub">센터 순 · 퇴사자는 하단 회색</span></span>
       </h3>
       <div class="cd-wide-table hidden" id="vcPersonTable"></div>
     </div>
@@ -16666,7 +16677,7 @@ const VC_SYNC_COLS=[VC_APP.customerKey,VC_APP.refundPkg,VC_APP.manager,VC_APP.ap
 const VC_EXCLUDE_WORDS=['노르드킨'];      // 접수제품에 이 단어가 있으면 노티 없이 자동 제외
 const VC_PERIODS=CD_PERIODS;              // 취소기간 구간은 WM과 동일 (cd에서 공용)
 const VC_CENTER_ORDER=CD_CENTER_ORDER;
-const VC_GROUP_ORDER=CD_GROUP_ORDER;
+
 const VC_MEMBER_KEY='vc_member_history';
 const VC_TYPES=['app-daily','app','attend'];
 
@@ -16701,6 +16712,12 @@ async function vcLoadFiles(){
     vcFiles=await vcIdbGetAll();
     const m=await vcMetaGet('products');
     vcProducts=(m&&m.v)||{};
+    const rv=await vcMetaGet('labelRuleVer');
+    if(((rv&&rv.v)||1)<VC_LABEL_RULE_VER){
+      const changed=vcMigrateLabels();
+      await vcMetaPut('labelRuleVer',VC_LABEL_RULE_VER);
+      if(changed){await vcMetaPut('products',vcProducts);if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}
+    }
     vcLoaded=true;vcUpdateStatusDots();vcUpdateUploadStatus();vcUpdateHeader();
   }catch(e){console.error('Via 취소율 IDB 로드:',e);}
 }
@@ -16729,7 +16746,7 @@ async function vcRestoreSync(arr,prods){
     const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
     rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
   }
-  if(prods&&typeof prods==='object'&&!Array.isArray(prods)){vcProducts=prods;await vcMetaPut('products',vcProducts);}
+  if(prods&&typeof prods==='object'&&!Array.isArray(prods)){vcProducts=prods;vcMigrateLabels();await vcMetaPut('products',vcProducts);}
   vcLoaded=true;vcResult=null;
   vcUpdateStatusDots();vcUpdateUploadStatus();vcUpdateHeader();
   if(typeof currentPage!=='undefined'&&currentPage==='via-cancel')vcOnShow();
@@ -16742,7 +16759,29 @@ async function vcRestoreSync(arr,prods){
 //     V6_블랙[PAS]·V6_블랙[스로틀]이 자동으로 같은 'V6_블랙'으로 추천된다
 //   · 처음 보는 값은 pending(잠정 포함)으로 두고 업로드한 사람에게 판정 모달을 띄운다
 // ═══════════════════════════════════════════
-function vcStripSuffix(raw){return String(raw==null?'':raw).replace(/\s*[\[(（][^\])）]*[\])）]\s*$/,'').trim();}
+// 구동방식 접미(PAS / 스로틀)만 떼어낸다 — 모델이 같고 스로틀·파스만 다르면 같은 제품이다.
+//   '비아지오 HX5 PRO_스로틀' · '비아지오 HX5 PRO_PAS' → '비아지오 HX5 PRO'
+//   'V6_블랙[PAS]'          · 'V6_블랙[스로틀]'        → 'V6_블랙'
+// 끝 세그먼트를 통째로 떼면 'V6_블랙'의 '_블랙'까지 날아가 다른 모델이 뭉개지므로,
+// PAS/스로틀 토큰일 때만 자른다.
+const VC_DRIVE_SUFFIX=/[\s_\-]*[\[(（]?\s*(pas|파스|스로틀|쓰로틀|throttle)\s*[\])）]?\s*$/i;
+function vcStripSuffix(raw){
+  let s=String(raw==null?'':raw).trim(),prev;
+  do{prev=s;s=s.replace(VC_DRIVE_SUFFIX,'').trim();}while(s&&s!==prev);
+  return s;
+}
+// 규칙을 고치면 이 값을 올릴 것 — 이미 사전에 저장된 표시명은 자동 반영되지 않으므로
+// vcLoadFiles가 1회 마이그레이션한다(사용자가 그 뒤에 수동으로 나눈 건 보존).
+const VC_LABEL_RULE_VER=2;
+function vcMigrateLabels(){
+  let changed=false;
+  for(const raw of Object.keys(vcProducts)){
+    const e=vcProducts[raw];if(!e||!e.label)continue;
+    const nl=vcStripSuffix(e.label);
+    if(nl&&nl!==e.label){e.label=nl;changed=true;}
+  }
+  return changed;
+}
 function vcAutoExcluded(raw){const s=String(raw==null?'':raw);return VC_EXCLUDE_WORDS.some(w=>s.includes(w));}
 function vcDefaultLabel(raw){return vcStripSuffix(raw)||String(raw==null?'':raw).trim();}
 function vcEntry(raw){return Object.prototype.hasOwnProperty.call(vcProducts,raw)?vcProducts[raw]:null;}
@@ -17049,8 +17088,11 @@ function vcGenerate(){
       const manager=str(row[VC_APP.manager]);
       const clean=manager.replace(/\(R_[^)]+\)/,'').trim();
       const center=(manager.match(/\(R_([^)]+)\)/)||[])[1]||'기타';
-      const mi=members[clean]||members[manager]||{};
-      return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',productRaw:str(row[VC_APP.product])};
+      const hit=members[clean]||members[manager];
+      const mi=hit||{};
+      // 최신 명단에 없는 이름(=이력에만 남은 사람)은 퇴사자. 명단 자체가 없으면 판정하지 않는다.
+      const left=attendFile?!(hit&&!hit.resigned):false;
+      return {manager,cleanName:clean||manager,center:mi.center||center,brand:mi.brand||'',group:mi.group||'',team:mi.team||'',left,productRaw:str(row[VC_APP.product])};
     };
 
     const contracts=[];
@@ -17287,22 +17329,23 @@ function vcRenderProduct(data){
 function vcRenderPerson(data){
   const byP={};
   for(const c of data){const k=c.cleanName;
-    if(!byP[k])byP[k]={...vcNewBucket(),center:c.center,group:c.group};
+    if(!byP[k])byP[k]={...vcNewBucket(),center:c.center,left:c.left};
     vcAddToBucket(byP[k],c);}
   const ci=k=>{const i=VC_CENTER_ORDER.indexOf(k);return i>=0?i:99;};
-  const gi=k=>{for(let i=0;i<VC_GROUP_ORDER.length;i++)if(k&&k.includes(VC_GROUP_ORDER[i]))return i;return 99;};
+  // 재직자 먼저, 그 안에서 센터 순 → 계약수 많은 순. 퇴사자는 아래로 몰아 흐리게 보여준다.
   const sorted=Object.entries(byP).filter(([,d])=>d.initial>0).sort((a,b)=>{
-    let d=ci(a[1].center)-ci(b[1].center);if(d)return d;
-    d=gi(a[1].group)-gi(b[1].group);if(d)return d;
+    let d=(a[1].left?1:0)-(b[1].left?1:0);if(d)return d;
+    d=ci(a[1].center)-ci(b[1].center);if(d)return d;
     return b[1].initial-a[1].initial;});
-  let html=`<table><thead><tr><th>코디명</th><th>센터</th><th>그룹</th>
+  let html=`<table><thead><tr><th>코디명</th><th>센터</th>
     <th>최초<br>계약수</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">배취수</th><th>배취율</th><th class="cd-sep">배송후<br>취소수</th><th>배송후<br>취소율</th>`;
   VC_PERIODS.forEach((p,i)=>{html+=`<th class="${(i===0||p.cumul)?'cd-sep':''}">${p.key}</th><th>취소율</th>`;});
   html+='<th class="cd-sep">계약<br>유지수</th><th>계약<br>유지율</th></tr></thead><tbody>';
-  const row=(name,center,group,b,bold)=>{
+  const row=(name,center,b,bold,left)=>{
     const n=b.initial,px=b.preCx,cx=b.cancel,mt=n-px-cx,tc=px+cx;
     const pxR=n>0?px/n:0,cxR=n>0?cx/n:0,mtR=n>0?mt/n:0,tcR=n>0?tc/n:0;
-    let h=`<tr${bold?' style="font-weight:800;background:#f8f9fc"':''}><td class="text-left" style="${bold?'':'font-weight:700;'}padding-left:14px">${name}</td><td>${center}</td><td>${group}</td>
+    const label=left?`${name}<span class="vc-left-badge">퇴사</span>`:name;
+    let h=`<tr class="${left?'vc-left':''}"${bold?' style="font-weight:800;background:#f8f9fc"':''}><td class="text-left" style="${bold?'':'font-weight:700;'}padding-left:14px">${label}</td><td>${center}</td>
       <td>${vcNum(n)}</td>
       <td class="cd-sep">${vcNum(tc)}</td><td style="color:${cdRateColor(tcR)};font-weight:700">${pct2(tcR)}</td>
       <td class="cd-sep">${vcNum(px)}</td><td>${pct2(pxR)}</td>
@@ -17311,8 +17354,8 @@ function vcRenderPerson(data){
     h+=`<td class="cd-sep">${vcNum(mt)}</td><td>${pct2(mtR)}</td></tr>`;return h;
   };
   const total=vcNewBucket();data.forEach(c=>vcAddToBucket(total,c));
-  html+=row('전체','','',total,true);
-  for(const[name,b]of sorted)html+=row(vcEsc(name),vcEsc(b.center||''),vcEsc(b.group||''),b,false);
+  html+=row('전체','',total,true,false);
+  for(const[name,b]of sorted)html+=row(vcEsc(name),vcEsc(b.center||''),b,false,!!b.left);
   html+='</tbody></table>';document.getElementById('vcPersonTable').innerHTML=html;
 }
 function vcTogglePerson(){

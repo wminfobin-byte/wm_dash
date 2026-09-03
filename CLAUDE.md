@@ -242,13 +242,15 @@ gd는 `{files,results}` 객체라 그룹 분할 대상이 아니므로 `files` �
 - **취소 판정 (WM과 동일 3단계)**: 일마감에 반품일 있으면 제외 → 전체기간에 고객키 없음 = `배송전취소` → 전체기간에 반품일 있음 = `취소`(취소일수 = 반품일 − 신청일) → 그 외 `유지`. 전체기간 파일이 없으면 배송전취소를 판정할 수 없으므로 전부 `유지`로 두고 경고한다(없는 파일 탓에 전건이 배송전취소로 찍히는 사고 방지).
 - **접수제품 사전 (`vcProducts`: 원문 → `{label, include}`)** — 제품 목록을 코드에 박지 않는다:
   - `노르드킨` **부분 문자열 포함 → 자동 제외**(노티 없음, `VC_EXCLUDE_WORDS`).
-  - 표시명 기본값 = 뒤에 붙은 대괄호 접미를 뗀 값(`vcStripSuffix`). `V6_블랙[PAS]`·`V6_블랙[스로틀]` → 둘 다 `V6_블랙`으로 자동 수렴(같은 모델, 스로틀/파스 차이일 뿐).
+  - 표시명 기본값 = **구동방식 접미(PAS/파스/스로틀/쓰로틀/throttle)만** 떼어낸 값(`vcStripSuffix`/`VC_DRIVE_SUFFIX`). 구분자는 `_` · 공백 · `-` · 대괄호 · 괄호 전부 허용, 대소문자 무시. `비아지오 HX5 PRO_PAS`·`비아지오 HX5 PRO_스로틀` → `비아지오 HX5 PRO`, `V6_블랙[PAS]`·`V6_블랙[스로틀]` → `V6_블랙`. **끝 세그먼트를 통째로 떼면 안 된다** — `V6_블랙`의 `_블랙`까지 날아가 다른 모델이 뭉개진다.
+  - **규칙을 고치면 `VC_LABEL_RULE_VER`를 올릴 것.** 이미 사전에 저장된 표시명은 자동 반영되지 않으므로 `vcLoadFiles`/`vcRestoreSync`가 `vcMigrateLabels()`로 1회 재정규화한다(그 뒤 사용자가 수동으로 나눈 건 보존).
   - **처음 보는 값은 판정 모달(`vcOpenProdModal`)** 로 업로드한 사람에게 노티 → `포함`/`제외` + 표시명 select(기존 라벨을 고르면 **병합**, `신규`면 접미 뗀 값). 미룰 경우 상단 배너(`vcPendingBanner`)로 계속 알린다.
   - **미판정 = 잠정 포함**, **제외 = 완전 제외**(KPI·월별·주차별·센터별·개인별 전부에서 그 행을 뺀다).
   - 사전은 IDB `meta` 스토어 + 싱크로 전파돼 다른 PC에서도 같은 판정이 유지된다. 파일 관리 모달에서 표시명/포함 여부를 직접 고칠 수 있다(행은 **인덱스**로 넘긴다 — 원문값을 onchange 인자로 넣으면 HTML 엔티티가 왕복하며 어긋난다).
 - **화면**: 기간 필터+빠른기간 → **서브탭 `전체 | 제품A | 제품B …`**(접수제품 표시명에서 자동 생성, 데이터에 있는 것만) → KPI 5종 → AI 인사이트 → 월별 / 주차별 / 센터별 / **제품별**(WM의 '종류별' 자리) / 개인별.
   **전체 뷰의 월별·주차별은 제품별 그룹으로 접힌다**(WM이 구분=브랜드로 접던 자리를 제품이 대체). 제품 서브탭에서는 그 제품만 필터되고 월/주차 행만 나오며 제품별 섹션은 숨긴다.
-- **개인별**은 센터 > 그룹 순 정렬(구분/브랜드 축 없음). 명단이 없으면 담당자명의 `(R_센터)` 표기로 센터를 채우고 경고한다.
+- **개인별**은 `코디명 · 센터` 2열만(구분/브랜드·그룹 축 없음). 정렬 = 재직자 먼저 → 센터 순 → 계약수 많은 순. **최신 명단에 없는 이름 = 퇴사자**(`c.left`)로 보고 행 전체를 `tr.vc-left`로 흐리게(opacity .45) + `퇴사` 뱃지를 달아 하단에 몰아둔다. 명단 파일 자체가 없으면 퇴사 판정을 하지 않고(전원 재직 취급) 담당자명의 `(R_센터)` 표기로 센터만 채운 뒤 경고한다.
+- **레이아웃**: `#page-via-cancel .container`를 `#page-cancel-dash`와 같은 `max-width:100%` 전폭 규칙에 함께 묶었다(반응형 padding 포함). 표 스타일(`.cd-wide-table`, 첫 열 sticky 등)은 클래스 기반이라 그대로 상속된다.
 - **공용 재사용**: 취소기간 구간(`CD_PERIODS`), 주차 키·라벨(`cdWeekKey`/`cdWeekLabel`), 취소율 색(`cdRateColor`), 엑셀 스타일(`cdStyleWs`)은 cd에서 그대로 쓴다. 동일기간추정(`vcComputeEstimation`)·Excel 5시트 다운로드도 WM과 같은 방식.
 - **핵심 함수**: `vcLoadFiles`/`vcGenerate`(계약 빌드 + 사전 대조)/`vcFilterAndRender`/`vcRenderSubtabs`/`vcRenderMonthly`·`vcRenderWeekly`(grouped 플래그로 제품 그룹 on/off)/`vcRenderCenter`/`vcRenderProduct`/`vcRenderPerson`/`vcRenderInsights`/`vcScanNewProducts`/`vcSavePending`/`vcCollectSync`·`vcRestoreSync`. 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin·admin) + 헤더 `headerRight-via-cancel`(`syncBtn12`).
 
