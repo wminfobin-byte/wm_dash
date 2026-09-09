@@ -290,6 +290,20 @@ gd는 `{files,results}` 객체라 그룹 분할 대상이 아니므로 `files` �
 - **공용 재사용**: 취소기간 구간(`CD_PERIODS`), 주차 키·라벨(`cdWeekKey`/`cdWeekLabel`), 취소율 색(`cdRateColor`), 엑셀 스타일(`cdStyleWs`)은 cd에서 그대로 쓴다. 동일기간추정(`vcComputeEstimation`)·Excel 5시트 다운로드도 WM과 같은 방식.
 - **핵심 함수**: `vcLoadFiles`/`vcGenerate`(계약 빌드 + 사전 대조)/`vcFilterAndRender`/`vcRenderSubtabs`/`vcRenderMonthly`·`vcRenderWeekly`(grouped 플래그로 제품 그룹 on/off)/`vcRenderCenter`/`vcRenderProduct`/`vcRenderPerson`/`vcRenderInsights`/`vcScanNewProducts`/`vcSavePending`/`vcCollectSync`·`vcRestoreSync`. 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin·admin) + 헤더 `headerRight-via-cancel`(`syncBtn12`).
 
+## 초기 로딩 진행률 (`wmLoad`, 2026-09-09)
+
+데이터가 수백 MB로 커지면서 로그인 직후 화면이 몇 분간 멈춘 것처럼 보였고, 다른 PC 사용자들이 계속 새로고침을 눌렀다. `#wmLoadOverlay` 전체화면 오버레이가 **실제 진행량**을 진행바 + %로 보여준다.
+
+- **구간 배분**: 로컬 IDB 로드 `0~40%` → 서버 확인 `40~48%` → 다운로드 `48~85%` → 복원 `85~100%`. 구간 안에서는 아래처럼 실측값으로 채운다.
+  - 로컬: 탭별 `*LoadFiles()` 완료 수 / 전체 탭 수 (탭 이름 표시)
+  - 다운로드: **수신 바이트** — `fetchSyncPayload(onProg)`가 청크를 `body.getReader()`로 스트리밍하며 바이트를 보고
+  - 복원: **행 수** — 각 `*RestoreSync`의 파일 루프가 `window.wmLoadRowTick(rowsCount)` 호출
+- **분모**: 업로드 시 `sliceMeta`에 `bytes`(그룹 압축 크기)를 기록하므로 매니페스트만 읽으면 총 다운로드 용량을 안다. `bytes`가 없는 구 매니페스트는 자동으로 **청크 개수 기준**으로 폴백한다(`dlByteMode`).
+- `wmLoad.set`은 **단조 증가**(뒤로 안 감) + 120ms 스로틀. 블로킹 작업(JSZip 압축해제·JSON.parse·IDB 대용량 put) 직전에 `setTimeout(0)`으로 양보해 라벨이 먼저 그려지게 한다.
+- **호출 경로**: 부팅은 `applyAuth()`가 `wmLoad.show()` → 로더 루프 → `autoSyncDownload({prog:true})` → `finally{ wmLoad.done() }`. 백그라운드 폴링(`wmSyncPoll`)이 부르는 `autoSyncDownload()`는 `opts.prog`가 없어 제목이 「최신 데이터 반영 중」이 되고 자기 `finally`에서 오버레이를 닫는다. 동기화 모달의 수동 다운로드는 `fetchSyncPayload()`를 인자 없이 불러 **기존 동작 그대로**(모달 내 `syncLog`).
+- `wmLoadRowTick`은 복원 구간에서만 세팅되고 `finally`에서 null로 되돌린다 — 수동 다운로드 경로에 같은 훅 호출이 있어도 no-op.
+- **알려진 특성**: `autoSyncDownload`는 페이로드를 **먼저 전부 받은 뒤** 최신 여부를 판정하므로, 변경이 없어도 매 접속마다 전량 다운로드가 일어난다(진행바가 85%까지 갔다가 「최신 상태입니다」로 끝나는 이유). 매니페스트 `ts`만 먼저 보고 건너뛰면 반복 접속이 크게 빨라진다 — 미적용.
+
 ## 원격 변경 감지 (동기화 반영 지연 해소, 2026-08-29)
 
 이전에는 **로그인·새로고침 때만** `autoSyncDownload`가 돌아서, 다른 PC가 업로드해도 켜 둔 화면은 갱신을 알 방법이 없었다(체감 수십 분 지연). `wmSyncStartPoll`이 로그인 직후 시작돼 **60초마다 + 탭 복귀·창 포커스 시** 매니페스트(`sync_manifest.json`, 수백 바이트)만 찍어 `ts`를 로컬 `sync_last_ts`와 비교한다.

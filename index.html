@@ -888,6 +888,40 @@ tr.vc-left:hover{opacity:.75}
   </div>
 </div>
 
+<!-- 초기 로딩 진행률 -->
+<style>
+.wm-load-overlay{position:fixed;inset:0;z-index:12000;display:none;align-items:center;justify-content:center;background:linear-gradient(160deg,#1e2a44 0%,#111827 100%);transition:opacity .35s}
+.wm-load-overlay.on{display:flex}
+.wm-load-overlay.fade{opacity:0}
+.wm-load-box{width:min(440px,88vw);text-align:center;color:#e2e8f0;font-family:inherit}
+.wm-load-logo{width:56px;height:56px;margin:0 auto 16px;border-radius:14px;background:linear-gradient(135deg,#4361ee,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;color:#fff;letter-spacing:.5px;box-shadow:0 10px 30px rgba(67,97,238,.35)}
+.wm-load-title{font-size:17px;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.wm-load-desc{font-size:12.5px;color:#94a3b8;margin-bottom:20px}
+.wm-load-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.wm-load-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#4361ee,#22d3ee);transition:width .28s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
+.wm-load-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:wmLoadShine 1.4s linear infinite}
+@keyframes wmLoadShine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.wm-load-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:11px}
+.wm-load-pct{font-size:26px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1}
+.wm-load-step{font-size:12.5px;color:#cbd5e1;font-weight:600;text-align:right;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wm-load-sub{margin-top:6px;font-size:11.5px;color:#7c8db0;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;gap:10px}
+.wm-load-note{margin-top:22px;padding:11px 14px;border-radius:9px;background:rgba(250,204,21,.09);border:1px solid rgba(250,204,21,.22);font-size:12px;color:#fde68a;line-height:1.6}
+</style>
+<div class="wm-load-overlay" id="wmLoadOverlay">
+  <div class="wm-load-box">
+    <div class="wm-load-logo">WM</div>
+    <div class="wm-load-title" id="wmLoadTitle">데이터 불러오는 중</div>
+    <div class="wm-load-desc" id="wmLoadDesc">대시보드 준비 중입니다</div>
+    <div class="wm-load-bar"><div class="wm-load-fill" id="wmLoadFill"></div></div>
+    <div class="wm-load-row">
+      <span class="wm-load-pct" id="wmLoadPct">0%</span>
+      <span class="wm-load-step" id="wmLoadStep">준비 중...</span>
+    </div>
+    <div class="wm-load-sub"><span id="wmLoadSub"></span><span id="wmLoadElapsed"></span></div>
+    <div class="wm-load-note">데이터가 커서 첫 접속은 몇 분 걸릴 수 있습니다.<br><b>진행률이 올라가는 중이면 정상이니 새로고침하지 마세요.</b></div>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-brand">
     <div class="header-logo" onclick="location.reload()" style="cursor:pointer"><img src="위버스마이드_세로형_화이트.png" alt="위버스마인드" style="height:32px"></div>
@@ -2891,6 +2925,74 @@ function doLogin(){
   applyAuth();
 }
 
+// ═══════════════════════════════════════════
+//  초기 로딩 진행률 (실제 진행량 기반)
+//   구간: 로컬 IDB 0~40% → 서버 확인 40~48% → 다운로드 48~85% → 복원 85~100%
+//   다운로드는 수신 바이트, 복원은 행 수를 세므로 표시값이 실제 진행률이다.
+// ═══════════════════════════════════════════
+const WM_SLICE_LABEL={ng:'N그룹',ngResults:'N그룹 결과',cd:'WM 취소율',vc:'Via 취소율',vcProducts:'Via 제품사전',gd:'차등성과',sp:'계열별성과',tb:'타임보드성과',tz:'톡이즈 성과',nc:'뇌새김 콜 현황',ac:'광고비',mc:'부재인입',ia:'유입분석',ls:'설정·이력'};
+function wmMB(n){ return (n/1048576).toFixed(n>=104857600?0:1)+'MB'; }
+const wmLoad={
+  on:false, pct:0, lo:0, hi:100, t0:0, _last:0, _timer:null, _tok:0,
+  el(id){ return document.getElementById(id); },
+  show(title,desc){
+    const ov=this.el('wmLoadOverlay'); if(!ov) return;
+    if(!this.on){ this.on=true; this.pct=0; this.t0=Date.now(); ov.classList.remove('fade'); ov.classList.add('on');
+      this._timer=setInterval(()=>{ const e=this.el('wmLoadElapsed'); if(e){const s=Math.floor((Date.now()-this.t0)/1000);e.textContent=`${Math.floor(s/60)}분 ${String(s%60).padStart(2,'0')}초 경과`;} },1000);
+    }
+    if(title) this.el('wmLoadTitle').textContent=title;
+    if(desc) this.el('wmLoadDesc').textContent=desc;
+  },
+  range(lo,hi){ this.lo=lo; this.hi=hi; },
+  // f = 현재 구간 내 진행률 0~1
+  frac(f,step,sub){
+    if(!this.on) return;
+    const v=this.lo+(this.hi-this.lo)*Math.max(0,Math.min(1,f||0));
+    this.set(v,step,sub);
+  },
+  set(v,step,sub){
+    if(!this.on) return;
+    if(v>this.pct) this.pct=v;                       // 되돌아가지 않게 단조 증가
+    const now=Date.now();
+    const force=(step!==undefined||sub!==undefined||this.pct>=100);
+    if(!force && now-this._last<120) return;         // DOM 갱신 스로틀
+    this._last=now;
+    const f=this.el('wmLoadFill'), pc=this.el('wmLoadPct');
+    if(f) f.style.width=this.pct.toFixed(1)+'%';
+    if(pc) pc.textContent=Math.floor(this.pct)+'%';
+    if(step!==undefined&&step!==null) this.el('wmLoadStep').textContent=step;
+    if(sub!==undefined&&sub!==null) this.el('wmLoadSub').textContent=sub;
+  },
+  async done(){
+    if(!this.on) return;
+    this.lo=this.pct; this.hi=100; this.set(100,'완료','');
+    await new Promise(r=>setTimeout(r,320));
+    this.hide();
+  },
+  hide(){
+    if(!this.on) return;
+    this.on=false;
+    if(this._timer){ clearInterval(this._timer); this._timer=null; }
+    const ov=this.el('wmLoadOverlay'); if(!ov) return;
+    const tok=++this._tok;
+    ov.classList.add('fade');
+    // 페이드 도중 다시 show()가 들어오면(백그라운드 갱신 등) 숨김을 취소한다
+    setTimeout(()=>{ if(this.on||tok!==this._tok) return; ov.classList.remove('on'); ov.classList.remove('fade'); },360);
+  }
+};
+// 복원 루프에서 호출하는 행 단위 진행 훅 (복원 구간에서만 세팅)
+window.wmLoadRowTick=null;
+// 페이로드에서 복원할 행 총량 추정 (진행률 분모)
+function wmPayloadRows(payload){
+  let n=0;
+  const add=a=>{ if(Array.isArray(a)) for(const f of a) n+=((f&&f.rows&&f.rows.length)||(f&&f.data&&f.data.length)||1); };
+  add(payload.ng); add(payload.cd); add(payload.ia); add(payload.sp); add(payload.tb); add(payload.tz); add(payload.nc); add(payload.vc);
+  if(payload.gd&&Array.isArray(payload.gd.files)) add(payload.gd.files);
+  if(payload.mc) add(Array.isArray(payload.mc)?payload.mc:payload.mc.files);
+  if(Array.isArray(payload.ac)) n+=payload.ac.length;
+  return n;
+}
+
 function applyAuth(){
   document.getElementById('loginOverlay').style.display='none';
   document.querySelectorAll('.tab-item[data-page]').forEach(tab=>{
@@ -2901,20 +3003,35 @@ function applyAuth(){
   switchPage(authUser.tabs[0]);
   // 유입분석/부재인입 IDB 먼저 로드 후 자동 동기화 (로컬 보유 판정을 위해)
   (async ()=>{
-    if(authUser.tabs.includes('inflow')) await iaLoad();
-    if(authUser.tabs.includes('missed-call') && typeof mcLoadFiles==='function') await mcLoadFiles();
-    if(authUser.tabs.includes('series-perf') && typeof spLoadFiles==='function') await spLoadFiles();
-    if(authUser.tabs.includes('timeboard-perf') && typeof tbLoadFiles==='function') await tbLoadFiles();
-    if(authUser.tabs.includes('talkis-perf') && typeof tzLoadFiles==='function') await tzLoadFiles();
-    if(authUser.tabs.includes('naesaegim-call') && typeof ncLoadFiles==='function') await ncLoadFiles();
-    if(authUser.tabs.includes('ad-cost') && typeof acLoadFiles==='function') await acLoadFiles();
-    if(authUser.tabs.includes('via-cancel') && typeof vcLoadFiles==='function') await vcLoadFiles();
-    await autoSyncDownload();
+    const loaders=[
+      ['inflow','유입분석', ()=>iaLoad()],
+      ['missed-call','부재인입', ()=>(typeof mcLoadFiles==='function')&&mcLoadFiles()],
+      ['series-perf','계열별성과', ()=>(typeof spLoadFiles==='function')&&spLoadFiles()],
+      ['timeboard-perf','타임보드성과', ()=>(typeof tbLoadFiles==='function')&&tbLoadFiles()],
+      ['talkis-perf','톡이즈 성과', ()=>(typeof tzLoadFiles==='function')&&tzLoadFiles()],
+      ['naesaegim-call','뇌새김 콜 현황', ()=>(typeof ncLoadFiles==='function')&&ncLoadFiles()],
+      ['ad-cost','광고비', ()=>(typeof acLoadFiles==='function')&&acLoadFiles()],
+      ['via-cancel','Via 취소율', ()=>(typeof vcLoadFiles==='function')&&vcLoadFiles()],
+    ].filter(([tab])=>authUser.tabs.includes(tab));
+    wmLoad.show('데이터 불러오는 중','이 컴퓨터에 저장된 데이터를 읽는 중입니다');
+    wmLoad.range(0,40);
+    wmLoad.frac(0,'로컬 데이터 준비 중...','');
+    try{
+      for(let i=0;i<loaders.length;i++){
+        wmLoad.frac(i/loaders.length, `로컬 데이터 · ${loaders[i][1]}`, `${i}/${loaders.length} 탭`);
+        await new Promise(r=>setTimeout(r,0));   // 진행률 페인트 후 무거운 IDB 읽기 시작
+        await loaders[i][2]();
+      }
+      wmLoad.frac(1, '로컬 데이터 완료', `${loaders.length}/${loaders.length} 탭`);
+      await autoSyncDownload({prog:true});
+    }catch(e){ console.error(e); }
+    finally{ await wmLoad.done(); }
     if(typeof wmSyncStartPoll==='function') wmSyncStartPoll();
   })();
 }
 
-async function autoSyncDownload(){
+async function autoSyncDownload(opts){
+  opts=opts||{};
   const ngReady=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
@@ -2931,7 +3048,27 @@ async function autoSyncDownload(){
   window._wmSyncRestoring=true;  // 복원 중 dirty 마킹 억제
 
   try{
-    const payload=await fetchSyncPayload();
+    // 다운로드 진행률 — 매니페스트에 슬라이스 압축 크기(bytes)가 있으면 바이트 기준,
+    // 없으면(구 매니페스트) 청크 개수 기준으로 계산한다. 둘 다 실제 수신량이다.
+    if(!wmLoad.on) wmLoad.show('최신 데이터 반영 중','다른 PC에서 올린 데이터를 받는 중입니다');
+    wmLoad.range(40,48);
+    wmLoad.frac(0,'서버 데이터 확인 중...','');
+    let dlTotal=0, dlDone=0, dlBytes=0, dlByteMode=false, dlLabel='';
+    const onProg=(ev)=>{
+      if(ev.init){
+        dlByteMode=ev.init.every(x=>x.bytes>0);
+        dlTotal=dlByteMode?ev.init.reduce((a,x)=>a+x.bytes,0):ev.init.reduce((a,x)=>a+(x.parts||1),0);
+        wmLoad.range(48,85);
+        wmLoad.show(null, dlByteMode?`서버에서 최신 데이터 ${wmMB(dlTotal)}를 받는 중입니다`:'서버에서 최신 데이터를 받는 중입니다');
+        return;
+      }
+      if(ev.label!==undefined){ dlLabel=ev.label; }
+      if(ev.bytes) dlBytes+=ev.bytes;
+      if(dlByteMode) dlDone=dlBytes; else if(ev.partFrac) dlDone+=ev.partFrac;
+      const sub=dlByteMode?`${wmMB(dlBytes)} / ${wmMB(dlTotal)}`:`${wmMB(dlBytes)} 받음`;
+      wmLoad.frac(dlTotal>0?dlDone/dlTotal:0, dlLabel||'데이터 받는 중...', sub);
+    };
+    const payload=await fetchSyncPayload(onProg);
     const remoteTs=payload.ts||0;
     remoteNewer=remoteTs>localSyncTs;
 
@@ -2955,14 +3092,36 @@ async function autoSyncDownload(){
     const vcAccess=authUser&&authUser.tabs.includes('via-cancel');
     const vcHasLocal=typeof vcFiles!=='undefined'&&vcFiles&&vcFiles.length>0;
     const vcOk=!vcAccess||vcHasLocal||!payload.vc;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk&&vcOk)return;
+    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk&&vcOk){
+      wmLoad.range(wmLoad.pct,100); wmLoad.frac(1,'최신 상태입니다','');
+      return;
+    }
+
+    // 복원 구간 — 행 단위로 실제 진행률 계산
+    wmLoad.range(85,100);
+    const _rowsTotal=wmPayloadRows(payload);
+    let _rowsDone=0, _restoreLabel='데이터 저장 중...';
+    wmLoad.show(null,'받은 데이터를 이 컴퓨터에 저장하는 중입니다');
+    wmLoad.frac(0,_restoreLabel,'');
+    window.wmLoadRowTick=(n)=>{
+      _rowsDone+=(n||1);
+      wmLoad.frac(_rowsTotal>0?_rowsDone/_rowsTotal:1, _restoreLabel, _rowsTotal>0?`${_rowsDone.toLocaleString()} / ${_rowsTotal.toLocaleString()}행`:'');
+    };
+    const _restoreStep=async(key,fn)=>{
+      _restoreLabel=`${WM_SLICE_LABEL[key]||key} 저장 중`;
+      wmLoad.frac(_rowsTotal>0?_rowsDone/_rowsTotal:0,_restoreLabel,null);
+      await new Promise(r=>setTimeout(r,0));   // 라벨 페인트 후 진행
+      return fn();
+    };
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
     if((!ngReady||remoteNewer)&&payload.ng){
+      _restoreLabel='N그룹 저장 중';
       if(remoteNewer){for(const f of allFiles)await idbDelete(f.id);allFiles=[];}
       for(const f of payload.ng){
         const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
         allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
+        if(window.wmLoadRowTick)wmLoadRowTick((f.data&&f.data.length)||1);
       }
       updateStatusDots();updateUploadStatus();
       if(payload.ngResults&&payload.ngResults.length>0){
@@ -2971,11 +3130,13 @@ async function autoSyncDownload(){
     }
     // 취소율 복원 (없거나 원격이 더 새로운 경우)
     if((!cdReady||remoteNewer)&&payload.cd){
+      _restoreLabel='WM 취소율 저장 중';
       if(remoteNewer){for(const f of cdAllFiles)await cdIdbDelete(f.id);cdAllFiles=[];}
       for(const f of payload.cd){let data=f.data;
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
         cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       cdUpdateStatusDots();cdUpdateUploadStatus();
       const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
@@ -2990,6 +3151,7 @@ async function autoSyncDownload(){
     }
     // 유입분석 복원 (없거나 원격이 더 새로운 경우)
     if(((!iaLoaded||remoteNewer)&&payload.ia)){
+      _restoreLabel='유입분석 저장 중';
       if(!iaIdb) await iaOpenIdb();
       const existing=await iaIdbGetAll();
       for(const r of existing) await iaIdbDeleteId(r.id);
@@ -3000,6 +3162,7 @@ async function autoSyncDownload(){
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
         if(iaFiles[f.type]) iaFiles[f.type].push(rec);
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       iaBindUploadBoxes();iaUpdateStatus();
       if(iaReady()){iaInitDateRange();iaGenerate();}
@@ -3008,6 +3171,7 @@ async function autoSyncDownload(){
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
     // 차등성과 복원 (없거나 원격이 더 새로운 경우)
     if(payload.gd&&(!gdHasLocal||remoteNewer)){
+      _restoreLabel='차등성과 저장 중';
       if(!gdIdb) await gdOpenIDB();
       if(remoteNewer){const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];}
       for(const f of (payload.gd.files||[])){
@@ -3015,6 +3179,7 @@ async function autoSyncDownload(){
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
       gdUpdateStatusDots();gdUpdateUploadStatus();
@@ -3023,30 +3188,30 @@ async function autoSyncDownload(){
     }
     // 부재인입 복원 (없거나 원격이 더 새로운 경우)
     if(payload.mc&&mcAccess&&(!mcHasLocal||remoteNewer)&&typeof mcRestoreSync==='function'){
-      await mcRestoreSync(payload.mc);
+      await _restoreStep('mc',()=>mcRestoreSync(payload.mc));
     }
     // 계열별성과 복원 (없거나 원격이 더 새로운 경우)
     if(payload.sp&&spAccess&&(!spHasLocal||remoteNewer)&&typeof spRestoreSync==='function'){
-      await spRestoreSync(payload.sp);
+      await _restoreStep('sp',()=>spRestoreSync(payload.sp));
     }
     // 타임보드성과 복원 (없거나 원격이 더 새로운 경우)
     if(payload.tb&&tbAccess&&(!tbHasLocal||remoteNewer)&&typeof tbRestoreSync==='function'){
-      await tbRestoreSync(payload.tb);
+      await _restoreStep('tb',()=>tbRestoreSync(payload.tb));
     }
     // 톡이즈 성과 복원 (없거나 원격이 더 새로운 경우)
     if(payload.nc&&ncAccess&&(!ncHasLocal||remoteNewer)&&typeof ncRestoreSync==='function'){
-      await ncRestoreSync(payload.nc);
+      await _restoreStep('nc',()=>ncRestoreSync(payload.nc));
     }
     if(payload.tz&&tzAccess&&(!tzHasLocal||remoteNewer)&&typeof tzRestoreSync==='function'){
-      await tzRestoreSync(payload.tz);
+      await _restoreStep('tz',()=>tzRestoreSync(payload.tz));
     }
     // 광고비 복원 (없거나 원격이 더 새로운 경우)
     if(payload.ac&&acAccess&&(!acHasLocal||remoteNewer)&&typeof acRestoreSync==='function'){
-      await acRestoreSync(payload.ac);
+      await _restoreStep('ac',()=>acRestoreSync(payload.ac));
     }
     // Via 취소율 복원 (없거나 원격이 더 새로운 경우)
     if(payload.vc&&vcAccess&&(!vcHasLocal||remoteNewer)&&typeof vcRestoreSync==='function'){
-      await vcRestoreSync(payload.vc,payload.vcProducts);
+      await _restoreStep('vc',()=>vcRestoreSync(payload.vc,payload.vcProducts));
     }
     // N그룹 결과 표시
     if(!ngReady||remoteNewer){
@@ -3067,7 +3232,9 @@ async function autoSyncDownload(){
     wmSyncSetDownloadStatus('fail', e.message||'unknown');
   }finally{
     window._wmSyncRestoring=false;
+    window.wmLoadRowTick=null;
     wmSyncRenderBadge();
+    if(!opts.prog) await wmLoad.done();   // 백그라운드 갱신은 여기서 오버레이 정리 (부팅은 applyAuth가 담당)
   }
 }
 
@@ -3507,7 +3674,7 @@ async function doSyncUpload(token){
           if(!br.ok){const e=await br.json();throw new Error(e.message||`[${key}] 그룹 ${g+1} 청크 ${p+1} blob 실패`);}
           treeItems.push({path:`sync_${key}.g${g}.part${p}`,mode:'100644',type:'blob',sha:(await br.json()).sha});
         }
-        sliceMeta.push({key,seq:g,parts,arr:Array.isArray(val)});
+        sliceMeta.push({key,seq:g,parts,arr:Array.isArray(val),bytes:comp.length});   // bytes = 다운로드 진행률 분모
       }
     }
 
@@ -3544,7 +3711,7 @@ async function doSyncUpload(token){
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
 
-async function fetchSyncPayload(){
+async function fetchSyncPayload(onProg){
   // raw.githubusercontent.com은 Fastly CDN 캐시로 커밋 직후 stale 응답이 올 수 있어
   // 최신 커밋 SHA를 API로 받아 SHA-pinned URL로 받는다 (각 커밋 = unique URL = 항상 fresh)
   let base=`https://raw.githubusercontent.com/${SYNC_REPO}/main`;
@@ -3558,11 +3725,27 @@ async function fetchSyncPayload(){
   }catch(e){/* API 실패(rate limit 등) 시 raw URL fallback */}
   const bust=(u)=>pinned?u:`${u}?t=${Date.now()}`;   // SHA 고정이면 URL 자체가 unique
 
-  // 매니페스트 우선. v2=탭별 개별 파일(슬라이스별 압축해제·파싱), v1=단일 data.json 청크, 없으면 단일파일.
-  const readParts=async(prefix,count)=>{const arr=[];let total=0;
+  // 진행률: 받은 만큼(바이트 또는 청크 단위)을 그때그때 보고한다
+  const prog=(typeof onProg==='function')?onProg:null;
+  // 매니페스트 우선. v3=슬라이스×그룹, v2=탭별 개별 파일, v1=단일 data.json 청크, 없으면 단일파일.
+  //  청크는 스트리밍으로 읽어 수신 바이트를 실시간 보고 (진행바가 실제 다운로드량을 따라감)
+  const readParts=async(prefix,count,tag)=>{const arr=[];let total=0;
     for(let p=0;p<count;p++){const pr=await fetch(bust(`${base}/${prefix}${p}`),{cache:'no-store'});
       if(!pr.ok)throw new Error(`동기화 ${prefix}${p} 조회 실패`);
-      const ab=new Uint8Array(await pr.arrayBuffer());arr.push(ab);total+=ab.length;}
+      let ab=null;
+      if(prog&&pr.body&&pr.body.getReader){
+        const len=+(pr.headers.get('content-length')||0);
+        const reader=pr.body.getReader();const chunks=[];let got=0;
+        for(;;){const{done,value}=await reader.read();if(done)break;
+          chunks.push(value);got+=value.length;
+          prog({bytes:value.length, partFrac:(len?value.length/len:0), tag});}
+        if(!len) prog({bytes:0, partFrac:1, tag});     // content-length 없으면 완료 시 1청크로 계상
+        ab=new Uint8Array(got);let o=0;for(const c of chunks){ab.set(c,o);o+=c.length;}
+      } else {
+        ab=new Uint8Array(await pr.arrayBuffer());
+        if(prog) prog({bytes:ab.length, partFrac:1, tag});
+      }
+      arr.push(ab);total+=ab.length;}
     const buf=new Uint8Array(total);let off=0;for(const ab of arr){buf.set(ab,off);off+=ab.length;}return buf;};
   const mRes=await fetch(bust(`${base}/${SYNC_MANIFEST}`),{cache:'no-store'});
   if(mRes.ok){
@@ -3571,8 +3754,13 @@ async function fetchSyncPayload(){
     if(manifest.v===3&&Array.isArray(manifest.slices)){
       const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
       const seen=new Set();
-      for(const s of manifest.slices){
-        const buf=await readParts(`sync_${s.key}.g${s.seq||0}.part`,s.parts);
+      if(prog) prog({init:manifest.slices});
+      for(let si=0;si<manifest.slices.length;si++){
+        const s=manifest.slices[si];
+        if(prog) prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 받는 중`, idx:si, of:manifest.slices.length});
+        const buf=await readParts(`sync_${s.key}.g${s.seq||0}.part`,s.parts,s.key);
+        if(prog){ prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 압축 해제 중`, idx:si, of:manifest.slices.length});
+                  await new Promise(r=>setTimeout(r,0)); }   // 블로킹 작업 전에 진행바 페인트
         const zip=await JSZip.loadAsync(buf);
         const part=JSON.parse(await zip.file('d').async('string'));
         if(!seen.has(s.key)){payload[s.key]=part;seen.add(s.key);}
@@ -3585,8 +3773,10 @@ async function fetchSyncPayload(){
     }
     if(manifest.v===2&&Array.isArray(manifest.slices)){
       const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
+      if(prog) prog({init:manifest.slices});
       for(const s of manifest.slices){
-        const buf=await readParts(`sync_${s.key}.part`,s.parts);
+        if(prog) prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 받는 중`});
+        const buf=await readParts(`sync_${s.key}.part`,s.parts,s.key);
         const zip=await JSZip.loadAsync(buf);
         payload[s.key]=JSON.parse(await zip.file('d').async('string'));   // 슬라이스 단위 파싱 → 메모리 피크 억제
       }
@@ -3648,6 +3838,7 @@ async function doSyncDownloadManual(){
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await iaIdbAdd(rec);rec.id=id;
         if(iaFiles[f.type]) iaFiles[f.type].push(rec);
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       iaUpdateStatus();
       if(iaReady()){iaInitDateRange();iaGenerate();}
@@ -3666,6 +3857,7 @@ async function doSyncDownloadManual(){
         if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       if(payload.gd.results&&payload.gd.results.length>0){for(const r of payload.gd.results)await gdSaveResult(r);}
       gdUpdateStatusDots();gdUpdateUploadStatus();
@@ -12823,6 +13015,7 @@ async function mcRestoreSync(data){
   for(const f of arr){
     const rec={type:f.type,corp:f.corp||'',fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],warn:f.warn||''};
     const id=await mcIdbAdd(rec);rec.id=id;mcFiles.push(rec);
+    if(window.wmLoadRowTick)wmLoadRowTick((rec.rows&&rec.rows.length)||1);
   }
   mcSealed=sealed;mcSealCutoffMs=cutoff;await mcSealedSave();
   mcLoaded=true;mcJudged=null;
@@ -13281,6 +13474,7 @@ async function spRestoreSync(arr){
     const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};
     if(f.ym)rec.ym=f.ym;
     const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
+    if(window.wmLoadRowTick)wmLoadRowTick(rec.rowsCount||1);
   }
   spLoaded=true;spModel=null;spUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='series-perf')spOnShow();
@@ -13875,7 +14069,7 @@ async function tbRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!tbIdb)await tbOpenIDB();
   await tbIdbClear();tbFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tbIdbAdd(rec);rec.id=id;tbFiles.push(rec);}
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tbIdbAdd(rec);rec.id=id;tbFiles.push(rec);if(window.wmLoadRowTick)wmLoadRowTick(rec.rowsCount||1);}
   tbLoaded=true;tbModel=null;tbUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='timeboard-perf')tbOnShow();
 }
@@ -14555,7 +14749,7 @@ async function tzRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!tzIdb)await tzOpenIDB();
   await tzIdbClear();tzFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tzIdbAdd(rec);rec.id=id;tzFiles.push(rec);}
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};const id=await tzIdbAdd(rec);rec.id=id;tzFiles.push(rec);if(window.wmLoadRowTick)wmLoadRowTick(rec.rowsCount||1);}
   tzLoaded=true;tzModel=null;tzUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='talkis-perf')tzOnShow();
 }
@@ -15329,7 +15523,7 @@ async function ncRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!ncIdb)await ncOpenIDB();
   await ncIdbClear();ncFiles=[];
-  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};if(f.diHist)rec.diHist=f.diHist;if(f.pv)rec.pv=f.pv;const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);}
+  for(const f of arr){const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};if(f.diHist)rec.diHist=f.diHist;if(f.pv)rec.pv=f.pv;const id=await ncIdbAdd(rec);rec.id=id;ncFiles.push(rec);if(window.wmLoadRowTick)wmLoadRowTick(rec.rowsCount||1);}
   ncLoaded=true;ncModel=null;ncUpdateUploadStatus();
   if(typeof currentPage!=='undefined'&&currentPage==='naesaegim-call')ncOnShow();
 }
@@ -16386,7 +16580,7 @@ async function acRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!acIdb)await acOpenIDB();
   await acIdbClear();acReports=[];
-  for(const r of arr){if(!r||!r.id)continue;await acIdbPut(r);acReports.push(r);}
+  for(const r of arr){if(!r||!r.id)continue;await acIdbPut(r);acReports.push(r);if(window.wmLoadRowTick)wmLoadRowTick(1);}
   acLoaded=true;acModel=null;acUpdateHeader();
   if(typeof currentPage!=='undefined'&&currentPage==='ad-cost')acOnShow();
 }
@@ -17103,6 +17297,7 @@ async function vcRestoreSync(arr,prods){
     }
     const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
     rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
+    if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
   }
   if(prods&&typeof prods==='object'&&!Array.isArray(prods)){vcProducts=prods;vcMigrateLabels();await vcMetaPut('products',vcProducts);}
   vcLoaded=true;vcResult=null;
