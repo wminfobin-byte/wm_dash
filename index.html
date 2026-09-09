@@ -3068,34 +3068,62 @@ async function autoSyncDownload(opts){
       const sub=dlByteMode?`${wmMB(dlBytes)} / ${wmMB(dlTotal)}`:`${wmMB(dlBytes)} 받음`;
       wmLoad.frac(dlTotal>0?dlDone/dlTotal:0, dlLabel||'데이터 받는 중...', sub);
     };
-    const payload=await fetchSyncPayload(onProg);
-    const remoteTs=payload.ts||0;
+    // ① 매니페스트(수 KB)만 먼저 읽는다. 예전엔 100MB를 다 받은 '뒤에' 최신 여부를 봤다.
+    const ctx=await fetchSyncCtx();
+    const remoteTs=ctx.ts||0;
     remoteNewer=remoteTs>localSyncTs;
+    // payload.X 존재 여부 ≡ 매니페스트에 그 슬라이스가 있는지 (업로더가 값 있는 키만 올리므로 동치)
+    const hasSlice=k=>ctx.keys.has(k);
 
     // 로컬 데이터가 모두 있고 원격이 더 새것이 아니면 스킵
     const iaHasLocal=iaFiles&&((iaFiles.db&&iaFiles.db.length>0)||(iaFiles.cont&&iaFiles.cont.length>0)||(iaFiles.attend&&iaFiles.attend.length>0));
     const iaLoaded=!iaAccess||iaHasLocal;
     const gdHasLocal=gdAllFiles&&gdAllFiles.length>0;
     const mcHasLocal=mcFiles&&mcFiles.length>0;
-    const mcOk=!mcAccess||mcHasLocal||!payload.mc;
+    const mcOk=!mcAccess||mcHasLocal||!hasSlice('mc');
     const spHasLocal=typeof spFiles!=='undefined'&&spFiles&&spFiles.length>0;
-    const spOk=!spAccess||spHasLocal||!payload.sp;
+    const spOk=!spAccess||spHasLocal||!hasSlice('sp');
     const tbHasLocal=typeof tbFiles!=='undefined'&&tbFiles&&tbFiles.length>0;
-    const tbOk=!tbAccess||tbHasLocal||!payload.tb;
+    const tbOk=!tbAccess||tbHasLocal||!hasSlice('tb');
     const tzHasLocal=typeof tzFiles!=='undefined'&&tzFiles&&tzFiles.length>0;
-    const tzOk=!tzAccess||tzHasLocal||!payload.tz;
+    const tzOk=!tzAccess||tzHasLocal||!hasSlice('tz');
     const ncAccess=authUser&&authUser.tabs.includes('naesaegim-call');
     const ncHasLocal=typeof ncFiles!=='undefined'&&ncFiles&&ncFiles.length>0;
-    const ncOk=!ncAccess||ncHasLocal||!payload.nc;
+    const ncOk=!ncAccess||ncHasLocal||!hasSlice('nc');
     const acHasLocal=typeof acReports!=='undefined'&&acReports&&acReports.length>0;
-    const acOk=!acAccess||acHasLocal||!payload.ac;
+    const acOk=!acAccess||acHasLocal||!hasSlice('ac');
     const vcAccess=authUser&&authUser.tabs.includes('via-cancel');
     const vcHasLocal=typeof vcFiles!=='undefined'&&vcFiles&&vcFiles.length>0;
-    const vcOk=!vcAccess||vcHasLocal||!payload.vc;
-    if(!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!payload.gd)&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk&&vcOk){
+    const vcOk=!vcAccess||vcHasLocal||!hasSlice('vc');
+    // ② 받을 게 없으면 다운로드 자체를 하지 않는다 (판정 조건은 기존과 동일, 근거만 매니페스트)
+    if(ctx.manifest&&!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!hasSlice('gd'))&&mcOk&&spOk&&tbOk&&tzOk&&ncOk&&acOk&&vcOk){
       wmLoad.range(wmLoad.pct,100); wmLoad.frac(1,'최신 상태입니다','');
+      wmSyncSetDownloadStatus('ok');
       return;
     }
+
+    // ③ 바뀐 슬라이스만 받는다 — 매니페스트의 내용 서명(그룹 blob sha)을 로컬 기록과 비교.
+    //    서명이 같고 로컬에 이미 있으면(또는 이 계정이 안 쓰는 탭이면) 통째로 건너뛴다.
+    //    서명이 없는 구 매니페스트면 wantKeys=null → 전량 다운로드(기존 동작).
+    let localSig={};
+    try{ localSig=JSON.parse(localStorage.getItem(WM_SLICE_SIG_KEY)||'{}')||{}; }catch(e){ localSig={}; }
+    const SLICE_LOCAL={ng:ngReady,ngResults:ngReady,cd:cdReady,gd:gdHasLocal,sp:spHasLocal,tb:tbHasLocal,tz:tzHasLocal,nc:ncHasLocal,ac:acHasLocal,vc:vcHasLocal,vcProducts:vcHasLocal};
+    const SLICE_ACCESS={sp:spAccess,tb:tbAccess,tz:tzAccess,nc:ncAccess,ac:acAccess,vc:vcAccess,vcProducts:vcAccess};
+    const ALWAYS_KEYS=new Set(['ls','ngResults','vcProducts','ac']);   // 합쳐서 수십 KB — 항상 받아 예외 케이스를 없앤다
+    let wantKeys=null; const skippedKeys=[];
+    if(ctx.manifest&&Object.keys(ctx.sig).length>0){
+      wantKeys=new Set();
+      for(const k of ctx.keys){
+        const access=(SLICE_ACCESS[k]===undefined)?true:!!SLICE_ACCESS[k];
+        const sameSig=!!localSig[k]&&localSig[k]===ctx.sig[k];
+        const haveIt=!!SLICE_LOCAL[k]||!access;
+        if(!ALWAYS_KEYS.has(k)&&sameSig&&haveIt){ skippedKeys.push(k); continue; }
+        wantKeys.add(k);
+      }
+      if(skippedKeys.length) console.log('[sync] 변경 없어 건너뜀:',skippedKeys.map(k=>WM_SLICE_LABEL[k]||k).join(', '));
+    }
+
+    const payload=await fetchSyncPayload(onProg, ctx, wantKeys);
 
     // 복원 구간 — 행 단위로 실제 진행률 계산
     wmLoad.range(85,100);
@@ -3222,8 +3250,9 @@ async function autoSyncDownload(opts){
         if(ready)generate();
       }
     }
-    // 동기화 타임스탬프 저장
+    // 동기화 타임스탬프 + 슬라이스 서명 저장 (다음 접속 때 안 바뀐 탭을 건너뛰기 위한 근거)
     localStorage.setItem('sync_last_ts',String(remoteTs));
+    if(ctx.manifest&&Object.keys(ctx.sig).length>0) localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(ctx.sig));
     wmSyncSetDownloadStatus('ok');
     // 원격 복원 성공 시 로컬 dirty 플래그 해제 (원격과 일치 상태)
     if(remoteNewer) wmSyncClearDirty();
@@ -3251,6 +3280,7 @@ function doLogout(){
 const SYNC_REPO='wminfobin-byte/wm_dash';
 const SYNC_FILE='sync_data.json.gz';
 const SYNC_MANIFEST='sync_manifest.json';   // 청크 분할 매니페스트 (대용량 대비)
+const WM_SLICE_SIG_KEY='sync_slice_sig';    // {슬라이스키: 내용서명} — 이미 갖고 있는 슬라이스를 다시 안 받기 위한 비교값
 const SYNC_PART_BYTES=20*1024*1024;          // 청크당 압축 바이트 한도(20MB) — base64≈27MB로 GitHub blob 요청 한도 이내
 const SLICE_GROUP_BYTES=16*1024*1024;        // 그룹당 JSON 문자열 예상 상한 — 한 번에 만드는 문자열을 작게 유지(OOM 방지)
 
@@ -3664,17 +3694,23 @@ async function doSyncUpload(token){
         let enc=(encFn&&Array.isArray(groups[g]))?groups[g].map(encFn):groups[g];
         groups[g]=null;                                   // 원본 참조 해제(인코딩본만 유지)
         let str=JSON.stringify(enc);enc=null;
-        const zip=new JSZip();zip.file('d',str);str=null;
+        // date 고정 = 같은 내용이면 항상 같은 바이트 → blob sha가 내용 해시 역할을 한다
+        // (받는 쪽이 sha를 비교해 '안 바뀐 탭'은 통째로 건너뛴다)
+        const zip=new JSZip();zip.file('d',str,{date:new Date(0)});str=null;
         const comp=await zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:6}});
         const parts=Math.max(1,Math.ceil(comp.length/SYNC_PART_BYTES));
+        const shas=[];
         for(let p=0;p<parts;p++){
           const chunk=comp.subarray(p*SYNC_PART_BYTES,(p+1)*SYNC_PART_BYTES);
           syncLog(`<span class="sync-spin">↻</span> 업로드 중... [${key}]${groups.length>1?` ${g+1}/${groups.length}`:''} ${p+1}/${parts}`);
           const br=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(chunk),encoding:'base64'})});
           if(!br.ok){const e=await br.json();throw new Error(e.message||`[${key}] 그룹 ${g+1} 청크 ${p+1} blob 실패`);}
-          treeItems.push({path:`sync_${key}.g${g}.part${p}`,mode:'100644',type:'blob',sha:(await br.json()).sha});
+          const bsha=(await br.json()).sha;
+          shas.push(bsha);
+          treeItems.push({path:`sync_${key}.g${g}.part${p}`,mode:'100644',type:'blob',sha:bsha});
         }
-        sliceMeta.push({key,seq:g,parts,arr:Array.isArray(val),bytes:comp.length});   // bytes = 다운로드 진행률 분모
+        // bytes = 다운로드 진행률 분모 / shas = 변경 감지용 내용 해시
+        sliceMeta.push({key,seq:g,parts,arr:Array.isArray(val),bytes:comp.length,shas});
       }
     }
 
@@ -3704,6 +3740,13 @@ async function doSyncUpload(token){
     const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:true})});
     if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
     // 업로드 성공: 로컬 dirty 해제 + 원격 ts 동기화
+    // 방금 올린 슬라이스 서명을 기록 — 올린 PC가 다음 접속에서 자기 데이터를 다시 받지 않게
+    try{
+      const _sigParts={};
+      for(const sl of sliceMeta) (_sigParts[sl.key]||(_sigParts[sl.key]=[])).push(`${sl.seq||0}:${(sl.shas||[]).join(',')}`);
+      const _sig={}; for(const k of Object.keys(_sigParts)) _sig[k]=_sigParts[k].join('|');
+      localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(_sig));
+    }catch(e){ localStorage.removeItem(WM_SLICE_SIG_KEY); }
     localStorage.setItem('sync_last_ts',String(Date.now()));
     wmSyncClearDirty();
     wmSyncSetDownloadStatus('ok');
@@ -3711,7 +3754,9 @@ async function doSyncUpload(token){
   }catch(err){syncBtnText('실패');setTimeout(syncBtnReset,2000);alert('동기화 오류: '+err.message);console.error(err);}
 }
 
-async function fetchSyncPayload(onProg){
+// 매니페스트(수 KB)만 먼저 읽어 "무엇이 바뀌었는지"를 판정하는 단계.
+//  전량 다운로드 전에 이걸 보고, 바뀐 게 없으면 다운로드 자체를 건너뛴다.
+async function fetchSyncCtx(){
   // raw.githubusercontent.com은 Fastly CDN 캐시로 커밋 직후 stale 응답이 올 수 있어
   // 최신 커밋 SHA를 API로 받아 SHA-pinned URL로 받는다 (각 커밋 = unique URL = 항상 fresh)
   let base=`https://raw.githubusercontent.com/${SYNC_REPO}/main`;
@@ -3724,6 +3769,32 @@ async function fetchSyncPayload(onProg){
     }
   }catch(e){/* API 실패(rate limit 등) 시 raw URL fallback */}
   const bust=(u)=>pinned?u:`${u}?t=${Date.now()}`;   // SHA 고정이면 URL 자체가 unique
+  let manifest=null;
+  try{
+    const mRes=await fetch(bust(`${base}/${SYNC_MANIFEST}`),{cache:'no-store'});
+    if(mRes.ok) manifest=await mRes.json();
+  }catch(e){/* 매니페스트 없음 = 아주 구 포맷 */}
+  // 슬라이스 키 목록 + 키별 내용 서명(그룹 sha를 이어붙인 값)
+  const keys=new Set(), sigParts={};
+  let sigOk=true;
+  if(manifest&&Array.isArray(manifest.slices)){
+    for(const sl of manifest.slices){
+      keys.add(sl.key);
+      if(!Array.isArray(sl.shas)||sl.shas.length===0) sigOk=false;
+      (sigParts[sl.key]||(sigParts[sl.key]=[])).push(`${sl.seq||0}:${(sl.shas||[]).join(',')}`);
+    }
+  }
+  const sig={};
+  if(sigOk) for(const k of Object.keys(sigParts)) sig[k]=sigParts[k].join('|');
+  return {base, bust, manifest, keys,
+          sig,                                    // 구 매니페스트(shas 없음)면 빈 객체 → 전량 다운로드
+          ts:(manifest&&((manifest.payloadMeta&&manifest.payloadMeta.ts)||manifest.ts))||0};
+}
+
+// wantKeys(Set)를 주면 그 슬라이스만 받는다. 생략하면 전부 (수동 다운로드 등 기존 경로).
+async function fetchSyncPayload(onProg, ctx, wantKeys){
+  ctx=ctx||await fetchSyncCtx();
+  const base=ctx.base, bust=ctx.bust;
 
   // 진행률: 받은 만큼(바이트 또는 청크 단위)을 그때그때 보고한다
   const prog=(typeof onProg==='function')?onProg:null;
@@ -3747,19 +3818,19 @@ async function fetchSyncPayload(onProg){
       }
       arr.push(ab);total+=ab.length;}
     const buf=new Uint8Array(total);let off=0;for(const ab of arr){buf.set(ab,off);off+=ab.length;}return buf;};
-  const mRes=await fetch(bust(`${base}/${SYNC_MANIFEST}`),{cache:'no-store'});
-  if(mRes.ok){
-    const manifest=await mRes.json();
+  const manifest=ctx.manifest;
+  if(manifest){
     // v3: 슬라이스를 그룹으로 분할(배열 슬라이스는 이어붙임) → 한 번에 파싱하는 문자열을 작게 유지
     if(manifest.v===3&&Array.isArray(manifest.slices)){
       const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
       const seen=new Set();
-      if(prog) prog({init:manifest.slices});
-      for(let si=0;si<manifest.slices.length;si++){
-        const s=manifest.slices[si];
-        if(prog) prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 받는 중`, idx:si, of:manifest.slices.length});
+      const slices=wantKeys?manifest.slices.filter(x=>wantKeys.has(x.key)):manifest.slices;
+      if(prog) prog({init:slices});
+      for(let si=0;si<slices.length;si++){
+        const s=slices[si];
+        if(prog) prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 받는 중`, idx:si, of:slices.length});
         const buf=await readParts(`sync_${s.key}.g${s.seq||0}.part`,s.parts,s.key);
-        if(prog){ prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 압축 해제 중`, idx:si, of:manifest.slices.length});
+        if(prog){ prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 압축 해제 중`, idx:si, of:slices.length});
                   await new Promise(r=>setTimeout(r,0)); }   // 블로킹 작업 전에 진행바 페인트
         const zip=await JSZip.loadAsync(buf);
         const part=JSON.parse(await zip.file('d').async('string'));
@@ -3773,8 +3844,9 @@ async function fetchSyncPayload(onProg){
     }
     if(manifest.v===2&&Array.isArray(manifest.slices)){
       const payload=Object.assign({},manifest.payloadMeta||{v:10,ts:manifest.ts});
-      if(prog) prog({init:manifest.slices});
-      for(const s of manifest.slices){
+      const slices2=wantKeys?manifest.slices.filter(x=>wantKeys.has(x.key)):manifest.slices;
+      if(prog) prog({init:slices2});
+      for(const s of slices2){
         if(prog) prog({label:`${WM_SLICE_LABEL[s.key]||s.key} 받는 중`});
         const buf=await readParts(`sync_${s.key}.part`,s.parts,s.key);
         const zip=await JSZip.loadAsync(buf);
@@ -3801,7 +3873,8 @@ async function doSyncDownloadManual(){
   window._wmSyncRestoring=true;
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
-    const payload=await fetchSyncPayload();
+    const _ctx=await fetchSyncCtx();
+    const payload=await fetchSyncPayload(null,_ctx);   // 수동 다운로드는 항상 전량
 
     // 기존 데이터 삭제 후 복원
     for(const f of allFiles)await idbDelete(f.id);allFiles=[];
@@ -3898,6 +3971,7 @@ async function doSyncDownloadManual(){
     syncLog('다운로드 완료!');
     // 원격 → 로컬 덮어쓰기 성공: 로컬 상태 = 원격 상태
     localStorage.setItem('sync_last_ts',String(payload.ts||Date.now()));
+    if(_ctx&&_ctx.manifest&&Object.keys(_ctx.sig).length>0) localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(_ctx.sig));
     wmSyncClearDirty();
     wmSyncSetDownloadStatus('ok');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},1500);
@@ -3915,7 +3989,8 @@ async function doSyncDownload(token){
   window._wmSyncRestoring=true;
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
-    const payload=await fetchSyncPayload();
+    const _ctx=await fetchSyncCtx();
+    const payload=await fetchSyncPayload(null,_ctx);   // 수동 다운로드는 항상 전량
 
     syncLog('<span class="sync-spin">↻</span> N그룹 데이터 복원 중...');
     // N그룹 IDB 복원
@@ -3973,6 +4048,7 @@ async function doSyncDownload(token){
 
     syncLog('다운로드 완료! 대시보드가 갱신되었습니다.');
     localStorage.setItem('sync_last_ts',String(payload.ts||Date.now()));
+    if(_ctx&&_ctx.manifest&&Object.keys(_ctx.sig).length>0) localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(_ctx.sig));
     wmSyncClearDirty();
     wmSyncSetDownloadStatus('ok');
     setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},2000);
