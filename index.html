@@ -9935,7 +9935,7 @@ function gdRenderTable(){
     const _btnCss='width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569';
     const dAdjBadge=dAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${dAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetDbAdj('${safeName}')">${dAdj>0?'+':''}${dAdj}</span>`:'';
     const dbCell=gdGroupEditMode
-      ? `<button title="DB수 -1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',-1)">−</button><span title="클릭: DB수 직접 입력" style="margin:0 6px;display:inline-block;min-width:28px;cursor:pointer;border-bottom:1px dashed #94a3b8" onclick="gdPromptDb('${safeName}')">${r.db.toLocaleString()}</span><button title="DB수 +1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',+1)">+</button>${dAdjBadge}`
+      ? `<button title="DB수 -1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',-1)">−</button><input type="number" min="0" step="1" value="${r.db}" title="반영할 DB수를 직접 입력 (원천 집계 ${(r.rawDb!==undefined?r.rawDb:r.db).toLocaleString()}건)" style="width:66px;margin:0 5px;padding:3px 5px;border:1.5px solid ${dAdj!==0?'#f59e0b':'#cbd5e1'};border-radius:5px;font-family:inherit;font-size:13px;font-weight:700;text-align:right;background:#fff" onchange="gdSetDb('${safeName}',this.value,this)" onkeydown="if(event.key==='Enter')this.blur()" onclick="this.select()"><button title="DB수 +1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',+1)">+</button>${dAdjBadge}`
       : r.db.toLocaleString();
     const cAdj=contractAdjMap[r.name]||0;
     const cAdjBadge=cAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${cAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetContractAdj('${safeName}')">${cAdj>0?'+':''}${cAdj}</span>`:'';
@@ -10395,29 +10395,20 @@ async function gdAdjustDb(name, delta){
   await gdApplyDbAdj(name, newAdj);
 }
 
-// 숫자 클릭 → 목표 DB수 직접 입력 (조정값 = 입력값 − 원천 DB수)
-async function gdPromptDb(name){
+// 셀 안 입력칸에 목표 DB수를 직접 타이핑 (조정값 = 입력값 − 원천 집계값)
+//  Enter 또는 포커스 이동 시 반영. 값이 그대로면 아무 일도 안 한다.
+async function gdSetDb(name, val, inputEl){
   if(!gdResult || !gdResult.maxDistDate){ alert('먼저 대시보드를 생성해주세요.'); return; }
   const sheetName=fmtDateShort(gdResult.maxDistDate);
   const all=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
   const cur=(all[sheetName] && all[sheetName][name])||0;
-  const s=gdResult.stats[name]||{};
-  const rawDb=(s.rawDb!==undefined)?s.rawDb:(s.db||0);
+  const st=gdResult.stats[name]||{};
+  const rawDb=(st.rawDb!==undefined)?st.rawDb:(st.db||0);
   const curDisp=Math.max(0, rawDb+cur);
-  const input=prompt(`${name} — DB수 직접 입력
-원천 집계: ${rawDb}건${cur!==0?` (현재 조정 ${cur>0?'+':''}${cur})`:''}
-
-반영할 DB수를 입력하세요 (취소 시 변경 없음)`, String(curDisp));
-  if(input===null) return;
-  const v=parseInt(String(input).trim().replace(/,/g,''),10);
-  if(isNaN(v)||v<0){ alert('0 이상의 숫자를 입력해주세요.'); return; }
+  const v=parseInt(String(val==null?'':val).trim().replace(/,/g,''),10);
+  if(isNaN(v)||v<0){ alert('0 이상의 숫자를 입력해주세요.'); if(inputEl)inputEl.value=curDisp; return; }
   const newAdj=v-rawDb;
-  if(newAdj===cur) return;
-  if(!confirm(`${name}
-DB수: ${curDisp} → ${v}
-조정값: ${cur>0?'+':''}${cur} → ${newAdj>0?'+':''}${newAdj}
-
-해당 회차(${sheetName})에만 적용됩니다. 진행하시겠습니까?`)) return;
+  if(newAdj===cur){ if(inputEl)inputEl.value=curDisp; return; }
   await gdApplyDbAdj(name, newAdj);
 }
 

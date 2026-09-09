@@ -145,7 +145,7 @@ DB수는 파일 집계값을 그대로 쓰지 않고 **① 전역 제외 규칙 
 
 `{sheetName: {name: delta}}` — 실계약수(`gd_contract_adj`)·취소수(`gd_cancel_adj`)와 같은 구조. **수정 모드에서만** 노출.
 
-- `gdAdjustDb(name,±1)` 버튼, 숫자 클릭 시 `gdPromptDb`로 **목표 DB수 직접 입력**(delta = 입력값 − 원천 집계값), 뱃지 클릭 시 `gdResetDbAdj`.
+- `gdAdjustDb(name,±1)` 버튼 + **셀 안 숫자 입력칸**(`gdSetDb`, Enter·포커스 이동 시 반영, delta = 입력값 − 원천 집계값), 뱃지 클릭 시 `gdResetDbAdj`. 처음엔 `prompt` 창(`gdPromptDb`)이었는데 눈에 안 띄어 인라인 input으로 교체했다.
 - `db = max(0, rawDb + dbAdj)`. `stats`에 `rawDb`/`dbAdj`를 같이 담아 뱃지·키 상세 모달이 원천값을 보여준다.
 - 저장·재산정 경로는 기존 조정 함수와 동일(`gdApplyDbAdj` → `gdGenerate(dbFileId)`), 즉 **수동 조정은 저장 트리거**다.
 
