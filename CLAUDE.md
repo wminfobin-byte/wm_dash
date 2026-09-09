@@ -125,6 +125,30 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 - **알려진 가정**: 콜백 E열은 `yyyy-mm-dd hh:mm:ss` 같은 날짜+시각이어야 함(시각만이면 해당 행 제외+경고). 명세서의 React/Vite/Dexie 스택은 단일 HTML 패턴에 맞춰 바닐라 JS로 이식함.
 - **박제(seal) & 원본 정리 (`MC_DB_VER` 2, `sealed` 스토어)**: mc는 사후 변경이 없으므로 과거 판정 레코드(`mcBuildJudged` out)를 값으로 고정 저장하면 영구 유효. 화면 렌더는 `mcSealed`(과거, callTs<`mcSealCutoffMs`) + 라이브(원본 즉석계산, callTs≥cutoff) 병합(`mcGenerate`). 파일관리 모달의 2단계 버튼: ① `mcSealOldData(cutoffISO)`=기준일 미만 박제(원본 유지·검증용), ② `mcPruneSealed`=박제분 IN call(`startTs`)·콜백(`callTs`) 원본 행 삭제(계약·DB·매핑은 최근 판정에 필요해 유지). 기본 기준일=전월 1일(`mcDefaultCutoffISO`). 클라우드 싱크 `payload.mc`는 `{files,sealed,sealCutoffMs}` 객체(구 배열 포맷 하위호환). **동기화 페이로드가 GitHub blob 한도를 넘는 대용량(mc가 최대 기여)일 때 핵심 감량 수단.** 업로드는 청크 분할(`SYNC_PART_BYTES` 20MB·`sync_manifest.json`)로도 한도 회피.
 
+## 차등성과 탭 (gd*) — DB수 보정
+
+DB수는 파일 집계값을 그대로 쓰지 않고 **① 전역 제외 규칙 → ② 회차별 수동 조정** 두 단계를 거친다.
+
+### ① DB 제외 규칙 (`gd_db_rules`, localStorage + 싱크)
+
+`[{id, start, end, media, pct, memo, off}]` — 대시보드 상단 **[DB 제외 규칙]** 버튼(`gdOpenModal('rule')`)에서 편집.
+
+- **조건** = 분배일 `start~end` (비우면 무제한) **AND** 매체코드에 `media` 부분일치(대소문자 무시, 비우면 매체 무관).
+- **`pct`는 제외율**이다. 30 = 걸린 DB의 30%를 빼고 70%만 DB수에 반영. 100 = 전량 제외. 필드명·라벨·확인창 문구를 전부 「제외율」로 통일해 뒀으니 반영률로 뒤집지 말 것.
+- **반올림 단위 = 코디 × 규칙**. `Math.round(걸린건수 × pct/100)`을 코디별로 계산해 빼므로 합계가 전체 반올림값과 1~2건 다를 수 있다(정상).
+- **한 행이 여러 규칙에 걸리면 제외율이 가장 높은 규칙 1건만** 적용한다(`gdCountDb`의 `hitPct` 비교). 규칙마다 차감하면 중복 차감이 된다.
+- 규칙 적용은 `gdCountDb`의 기존 필터(군자·재콜·IN무매체·talkis·휴일·멤버) **를 모두 통과한 뒤** 마지막에 걸린다 — 이미 빠진 행은 규칙 모수에 안 들어간다.
+- 적용 결과는 `ruleCollect`(6번째 인자)로 나와 `gdResult.dbRuleStat`에 담기고, 보라색 배너(`gdRenderExcludedBanner`)와 규칙 모달 하단(`gdRenderRuleEffect`)에 「걸림 N건 중 M건 제외」로 표시된다.
+- 규칙은 **전 회차 공통**이므로 과거 회차를 조회해도 같이 적용된다. 특정 회차만 손보려면 규칙이 아니라 ②를 쓸 것.
+
+### ② 회차별 DB수 수동 조정 (`gd_db_adj`, localStorage + 싱크)
+
+`{sheetName: {name: delta}}` — 실계약수(`gd_contract_adj`)·취소수(`gd_cancel_adj`)와 같은 구조. **수정 모드에서만** 노출.
+
+- `gdAdjustDb(name,±1)` 버튼, 숫자 클릭 시 `gdPromptDb`로 **목표 DB수 직접 입력**(delta = 입력값 − 원천 집계값), 뱃지 클릭 시 `gdResetDbAdj`.
+- `db = max(0, rawDb + dbAdj)`. `stats`에 `rawDb`/`dbAdj`를 같이 담아 뱃지·키 상세 모달이 원천값을 보여준다.
+- 저장·재산정 경로는 기존 조정 함수와 동일(`gdApplyDbAdj` → `gdGenerate(dbFileId)`), 즉 **수동 조정은 저장 트리거**다.
+
 ## 계열별성과 탭 (sp* 네임스페이스)
 
 취소율↔부재인입 사이에 배치. DB 계열(0~5, 0=최상위 품질)별로 분배 DB를 **기대계약률 대비 얼마나 잘 살리는지** 분석. 설계서 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`seriesPerfDashboard`), 클라우드 싱크 `payload.sp`(v8~).

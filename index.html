@@ -2764,6 +2764,38 @@ tr.vc-left:hover{opacity:.75}
         <button class="btn btn-outline" onclick="gdCloseModal()">닫기</button>
       </div>
     </div>
+    <div id="gdModalRule" class="hidden">
+      <h2>DB 제외 규칙 — 차등성과</h2>
+      <div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:12px">
+        분배일 범위와 매체코드(일부 단어)로 걸러낸 DB 중 <b>입력한 비율만큼을 DB수 산정에서 제외</b>합니다.<br>
+        예) <b>30</b> 입력 → 걸린 DB 100건 중 30건 제외, 70건만 DB수에 반영 (반올림은 코디별로 계산).<br>
+        <span style="color:#92400e">· 날짜를 비우면 기간 제한 없음 · 매체코드를 비우면 매체 무관 전체 · 100 입력 시 전량 제외</span><br>
+        <span style="color:#92400e">· 한 건이 여러 규칙에 걸리면 <b>제외율이 가장 높은 규칙 1건만</b> 적용됩니다 (중복 차감 없음)</span><br>
+        <span style="color:#64748b">· 규칙은 모든 회차 산정에 공통 적용되며 동기화로 다른 PC에도 전파됩니다.</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px" id="gdRuleTable">
+          <thead><tr style="background:#f1f5f9">
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">사용</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">분배일 시작</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">분배일 종료</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">매체코드 (포함 단어)</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">제외율 (%)</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0;white-space:nowrap">메모</th>
+            <th style="padding:8px 6px;border:1px solid #e2e8f0"></th>
+          </tr></thead>
+          <tbody id="gdRuleBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px">
+        <button type="button" class="btn btn-outline btn-sm" onclick="gdAddRule()">+ 규칙 추가</button>
+      </div>
+      <div id="gdRuleEffect" style="margin-top:12px"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="gdCloseModal()">취소</button>
+        <button class="btn btn-primary" onclick="gdSaveRules()">저장 후 재산정</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2801,6 +2833,7 @@ tr.vc-left:hover{opacity:.75}
     <div class="download-bar">
       <button class="btn btn-outline btn-sm" id="gdBtnPromo" onclick="gdTogglePromotion()" title="B 1위 → A, C 1위 → B (실계약수 기준) 룰 ON/OFF">프로모션: ON</button>
       <button class="btn btn-outline btn-sm" id="gdBtnEditGroup" onclick="gdToggleGroupEdit()">수정</button>
+      <button class="btn btn-outline btn-sm" id="gdBtnDbRule" onclick="gdOpenModal('rule')" title="분배일·매체코드 조건으로 DB수 산정에서 n%를 제외하는 규칙 관리">DB 제외 규칙</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadPNG()">PNG 다운로드</button>
       <button class="btn btn-success btn-sm" onclick="gdDownloadExcel()">Excel 다운로드</button>
       <button class="btn btn-outline btn-sm" onclick="gdDownloadChangesExcel()" title="이번 회차와 직전 회차 간 등급이 변동된 코디만 추출">변동 Excel 다운로드</button>
@@ -3366,7 +3399,7 @@ async function doSyncUpload(token){
     const gdData={files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // (일자별 성과 탭 삭제됨 — 싱크 제외)
@@ -7619,6 +7652,8 @@ const GD_PROMO_KEY='gd_promotion_enabled';
 const GD_LONG_ABSENT_INCLUDE_KEY='gd_long_absent_include';  // JSON array of names — 이 인원의 장기공석은 풀에 포함(정당사유 취급)
 const GD_CONTRACT_ADJ_KEY='gd_contract_adj';   // {sheetName: {name: delta}} — 해당 회차에만 적용되는 실계약수 ±조정
 const GD_CANCEL_ADJ_KEY='gd_cancel_adj';       // {sheetName: {name: delta}} — 해당 회차에만 적용되는 취소수 ±조정
+const GD_DB_ADJ_KEY='gd_db_adj';               // {sheetName: {name: delta}} — 해당 회차에만 적용되는 DB수 ±조정
+const GD_DB_RULE_KEY='gd_db_rules';            // [{id,start,end,media,pct,memo,off}] — 분배일·매체코드 기준 DB수 n% 제외 규칙
 // 2026-05-18 이후 업로드된 cancel 파일부터: 코드(R)='IN' + 분류(Q)에 매체코드 있음 → 취소수에 포함
 const GD_IN_RULE_CUTOFF=new Date(2026,4,18,0,0,0).getTime();
 const gdApplyInRule=(uploadTime)=>typeof uploadTime==='number' && uploadTime>=GD_IN_RULE_CUTOFF;
@@ -7651,8 +7686,12 @@ function gdDeleteResult(s){return new Promise((r,j)=>{const tx=gdIdb.transaction
 function gdOpenModal(v){
   document.getElementById('gdModalUpload').classList.toggle('hidden',v!=='upload');
   document.getElementById('gdModalManage').classList.toggle('hidden',v!=='manage');
+  document.getElementById('gdModalRule').classList.toggle('hidden',v!=='rule');
   document.getElementById('gdModalOverlay').classList.add('open');
   if(v==='manage') gdRenderFileHistory();
+  const _mw=document.querySelector('#gdModalOverlay .modal');
+  if(_mw) _mw.style.width=(v==='rule')?'980px':'';
+  if(v==='rule'){ gdRuleDraft=gdGetDbRules().map(r=>({...r})); gdRenderRuleList(); }
   if(v==='upload'){ gdUpdateUploadStatus(); if(typeof gdRefreshDirHandle==='function')gdRefreshDirHandle(); }
 }
 function gdCloseModal(){document.getElementById('gdModalOverlay').classList.remove('open');}
@@ -8448,12 +8487,37 @@ function gdGetMembers(data){
   return {members, cmsGroups, excluded, longAbsentList};
 }
 
-function gdCountDb(data, members, uploadTime, periodStart, periodEnd){
+// ── DB 제외 규칙 (분배일 범위 + 매체코드 부분일치 → 걸린 수량의 n% 제외) ──
+// 저장 형식: [{id, start:'YYYY-MM-DD', end:'YYYY-MM-DD', media:'단어', pct:0~100(제외율), memo, off}]
+function gdGetDbRules(){
+  try{ const a=JSON.parse(localStorage.getItem(GD_DB_RULE_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; }
+}
+function gdSetDbRules(list){ localStorage.setItem(GD_DB_RULE_KEY, JSON.stringify(list)); wmSyncMarkDirty(); }
+function gdRulePct(r){ const v=Number(r&&r.pct); return isNaN(v)?0:Math.min(100,Math.max(0,v)); }
+// 규칙 1건이 특정 DB 행(분배일·매체코드)에 걸리는지
+function gdRuleHits(rule, distDate, mediaCode){
+  if(rule.start){ const sd=parseDate(rule.start); if(sd && distDate.getTime() < new Date(sd.getFullYear(),sd.getMonth(),sd.getDate(),0,0,0,0).getTime()) return false; }
+  if(rule.end){ const ed=parseDate(rule.end); if(ed && distDate.getTime() > new Date(ed.getFullYear(),ed.getMonth(),ed.getDate(),23,59,59,999).getTime()) return false; }
+  const w=String(rule.media||'').trim().toLowerCase();
+  if(w && !String(mediaCode||'').toLowerCase().includes(w)) return false;
+  return true;
+}
+function gdRuleLabel(r){
+  const per=(r.start||r.end)?`${r.start||'처음'} ~ ${r.end||'끝'}`:'전체 기간';
+  const md=String(r.media||'').trim()||'매체 전체';
+  return `${per} · ${md} · ${gdRulePct(r)}% 제외`;
+}
+
+function gdCountDb(data, members, uploadTime, periodStart, periodEnd, ruleCollect){
   // N그룹과 동일 로직 (countDb 참조)
   // DB정보에 'in' 포함 + 매체코드(T) 공란이면 제외 (IN 행은 매체코드가 있어야 산정)
   // periodStart/periodEnd(분배일): 집계기간 입력 시 그 범위만 카운트. 미전달이면 파일 전체.
+  // DB 제외 규칙: 걸린 행은 코디별로 모아 round(건수 × 제외율)만큼 빼고 나머지만 DB수에 반영.
+  //   한 행이 여러 규칙에 걸리면 제외율이 가장 높은 규칙 1건만 적용 (중복 차감 방지)
   const set=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
+  const rules=gdGetDbRules().filter(r=>!r.off && gdRulePct(r)>0);
+  const hitCounts={}; // {name: {ruleIdx: 걸린 건수}}
   const psMs=periodStart ? new Date(periodStart.getFullYear(),periodStart.getMonth(),periodStart.getDate(),0,0,0,0).getTime() : null;
   const peMs=periodEnd ? new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999).getTime() : null;
   for(let i=1;i<data.length;i++){
@@ -8472,8 +8536,31 @@ function gdCountDb(data, members, uploadTime, periodStart, periodEnd){
     if(mediaCode.toLowerCase().includes('talkis')) continue;
     if(isHoliday(distDate)) continue;
     if(!set.has(obName)) continue;
+    if(rules.length>0){
+      let hit=-1, hitPct=-1;
+      for(let k=0;k<rules.length;k++){
+        if(!gdRuleHits(rules[k], distDate, mediaCode)) continue;
+        const pv=gdRulePct(rules[k]);
+        if(pv>hitPct){ hitPct=pv; hit=k; }
+      }
+      if(hit>=0){ (hitCounts[obName]||(hitCounts[obName]={}))[hit]=(hitCounts[obName][hit]||0)+1; continue; }
+    }
     counts[obName]++;
   }
+  // 규칙 대상 행: 반영분(= 걸린 건수 − 제외분)만 되돌려 더함. 반올림은 코디별로 계산.
+  const stat={rules:rules.map(r=>({...r,matched:0,excluded:0})), matched:0, excluded:0, perPerson:{}};
+  for(const name of Object.keys(hitCounts)){
+    for(const kStr of Object.keys(hitCounts[name])){
+      const k=+kStr, m=hitCounts[name][kStr];
+      const ex=Math.round(m*gdRulePct(rules[k])/100);
+      counts[name]+=(m-ex);
+      stat.rules[k].matched+=m; stat.rules[k].excluded+=ex;
+      stat.matched+=m; stat.excluded+=ex;
+      const pp=stat.perPerson[name]||(stat.perPerson[name]={matched:0,excluded:0});
+      pp.matched+=m; pp.excluded+=ex;
+    }
+  }
+  if(ruleCollect) Object.assign(ruleCollect, stat);
   return counts;
 }
 
@@ -9074,7 +9161,8 @@ async function gdGenerate(dbFileId, opts={}){
 
     // 키 상세 수집기 (수정 모드 이름 클릭 시 표시 — 집계 대상 고객키)
     const _contractKeys={}, _banpumKeys={}, _huPreKeys={}, _swapKeys={};
-    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate);
+    const _dbRuleStat={};
+    const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate, _dbRuleStat);
     const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
     const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
 
@@ -9108,10 +9196,14 @@ async function gdGenerate(dbFileId, opts={}){
     const contractAdj=_allContractAdj[_sheetForAdj]||{};
     const _allCancelAdj=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
     const cancelAdj=_allCancelAdj[_sheetForAdj]||{};
+    const _allDbAdj=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+    const dbAdj=_allDbAdj[_sheetForAdj]||{};
 
     const stats={};
     members.forEach(name=>{
-      const db=dbCounts[name]||0;
+      const rawDb=dbCounts[name]||0;
+      const dAdj=dbAdj[name]||0;
+      const db=Math.max(0, rawDb+dAdj);
       const rawCont=contCounts[name]||0;
       const cAdj=contractAdj[name]||0;
       const cont=Math.max(0, rawCont+cAdj);
@@ -9121,7 +9213,7 @@ async function gdGenerate(dbFileId, opts={}){
       const contractRate=db>0?cont/db:0;
       const refAdjContract=cont-cx;                        // 음수 가능
       const refAdjRate=db>0?refAdjContract/db:0;            // 음수 가능
-      stats[name]={db,contract:cont,rawContract:rawCont,contractAdj:cAdj,contractRate,cancelCount:cx,rawCancel:rawCx,cancelAdj:cxAdj,refAdjContract,refAdjRate};
+      stats[name]={db,rawDb,dbAdj:dAdj,contract:cont,rawContract:rawCont,contractAdj:cAdj,contractRate,cancelCount:cx,rawCancel:rawCx,cancelAdj:cxAdj,refAdjContract,refAdjRate};
     });
 
     const {groups,cutlines}=gdAssignGroups(stats);
@@ -9384,7 +9476,7 @@ async function gdGenerate(dbFileId, opts={}){
     });
 
     gdResult={members, stats, groups, streaks, cutlines:finalCutlines,
-      protectedMembers, excluded, longAbsentList,
+      protectedMembers, excluded, longAbsentList, dbRuleStat:_dbRuleStat,
       minDistDate, maxDistDate, detailKeys:_detailKeys,
       dbFileName:dbFile.fileName, contFileName:contFile.fileName,
       dbFileId:dbFile.id, contFileId:contFile.id};
@@ -9437,13 +9529,97 @@ function gdRenderDashboard(){
   gdRenderPeriodRange(); gdRenderExcludedBanner(); gdRenderKPI(); gdRenderGroupSummary(); gdRenderTable(); gdRenderHistory();
   gdRenderLongAbsentEditPanel();
   gdSyncPromoBtnLabel();
+  gdSyncRuleBtnLabel();
+}
+
+// ── DB 제외 규칙 편집 UI ──
+let gdRuleDraft=[];
+function gdRenderRuleList(){
+  const body=document.getElementById('gdRuleBody');
+  if(!body) return;
+  const td='padding:5px 6px;border:1px solid #e2e8f0;text-align:center';
+  const inp='padding:5px 7px;border:1.5px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px';
+  if(gdRuleDraft.length===0){
+    body.innerHTML=`<tr><td colspan="7" style="${td};color:var(--gray);padding:18px 6px">등록된 규칙이 없습니다. [+ 규칙 추가]로 만들어주세요.</td></tr>`;
+  } else {
+    body.innerHTML=gdRuleDraft.map((r,i)=>`<tr${r.off?' style="opacity:.5"':''}>
+      <td style="${td}"><input type="checkbox" ${r.off?'':'checked'} onchange="gdRuleEdit(${i},'off',!this.checked)" style="width:16px;height:16px;cursor:pointer"></td>
+      <td style="${td}"><input type="date" value="${r.start||''}" onchange="gdRuleEdit(${i},'start',this.value)" style="${inp}"></td>
+      <td style="${td}"><input type="date" value="${r.end||''}" onchange="gdRuleEdit(${i},'end',this.value)" style="${inp}"></td>
+      <td style="${td}"><input type="text" value="${String(r.media||'').replace(/"/g,'&quot;')}" placeholder="예: tv_b" onchange="gdRuleEdit(${i},'media',this.value)" style="${inp};width:150px"></td>
+      <td style="${td}"><input type="number" min="0" max="100" step="1" value="${gdRulePct(r)}" onchange="gdRuleEdit(${i},'pct',this.value)" style="${inp};width:78px;text-align:right"> %</td>
+      <td style="${td}"><input type="text" value="${String(r.memo||'').replace(/"/g,'&quot;')}" placeholder="사유 메모" onchange="gdRuleEdit(${i},'memo',this.value)" style="${inp};width:180px"></td>
+      <td style="${td}"><button type="button" class="btn btn-outline btn-sm" style="color:var(--danger);border-color:#fca5a5" onclick="gdDeleteRule(${i})">삭제</button></td>
+    </tr>`).join('');
+  }
+  gdRenderRuleEffect();
+}
+function gdRenderRuleEffect(){
+  const el=document.getElementById('gdRuleEffect');
+  if(!el) return;
+  const st=gdResult?.dbRuleStat;
+  if(!st||!st.rules||st.rules.length===0||!st.matched){ el.innerHTML=''; return; }
+  const lines=st.rules.filter(r=>r.matched>0).map(r=>`<div style="margin-top:3px">· ${gdRuleLabel(r)} → 걸림 ${r.matched.toLocaleString()}건 중 <b style="color:#dc2626">${r.excluded.toLocaleString()}건 제외</b>${r.memo?` <span style="color:#94a3b8">(${r.memo})</span>`:''}</div>`).join('');
+  el.innerHTML=`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:11px 14px;font-size:12.5px;line-height:1.55">
+    <b>현재 회차 적용 결과</b> — 걸린 DB ${st.matched.toLocaleString()}건 중 ${st.excluded.toLocaleString()}건 제외${lines}</div>`;
+}
+function gdRuleEdit(i,key,val){
+  if(!gdRuleDraft[i]) return;
+  if(key==='pct'){ const v=parseInt(String(val).trim(),10); gdRuleDraft[i].pct=isNaN(v)?0:Math.min(100,Math.max(0,v)); }
+  else gdRuleDraft[i][key]=val;
+  if(key==='off') gdRenderRuleList();
+}
+function gdAddRule(){
+  const _d=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const st=gdResult?.minDistDate?_d(gdResult.minDistDate):'';
+  const en=gdResult?.maxDistDate?_d(gdResult.maxDistDate):'';
+  gdRuleDraft.push({id:'r'+Date.now()+Math.floor(Math.random()*1000), start:st, end:en, media:'', pct:100, memo:'', off:false});
+  gdRenderRuleList();
+}
+function gdDeleteRule(i){
+  const r=gdRuleDraft[i];
+  if(!r) return;
+  if(!confirm(`규칙을 삭제하시겠습니까?\n${gdRuleLabel(r)}`)) return;
+  gdRuleDraft.splice(i,1);
+  gdRenderRuleList();
+}
+async function gdSaveRules(){
+  const bad=gdRuleDraft.find(r=>r.start&&r.end&&r.start>r.end);
+  if(bad){ alert('분배일 시작이 종료보다 늦은 규칙이 있습니다.\n'+gdRuleLabel(bad)); return; }
+  const wide=gdRuleDraft.filter(r=>!r.off&&gdRulePct(r)>0&&!String(r.media||'').trim()&&!r.start&&!r.end);
+  if(wide.length>0 && !confirm('기간·매체코드가 모두 비어 있는 규칙이 있습니다.\n전체 DB에 제외율이 적용됩니다. 계속하시겠습니까?')) return;
+  gdSetDbRules(gdRuleDraft.map(r=>({id:r.id,start:r.start||'',end:r.end||'',media:String(r.media||'').trim(),pct:gdRulePct(r),memo:String(r.memo||'').trim(),off:!!r.off})));
+  gdSyncRuleBtnLabel();
+  gdCloseModal();
+  if(gdResult && gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
+}
+function gdSyncRuleBtnLabel(){
+  const btn=document.getElementById('gdBtnDbRule');
+  if(!btn) return;
+  const n=gdGetDbRules().filter(r=>!r.off&&gdRulePct(r)>0).length;
+  btn.textContent=n>0?`DB 제외 규칙 (${n})`:'DB 제외 규칙';
+  btn.style.color=n>0?'#b45309':'';
+  btn.style.borderColor=n>0?'#fcd34d':'';
+  btn.style.fontWeight=n>0?'700':'';
 }
 
 function gdRenderExcludedBanner(){
   const el=document.getElementById('gdExcludedBanner');
   if(!el) return;
+  // DB 제외 규칙 적용 결과 배너 (규칙에 걸린 DB가 있을 때만)
+  let ruleHtml='';
+  const rst=gdResult?.dbRuleStat;
+  if(rst && rst.matched>0){
+    const items=rst.rules.filter(r=>r.matched>0).map(r=>
+      `<span style="display:inline-block;background:#fff;border:1px solid #ddd6fe;border-radius:6px;padding:3px 9px;margin:3px 6px 0 0">${gdRuleLabel(r)} · <b style="color:#dc2626">−${r.excluded.toLocaleString()}건</b> / ${r.matched.toLocaleString()}건${r.memo?` <span style="color:#94a3b8;font-size:11px">(${r.memo})</span>`:''}</span>`).join('');
+    ruleHtml=`<div style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.65">
+      <div style="font-weight:700;color:#5b21b6">✂️ DB 제외 규칙 적용 — 걸린 DB ${rst.matched.toLocaleString()}건 중 ${rst.excluded.toLocaleString()}건 제외
+        <button class="btn btn-outline btn-sm" style="margin-left:8px;padding:2px 10px;font-size:11px" onclick="gdOpenModal('rule')">규칙 관리</button></div>
+      <div style="margin-top:2px">${items}</div>
+    </div>`;
+  }
   const ex=gdResult?.excluded||[];
-  if(ex.length===0){ el.innerHTML=''; return; }
+  if(ex.length===0){ el.innerHTML=ruleHtml; return; }
   const resigned=ex.filter(e=>e.reason==='퇴사');
   const absent=ex.filter(e=>e.reason==='장기공석').sort((a,b)=>b.days-a.days);
   let parts=[];
@@ -9457,7 +9633,7 @@ function gdRenderExcludedBanner(){
       return `<span><span style="font-weight:600">${e.name}</span><span style="color:#94a3b8;font-size:11px">(${e.cmsGroup})</span> <span ${cls}>${e.days}일째${danger?' ⚠':''}</span></span>`;
     }).join(', ')}</div>`);
   }
-  el.innerHTML=`<div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.65">
+  el.innerHTML=ruleHtml+`<div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.65">
     <div style="font-weight:700;color:#92400e">ℹ️ 등급 산정 제외 인원 ${ex.length}명</div>
     ${parts.join('')}
   </div>`;
@@ -9536,6 +9712,8 @@ function gdRenderTable(){
   const contractAdjMap=(_adjSheetName&&_allContractAdjMap[_adjSheetName])||{};
   const _allCancelAdjMap=JSON.parse(localStorage.getItem(GD_CANCEL_ADJ_KEY)||'{}');
   const cancelAdjMap=(_adjSheetName&&_allCancelAdjMap[_adjSheetName])||{};
+  const _allDbAdjMap=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+  const dbAdjMap=(_adjSheetName&&_allDbAdjMap[_adjSheetName])||{};
   // streak 수동 조정값 맵 (글로벌)
   const streakAdjMap=JSON.parse(localStorage.getItem(GD_STREAK_ADJ_KEY)||'{}');
   const t=rows.reduce((a,r)=>({db:a.db+r.db,cont:a.cont+r.contract,cx:a.cx+r.cancelCount,adj:a.adj+r.refAdjContract}),{db:0,cont:0,cx:0,adj:0});
@@ -9561,6 +9739,12 @@ function gdRenderTable(){
     }
     const adjNeg=r.refAdjContract<0;
     const safeName=r.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const dAdj=dbAdjMap[r.name]||0;
+    const _btnCss='width:20px;height:20px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0;font-weight:700;color:#475569';
+    const dAdjBadge=dAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${dAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetDbAdj('${safeName}')">${dAdj>0?'+':''}${dAdj}</span>`:'';
+    const dbCell=gdGroupEditMode
+      ? `<button title="DB수 -1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',-1)">−</button><span title="클릭: DB수 직접 입력" style="margin:0 6px;display:inline-block;min-width:28px;cursor:pointer;border-bottom:1px dashed #94a3b8" onclick="gdPromptDb('${safeName}')">${r.db.toLocaleString()}</span><button title="DB수 +1 (해당 회차)" style="${_btnCss}" onclick="gdAdjustDb('${safeName}',+1)">+</button>${dAdjBadge}`
+      : r.db.toLocaleString();
     const cAdj=contractAdjMap[r.name]||0;
     const cAdjBadge=cAdj!==0?` <span title="회차 수동 조정값 (클릭: 초기화)" style="margin-left:4px;font-size:10px;color:#fff;background:${cAdj>0?'#16a34a':'#dc2626'};padding:1px 6px;border-radius:8px;font-weight:700;cursor:pointer" onclick="gdResetContractAdj('${safeName}')">${cAdj>0?'+':''}${cAdj}</span>`:'';
     const contractCell=gdGroupEditMode
@@ -9579,7 +9763,7 @@ function gdRenderTable(){
     html+=`<tr class="row-${gc.toLowerCase()}">
       <td>${groupCell}</td>
       <td class="name-cell ${gc}">${gdGroupEditMode?`<span style="cursor:pointer;border-bottom:1px dashed currentColor" title="집계 대상 고객키 보기" onclick="gdShowKeyDetail('${safeName}')">${r.name}</span>`:r.name}</td>
-      <td>${r.db.toLocaleString()}</td>
+      <td>${dbCell}</td>
       <td>${contractCell}</td>
       <td>${pct(r.contractRate)}</td>
       <td${(!gdGroupEditMode && r.cancelCount>0)?' style="color:var(--danger);font-weight:700"':''}>${cancelCell}</td>
@@ -9677,8 +9861,8 @@ function gdShowKeyDetail(name){
   ];
 
   const cnt=(label,n,color)=>`<span style="display:inline-block;background:${color};color:#fff;border-radius:10px;padding:1px 9px;font-size:12px;font-weight:700;margin-left:6px">${n}</span>`;
-  const adjNote=((s.contractAdj||0)!==0||(s.cancelAdj||0)!==0)
-    ? `<div style="font-size:12px;color:#b45309;margin-top:6px">※ 이 코디는 수동 조정값이 있습니다 (실계약 ${s.contractAdj>0?'+':''}${s.contractAdj||0} · 취소 ${s.cancelAdj>0?'+':''}${s.cancelAdj||0}). 아래 목록은 <b>원천 집계 대상</b>으로 수동 조정은 미반영입니다.</div>`
+  const adjNote=((s.contractAdj||0)!==0||(s.cancelAdj||0)!==0||(s.dbAdj||0)!==0)
+    ? `<div style="font-size:12px;color:#b45309;margin-top:6px">※ 이 코디는 수동 조정값이 있습니다 (DB수 ${s.dbAdj>0?'+':''}${s.dbAdj||0} · 실계약 ${s.contractAdj>0?'+':''}${s.contractAdj||0} · 취소 ${s.cancelAdj>0?'+':''}${s.cancelAdj||0}). 아래 목록은 <b>원천 집계 대상</b>으로 수동 조정은 미반영입니다.</div>`
     : '';
 
   const keyList=(rows, cols)=>{
@@ -9992,6 +10176,68 @@ async function gdResetCancelAdj(name){
   localStorage.setItem(GD_CANCEL_ADJ_KEY,JSON.stringify(all));
   wmSyncMarkDirty();
   if(gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
+}
+
+// ── 회차별 DB수 수동 조정 (해당 회차에만 적용) ──
+async function gdApplyDbAdj(name, newAdj){
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+  if(!all[sheetName]) all[sheetName]={};
+  all[sheetName][name]=newAdj;
+  if(!newAdj) delete all[sheetName][name];
+  if(Object.keys(all[sheetName]).length===0) delete all[sheetName];
+  localStorage.setItem(GD_DB_ADJ_KEY,JSON.stringify(all));
+  wmSyncMarkDirty();
+  if(gdResult.dbFileId) await gdGenerate(gdResult.dbFileId);
+}
+
+async function gdAdjustDb(name, delta){
+  if(!gdResult || !gdResult.maxDistDate){ alert('먼저 대시보드를 생성해주세요.'); return; }
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+  const cur=(all[sheetName] && all[sheetName][name])||0;
+  const s=gdResult.stats[name]||{};
+  const rawDb=(s.rawDb!==undefined)?s.rawDb:(s.db||0);
+  const newAdj=Math.max(-rawDb, cur+delta);
+  if(newAdj===cur) return;
+  await gdApplyDbAdj(name, newAdj);
+}
+
+// 숫자 클릭 → 목표 DB수 직접 입력 (조정값 = 입력값 − 원천 DB수)
+async function gdPromptDb(name){
+  if(!gdResult || !gdResult.maxDistDate){ alert('먼저 대시보드를 생성해주세요.'); return; }
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+  const cur=(all[sheetName] && all[sheetName][name])||0;
+  const s=gdResult.stats[name]||{};
+  const rawDb=(s.rawDb!==undefined)?s.rawDb:(s.db||0);
+  const curDisp=Math.max(0, rawDb+cur);
+  const input=prompt(`${name} — DB수 직접 입력
+원천 집계: ${rawDb}건${cur!==0?` (현재 조정 ${cur>0?'+':''}${cur})`:''}
+
+반영할 DB수를 입력하세요 (취소 시 변경 없음)`, String(curDisp));
+  if(input===null) return;
+  const v=parseInt(String(input).trim().replace(/,/g,''),10);
+  if(isNaN(v)||v<0){ alert('0 이상의 숫자를 입력해주세요.'); return; }
+  const newAdj=v-rawDb;
+  if(newAdj===cur) return;
+  if(!confirm(`${name}
+DB수: ${curDisp} → ${v}
+조정값: ${cur>0?'+':''}${cur} → ${newAdj>0?'+':''}${newAdj}
+
+해당 회차(${sheetName})에만 적용됩니다. 진행하시겠습니까?`)) return;
+  await gdApplyDbAdj(name, newAdj);
+}
+
+async function gdResetDbAdj(name){
+  if(!gdResult || !gdResult.maxDistDate) return;
+  const sheetName=fmtDateShort(gdResult.maxDistDate);
+  const all=JSON.parse(localStorage.getItem(GD_DB_ADJ_KEY)||'{}');
+  const cur=(all[sheetName] && all[sheetName][name])||0;
+  if(cur===0) return;
+  if(!confirm(`${name}
+DB수 조정값 ${cur>0?'+':''}${cur}을(를) 초기화하시겠습니까?`)) return;
+  await gdApplyDbAdj(name, 0);
 }
 
 async function gdRenderHistory(){
