@@ -668,6 +668,8 @@ table.pd-tbl.sm{font-size:12px;margin-top:4px}
 table.pd-tbl.sm td{padding:5px 8px}
 .pd-neg{color:#dc2626;font-weight:700}.pd-pos{color:#16a34a;font-weight:700}.pd-up{color:#b45309}
 .pd-new{display:inline-block;font-size:10.5px;font-weight:800;background:#ede9fe;color:#6d28d9;padding:1px 7px;border-radius:10px}
+table.pd-tbl thead tr.pd-grp th{background:#0f172a;border-bottom:1px solid #334155}
+table.pd-tbl tr.pd-diff td{background:#f8fafc;font-weight:700;border-top:2px solid #cbd5e1}
 tr.pd-row-neg td{background:#fef2f2}tr.pd-row-pos td{background:#f0fdf4}
 .pd-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
 .pd-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
@@ -2300,9 +2302,9 @@ tr.vc-left:hover{opacity:.75}
 
       <div class="sp-section pd-insight"><h3>요약</h3><div id="pdInsights"></div></div>
       <div class="sp-section"><h3>① 월별 비교 <span class="sub">매월 같은 일자 범위로 자름</span></h3><div class="pd-scroll" id="pdSummary"></div></div>
-      <div class="sp-section"><h3>② 하락 분해 <span class="sub">직전월 패키지×매체 전환율을 유지했다면? → DB 구성 변화(믹스) vs 같은 DB에서 전환 하락</span></h3><div id="pdDecomp"></div></div>
+      <div class="sp-section"><h3>② 하락 분해 <span class="sub">직전월 패키지×매체 계약률을 유지했다면? → DB 구성 변화(믹스) vs 같은 DB에서 계약률 하락</span></h3><div id="pdDecomp"></div></div>
       <div class="sp-section">
-        <h3>③ 어디서 빠졌나 — <span id="pdDimTitle"></span> <span class="sub">전환율 손실 = 기준월 DB × 전환율 증감 (음수 = 계약 손실 건수)</span></h3>
+        <h3>③ 어디서 빠졌나 — <span id="pdDimTitle"></span> <span class="sub">계약 손실 = 기준월 DB수 × 계약률 증감 (음수 = 놓친 계약 건수)</span></h3>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
           <div class="sp-seg" id="pdDimSeg">
             <button class="active" data-dim="pkmg" onclick="pdSetDim('pkmg')">패키지×매체</button>
@@ -2318,8 +2320,8 @@ tr.vc-left:hover{opacity:.75}
         </div>
         <div class="pd-scroll" id="pdDimTable"></div>
       </div>
-      <div class="sp-section"><h3>④ 개인별 — 받은 DB 대비 계약 <span class="sub">기대 = 본인이 받은 DB 구성을 직전 월들 팀 평균 전환율로 계산 · 차이 ±8건 이상 강조</span></h3><div class="pd-scroll" id="pdPerson"></div></div>
-      <div class="sp-section"><h3>⑤ 주차별 추이 <span class="sub">분배 주차 · 3일 내 계약 (최근 주까지 보기 위해 짧게)</span></h3><div class="sp-chart-wrap"><canvas id="pdTrendChart"></canvas></div><div class="pd-scroll" id="pdTrend" style="margin-top:14px"></div></div>
+      <div class="sp-section"><h3>④ 개인별 — 받은 DB 대비 계약 <span class="sub">기대 계약수 = 본인이 받은 DB 구성 × 직전 월들 팀 평균 계약률 · 차이 ±8건 이상 강조</span></h3><div class="pd-scroll" id="pdPerson"></div></div>
+      <div class="sp-section"><h3>⑤ 주차별 추이 <span class="sub">분배 주차 · 계약수 = 분배 후 3일 내 계약 (최근 주까지 보기 위해 짧게)</span></h3><div class="sp-chart-wrap"><canvas id="pdTrendChart"></canvas></div><div class="pd-scroll" id="pdTrend" style="margin-top:14px"></div></div>
     </div>
   </div>
 </div><!-- /page-perf-diag -->
@@ -14331,7 +14333,7 @@ function pdDecompose(rows,prev,tgt,segf){
     const r8=o.p[0]>=PD_MIN_SEG?o.p[1]/o.p[0]:null;
     const exp=r8==null?o.t[1]:o.t[0]*r8;E+=exp;
     if(r8==null){newN+=o.t[0];newC+=o.t[1];}
-    segs.push({seg:s,n8:o.p[0],n9:o.t[0],r8,r9:o.t[1]/o.t[0],c9:o.t[1],loss:o.t[1]-exp,isNew:r8==null});
+    segs.push({seg:s,n8:o.p[0],c8:o.p[1],n9:o.t[0],r8,r9:o.t[1]/o.t[0],c9:o.t[1],loss:o.t[1]-exp,isNew:r8==null});
   }
   const R8=n8?c8/n8:null,R9=n9?c9/n9:null,E9=n9?E/n9:null;
   return {n8,c8,n9,c9,R8,R9,E,mix:(E9!=null&&R8!=null)?E9-R8:null,rate:(R9!=null&&E9!=null)?R9-E9:null,newN,newC,segs};
@@ -14391,11 +14393,11 @@ function pdRender(){
   const warns=[];
   if(pdModel.staleFiles)warns.push(`패키지·매체그룹 정보가 없는 옛 DB 파일 ${pdModel.staleFiles}개가 있어 해당 기간은 「(미수집)」으로 묶입니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
   if(!W.prev)warns.push('비교할 직전월 데이터가 없습니다.');
-  if(!W.cohDay)warns.push(`기준월 분배 DB 중 계약 인정기간(${pdH}일)이 지난 날이 아직 없어 코호트 전환율을 비교할 수 없습니다. 계약 인정기간을 줄이거나 이전 월을 고르세요.`);
+  if(!W.cohDay)warns.push(`기준월 분배 DB 중 계약 인정기간(${pdH}일)이 지난 날이 아직 없어 신규 DB 계약률을 비교할 수 없습니다. 계약 인정기간을 줄이거나 이전 월을 고르세요.`);
   const wb=document.getElementById('pdWarnBar');
   wb.innerHTML=warns.map(w=>'⚠ '+pdEsc(w)).join('<br>');wb.classList.toggle('hidden',!warns.length);
   document.getElementById('pdWinInfo').textContent=
-    `비교 ${W.M.map(pdMLabel).join(' · ')} — 물량·계약: 매월 1~${W.flowDay}일 · 전환율: 매월 1~${W.cohDay}일 분배 신규 DB 중 ${pdHLabel()} 계약 (데이터 ~${pdModel.maxDay})`;
+    `비교 ${W.M.map(pdMLabel).join(' · ')} — 당월 흐름: 매월 1~${W.flowDay}일 · 신규 DB 계약률: 매월 1~${W.cohDay}일 분배 DB 중 ${pdHLabel()} 계약된 비율 (데이터 ~${pdModel.maxDay})`;
   pdRenderSummary(W);
   pdRenderDecomp(W);
   pdRenderDim(W);
@@ -14403,7 +14405,11 @@ function pdRender(){
   pdRenderTrend(W);
 }
 
-// ① 월별 요약 (같은 일자 범위)
+// 공용: DB수 | 계약수 | 계약률 3칸
+function pdTri(n,c,cls){const k=cls?` class="${cls}"`:'';return `<td${k}>${n?pdN(n):'-'}</td><td${k}>${n?pdN(c):'-'}</td><td${k}><b>${n?pdPct(c/n):'-'}</b></td>`;}
+const PD_TRI_H='<th>DB수</th><th>계약수</th><th>계약률</th>';
+
+// ① 월별 비교 (같은 일자 범위) — 월=행, [당월 흐름] / [신규 DB 성과] 각각 DB수|계약수|계약률
 function pdRenderSummary(W){
   const el=document.getElementById('pdSummary');
   const rows=[];
@@ -14414,30 +14420,26 @@ function pdRenderSummary(W){
     const coh=nDb.filter(r=>r.day<=W.cohDay);
     const cc=coh.filter(r=>pdConv(r,pdH)).length;
     const pd=new Set();const ppl=new Set();for(const r of nDb){pd.add(r.name+'|'+r.d);ppl.add(r.name);}
-    const days=new Set(nDb.map(r=>r.d)).size;
-    rows.push({m,newDb:nDb.length,recDb:rDb.length,cont:ct.length,days,flowRate:(nDb.length+rDb.length)?ct.length/(nDb.length+rDb.length):null,
-      cohN:coh.length,cohC:cc,cohR:coh.length?cc/coh.length:null,ppl:ppl.size,perDay:pd.size?nDb.length/pd.size:null,contPerDay:days?ct.length/days:null});
+    rows.push({m,fN:nDb.length+rDb.length,fC:ct.length,cN:coh.length,cC:cc,ppl:ppl.size,perDay:pd.size?nDb.length/pd.size:null});
   }
   const t=rows[rows.length-1],p=rows.length>1?rows[rows.length-2]:null;
-  const defs=[
-    ['신규 DB',r=>pdN(r.newDb),(a,b)=>pdSgn(a.newDb-b.newDb)+` (${pdSgn((a.newDb/b.newDb-1)*100,0)}%)`,null],
-    ['재콜 DB',r=>pdN(r.recDb),(a,b)=>pdSgn(a.recDb-b.recDb),null],
-    ['계약 (신청일 기준)',r=>pdN(r.cont),(a,b)=>pdSgn(a.cont-b.cont)+` (${pdSgn((a.cont/b.cont-1)*100,0)}%)`,(a,b)=>a.cont-b.cont],
-    ['영업일 · 일평균 계약',r=>`${r.days}일 · ${r.contPerDay==null?'-':r.contPerDay.toFixed(1)}`,(a,b)=>pdSgn(a.contPerDay-b.contPerDay,1),(a,b)=>a.contPerDay-b.contPerDay],
-    ['계약 ÷ 분배 DB(신규+재콜)',r=>pdPct(r.flowRate),(a,b)=>pdPp(a.flowRate-b.flowRate),(a,b)=>a.flowRate-b.flowRate],
-    [`<b>신규 DB 전환율</b> (1~${W.cohDay}일 분배·${pdHLabel()})`,r=>`<b>${pdPct(r.cohR)}</b> <span class="pd-meta">${pdN(r.cohC)}/${pdN(r.cohN)}</span>`,(a,b)=>pdPp(a.cohR-b.cohR),(a,b)=>a.cohR-b.cohR],
-    ['활동 코디 (DB 받은 인원)',r=>pdN(r.ppl)+'명',(a,b)=>pdSgn(a.ppl-b.ppl)+'명',null],
-    ['코디 1인·1일당 신규 DB',r=>r.perDay==null?'-':r.perDay.toFixed(1)+'건',(a,b)=>pdSgn(a.perDay-b.perDay,1),null]
-  ];
-  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">지표</th>${rows.map(r=>`<th>${pdMLabel(r.m)}${r.m===W.tgt?' (기준)':''}</th>`).join('')}${p?`<th>${pdMLabel(t.m)} vs ${pdMLabel(p.m)}</th>`:''}</tr></thead><tbody>`+
-    defs.map(([l,f,d,tone])=>`<tr><td style="text-align:left">${l}</td>${rows.map(r=>`<td${r.m===W.tgt?' class="pd-tgt"':''}>${f(r)}</td>`).join('')}${p?`<td class="${tone?pdTone(tone(t,p)):''}">${d(t,p)}</td>`:''}</tr>`).join('')+'</tbody></table>';
+  const rt=(c,n)=>n?c/n:null;
+  const body=rows.map(r=>`<tr><td style="text-align:left;font-weight:700">${pdMLabel(r.m)}${r.m===W.tgt?' (기준)':''}</td>${pdTri(r.fN,r.fC,r.m===W.tgt?'pd-tgt':'')}${pdTri(r.cN,r.cC,r.m===W.tgt?'pd-tgt':'')}<td>${pdN(r.ppl)}명</td><td>${r.perDay==null?'-':r.perDay.toFixed(1)}</td></tr>`).join('');
+  const pctChg=(a,b)=>b?` (${pdSgn((a/b-1)*100,0)}%)`:'';
+  const diff=p?`<tr class="pd-diff"><td style="text-align:left">${pdMLabel(t.m)} vs ${pdMLabel(p.m)}</td>
+    <td>${pdSgn(t.fN-p.fN)}${pctChg(t.fN,p.fN)}</td><td class="${pdTone(t.fC-p.fC)}">${pdSgn(t.fC-p.fC)}${pctChg(t.fC,p.fC)}</td><td class="${pdTone(rt(t.fC,t.fN)-rt(p.fC,p.fN),.0005)}">${pdPp(rt(t.fC,t.fN)-rt(p.fC,p.fN))}</td>
+    <td>${pdSgn(t.cN-p.cN)}${pctChg(t.cN,p.cN)}</td><td class="${pdTone(t.cC-p.cC)}">${pdSgn(t.cC-p.cC)}</td><td class="${pdTone(rt(t.cC,t.cN)-rt(p.cC,p.cN),.0005)}"><b>${pdPp(rt(t.cC,t.cN)-rt(p.cC,p.cN))}</b></td>
+    <td>${pdSgn(t.ppl-p.ppl)}명</td><td>${pdSgn(t.perDay-p.perDay,1)}</td></tr>`:'';
+  el.innerHTML=`<table class="pd-tbl"><thead>
+    <tr class="pd-grp"><th></th><th colspan="3">당월 흐름 · 매월 1~${W.flowDay}일<br><span class="pd-meta-h">DB수 = 분배 신규+재콜 · 계약수 = 신청일 기준</span></th><th colspan="3">신규 DB 성과 · 매월 1~${W.cohDay}일 분배<br><span class="pd-meta-h">계약수 = 그 DB 중 ${pdHLabel()} 계약</span></th><th colspan="2">인력</th></tr>
+    <tr><th style="text-align:left">월</th>${PD_TRI_H}${PD_TRI_H}<th>활동 코디</th><th>1인·1일당 DB수</th></tr></thead><tbody>${body}${diff}</tbody></table>`;
 }
 
 // ② 하락 분해 (팀별 카드) + 자동 요약
 function pdRenderDecomp(W){
   const el=document.getElementById('pdDecomp');const ins=[];
   if(!W.prev||!W.cohDay){el.innerHTML='<div class="pd-meta">비교 불가</div>';pdInsightBase=[];return;}
-  const cards=[];
+  const cards=[];const P8=pdMLabel(W.prev),P9=pdMLabel(W.tgt);
   for(const team of pdTeamsInScope()){
     const rows=pdModel.recs.filter(r=>r.team===team&&r.day<=W.cohDay);
     const d=pdDecompose(rows,W.prev,W.tgt,PD_DIMS.pkmg.f);
@@ -14447,35 +14449,37 @@ function pdRenderDecomp(W){
     const newTop=d.segs.filter(s=>s.isNew).sort((a,b)=>b.n9-a.n9).slice(0,3);
     const lossTop=d.segs.filter(s=>!s.isNew).sort((a,b)=>a.loss-b.loss).slice(0,6);
     const mixShare=drop<0&&d.mix<0?Math.min(100,Math.round(d.mix/drop*100)):null;
-    const verdict=drop>=0?'<span class="pd-pos">하락 없음</span>':(d.mix<=d.rate?'<b>DB 구성 변화(믹스)</b>가 주원인':'<b>같은 DB에서 전환 하락</b>이 주원인');
+    const verdict=drop>=0?'<span class="pd-pos">하락 없음</span>':(d.mix<=d.rate?'<b>DB 구성 변화(믹스)</b>가 주원인':'<b>같은 DB에서 계약률 하락</b>이 주원인');
     cards.push(`<div class="pd-card">
-      <div class="pd-card-h">${pdEsc(pdTeamShort(team))} <span class="pd-meta">${pdMLabel(W.prev)} ${pdPct(d.R8)} → ${pdMLabel(W.tgt)} ${pdPct(d.R9)}</span> <span class="${pdTone(drop)}" style="font-weight:800">${pdPp(drop)}</span></div>
+      <div class="pd-card-h">${pdEsc(pdTeamShort(team))} <span class="pd-meta">계약률 ${P8} ${pdPct(d.R8)} → ${P9} ${pdPct(d.R9)}</span> <span class="${pdTone(drop)}" style="font-weight:800">${pdPp(drop)}</span></div>
+      <table class="pd-tbl sm"><thead><tr><th style="text-align:left">월</th>${PD_TRI_H}</tr></thead><tbody>
+        <tr><td style="text-align:left">${P8}</td>${pdTri(d.n8,d.c8)}</tr><tr><td style="text-align:left">${P9}</td>${pdTri(d.n9,d.c9,'pd-tgt')}</tr></tbody></table>
       <div class="pd-verdict">${verdict}</div>
       <div class="pd-bars">
         <div><span>믹스효과 (DB 구성 변화)</span><b class="${pdTone(d.mix,.0005)}">${pdPp(d.mix)}</b></div>
-        <div><span>전환율효과 (같은 세그 내 하락)</span><b class="${pdTone(d.rate,.0005)}">${pdPp(d.rate)}</b></div>
-        <div><span>${pdMLabel(W.prev)} 전환율 유지 시 기대 계약</span><b>${d.E.toFixed(0)}건 → 실제 ${pdN(d.c9)}건 (${pdSgn(d.c9-d.E)})</b></div>
-        <div><span>계열 기준으로 보면</span><b>믹스 ${pdPp(ds.mix)} · 전환율 ${pdPp(ds.rate)}</b></div>
+        <div><span>계약률 효과 (같은 패키지·매체 안에서 하락)</span><b class="${pdTone(d.rate,.0005)}">${pdPp(d.rate)}</b></div>
+        <div><span>${P8} 계약률 유지 시 기대 계약수</span><b>${d.E.toFixed(0)}건 → 실제 ${pdN(d.c9)}건 (${pdSgn(d.c9-d.E)})</b></div>
+        <div><span>계열 기준으로 보면</span><b>믹스 ${pdPp(ds.mix)} · 계약률 ${pdPp(ds.rate)}</b></div>
       </div>
-      ${d.newN?`<div class="pd-sub-h">직전월에 없던 DB ${pdN(d.newN)}건 · 전환 ${pdPct(d.newC/d.newN)}</div>
-      <table class="pd-tbl sm"><tbody>${newTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td><td>${pdN(s.n9)}건</td><td>${pdPct(s.r9)}</td></tr>`).join('')}</tbody></table>`:''}
-      <div class="pd-sub-h">전환율 하락 손실 상위 (기존 세그)</div>
-      <table class="pd-tbl sm"><thead><tr><th style="text-align:left">패키지 / 매체</th><th>DB ${pdMLabel(W.prev)}→${pdMLabel(W.tgt)}</th><th>전환</th><th>손실</th></tr></thead><tbody>${lossTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td><td>${pdN(s.n8)}→${pdN(s.n9)}</td><td>${pdPct(s.r8,1)}→${pdPct(s.r9,1)}</td><td class="${pdTone(s.loss)}">${pdSgn(s.loss,1)}</td></tr>`).join('')}</tbody></table>
+      ${d.newN?`<div class="pd-sub-h">직전월에 없던 DB — DB수 ${pdN(d.newN)} · 계약수 ${pdN(d.newC)} · 계약률 ${pdPct(d.newC/d.newN)}</div>
+      <table class="pd-tbl sm"><thead><tr><th style="text-align:left">패키지 / 매체</th>${PD_TRI_H}</tr></thead><tbody>${newTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td>${pdTri(s.n9,s.c9)}</tr>`).join('')}</tbody></table>`:''}
+      <div class="pd-sub-h">계약률 하락 손실 상위 (기존 패키지·매체)</div>
+      <table class="pd-tbl sm"><thead><tr><th style="text-align:left">패키지 / 매체</th><th>DB수<br><span class="pd-meta-h">${P8}→${P9}</span></th><th>계약수<br><span class="pd-meta-h">${P8}→${P9}</span></th><th>계약률<br><span class="pd-meta-h">${P8}→${P9}</span></th><th>계약 손실</th></tr></thead><tbody>${lossTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td><td>${pdN(s.n8)}→${pdN(s.n9)}</td><td>${pdN(s.c8)}→${pdN(s.c9)}</td><td>${pdPct(s.r8,1)}→${pdPct(s.r9,1)}</td><td class="${pdTone(s.loss)}">${pdSgn(s.loss,1)}</td></tr>`).join('')}</tbody></table>
     </div>`);
     // 자동 요약 문장
     if(drop<0){
-      let s=`<b>${pdEsc(pdTeamShort(team))}</b>: 신규 DB 전환율 ${pdPct(d.R8)} → ${pdPct(d.R9)} (${pdPp(drop)}). `;
+      let s=`<b>${pdEsc(pdTeamShort(team))}</b>: 신규 DB 계약률 ${pdPct(d.R8)} → ${pdPct(d.R9)} (${pdPp(drop)}). `;
       if(mixShare!=null&&mixShare>=50){
-        s+=`하락의 약 ${mixShare}%가 <b>DB 구성 변화</b> — 직전월에 없던 DB ${pdN(d.newN)}건(전환 ${pdPct(d.newC/d.newN)})이 유입`;
+        s+=`하락의 약 ${mixShare}%가 <b>DB 구성 변화</b> — 직전월에 없던 DB ${pdN(d.newN)}건(계약 ${pdN(d.newC)}건, 계약률 ${pdPct(d.newC/d.newN)})이 유입`;
         if(newTop.length)s+=`, 최다: ${pdEsc(newTop[0].seg)} ${pdN(newTop[0].n9)}건`;
         s+='.';
       }else{
         const g=lossTop[0];
-        s+=`<b>같은 패키지·매체 안에서 전환이 하락</b>한 몫이 큼(${pdPp(d.rate)})`;
-        if(g)s+=` — 최대 손실: ${pdEsc(g.seg)} (DB ${pdN(g.n8)}→${pdN(g.n9)}, ${pdPct(g.r8,1)}→${pdPct(g.r9,1)})`;
+        s+=`<b>같은 패키지·매체 안에서 계약률이 하락</b>한 몫이 큼(${pdPp(d.rate)})`;
+        if(g)s+=` — 최대 손실: ${pdEsc(g.seg)} (DB수 ${pdN(g.n8)}→${pdN(g.n9)}, 계약률 ${pdPct(g.r8,1)}→${pdPct(g.r9,1)})`;
         s+='.';
       }
-      s+=` ${pdMLabel(W.prev)} 전환율이 유지됐다면 계약 ${pdSgn(d.E-d.c9)}건 더.`;
+      s+=` ${P8} 계약률이 유지됐다면 계약 ${pdSgn(d.E-d.c9)}건 더.`;
       ins.push(s);
     }
   }
@@ -14486,10 +14490,10 @@ function pdRenderDecomp(W){
 let pdInsightBase=[];
 function pdRenderInsights(extra){
   const all=pdInsightBase.concat(extra||[]);
-  document.getElementById('pdInsights').innerHTML=all.length?'<ul>'+all.map(s=>`<li>${s}</li>`).join('')+'</ul>':'<div class="pd-meta">기준월 전환율이 직전월보다 낮지 않습니다.</div>';
+  document.getElementById('pdInsights').innerHTML=all.length?'<ul>'+all.map(s=>`<li>${s}</li>`).join('')+'</ul>':'<div class="pd-meta">기준월 계약률이 직전월보다 낮지 않습니다.</div>';
 }
 
-// ③ 차원별 비교
+// ③ 차원별 비교 — 월마다 DB수|계약수|계약률
 function pdRenderDim(W){
   const el=document.getElementById('pdDimTable');
   document.getElementById('pdDimTitle').textContent=PD_DIMS[pdDim].label;
@@ -14509,13 +14513,15 @@ function pdRenderDim(W){
   }
   out.sort((a,b)=>(a.loss==null)-(b.loss==null)||(a.loss??0)-(b.loss??0)||b.nt-a.nt);
   const tp=W.prev?pdMLabel(W.prev):'';const tt=pdMLabel(W.tgt);
-  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">${pdEsc(PD_DIMS[pdDim].label)}</th>${W.M.map(m=>`<th>${pdMLabel(m)} DB</th><th>${pdMLabel(m)} 전환</th>`).join('')}<th>DB 증감<br><span class="pd-meta-h">${tt}−${tp}</span></th><th>전환 증감</th><th>전환율 손실<br><span class="pd-meta-h">${tt} DB×증감</span></th></tr></thead><tbody>`+
-    out.map(x=>`<tr><td style="text-align:left">${pdEsc(x.k)}</td>${W.M.map(m=>{const b=x.o[m];return `<td${m===W.tgt?' class="pd-tgt"':''}>${b?pdN(b[0]):'-'}</td><td${m===W.tgt?' class="pd-tgt"':''}>${b&&b[0]?pdPct(b[1]/b[0]):'-'}</td>`;}).join('')}
+  el.innerHTML=`<table class="pd-tbl"><thead>
+    <tr class="pd-grp"><th></th>${W.M.map(m=>`<th colspan="3">${pdMLabel(m)}${m===W.tgt?' (기준)':''}</th>`).join('')}<th colspan="3">${tt} vs ${tp}</th></tr>
+    <tr><th style="text-align:left">${pdEsc(PD_DIMS[pdDim].label)}</th>${W.M.map(()=>PD_TRI_H).join('')}<th>DB수 증감</th><th>계약률 증감</th><th>계약 손실<br><span class="pd-meta-h">${tt} DB수×증감</span></th></tr></thead><tbody>`+
+    out.map(x=>`<tr><td style="text-align:left">${pdEsc(x.k)}</td>${W.M.map(m=>{const b=x.o[m]||[0,0];return pdTri(b[0],b[1],m===W.tgt?'pd-tgt':'');}).join('')}
       <td class="${x.ddb>0?'pd-up':''}">${pdSgn(x.ddb)}</td><td class="${pdTone(x.dr,.0005)}">${x.rp==null?'<span class="pd-new">신규</span>':pdPp(x.dr)}</td><td class="${pdTone(x.loss,.5)}"><b>${x.loss==null?'-':pdSgn(x.loss,1)}</b></td></tr>`).join('')+
     `</tbody></table>${out.length?'':'<div class="pd-meta" style="padding:10px">표시할 행이 없습니다 (최소 DB수 조건 확인)</div>'}`;
 }
 
-// ④ 개인별 — 받은 DB 구성 기준 기대 계약 vs 실제
+// ④ 개인별 — 받은 DB 구성 기준 기대 계약수 vs 실제
 function pdRenderPerson(W){
   const el=document.getElementById('pdPerson');
   if(!W.cohDay||W.M.length<2){el.innerHTML='<div class="pd-meta">비교 불가</div>';pdRenderInsights([]);return;}
@@ -14539,15 +14545,18 @@ function pdRenderPerson(W){
   }
   const list=Array.from(P.values()).filter(p=>p.n>=50).map(p=>({...p,gap:p.c-p.e,perDay:p.days.size?p.n/p.days.size:0})).sort((a,b)=>a.gap-b.gap);
   const bad=list.filter(p=>p.gap<=-8),good=list.filter(p=>p.gap>=8);
-  el.innerHTML=`<table class="pd-tbl"><thead><tr><th>#</th><th style="text-align:left">코디</th><th>팀</th><th>센터</th><th>${pdMLabel(W.prev)} DB</th><th>${pdMLabel(W.prev)} 전환</th><th>${pdMLabel(W.tgt)} DB</th><th>1일당 DB</th><th>기대 전환<br><span class="pd-meta-h">받은 DB 구성 기준</span></th><th>실제 전환</th><th>기대 계약</th><th>실제 계약</th><th>차이</th></tr></thead><tbody>`+
-    list.map((p,i)=>`<tr class="${p.gap<=-8?'pd-row-neg':p.gap>=8?'pd-row-pos':''}"><td>${i+1}</td><td style="text-align:left;font-weight:700">${pdEsc(p.name.replace(/^\(.*?\)/,''))}</td><td>${pdEsc(pdTeamShort(p.team))}</td><td>${pdEsc(p.ctr)}</td><td>${pdN(p.pn)}</td><td>${p.pn?pdPct(p.pc/p.pn,1):'-'}</td><td>${pdN(p.n)}</td><td>${p.perDay.toFixed(1)}</td><td>${pdPct(p.e/p.n)}</td><td><b>${pdPct(p.c/p.n)}</b></td><td>${p.e.toFixed(1)}</td><td>${pdN(p.c)}</td><td class="${pdTone(p.gap,.5)}"><b>${pdSgn(p.gap,1)}</b></td></tr>`).join('')+'</tbody></table>';
+  const P8=pdMLabel(W.prev),P9=pdMLabel(W.tgt);
+  el.innerHTML=`<table class="pd-tbl"><thead>
+    <tr class="pd-grp"><th colspan="4"></th><th colspan="3">${P8}</th><th colspan="3">${P9} (기준)</th><th colspan="4">받은 DB 구성 기준 기대</th></tr>
+    <tr><th>#</th><th style="text-align:left">코디</th><th>팀</th><th>센터</th>${PD_TRI_H}${PD_TRI_H}<th>1일당 DB수</th><th>기대 계약률</th><th>기대 계약수</th><th>차이</th></tr></thead><tbody>`+
+    list.map((p,i)=>`<tr class="${p.gap<=-8?'pd-row-neg':p.gap>=8?'pd-row-pos':''}"><td>${i+1}</td><td style="text-align:left;font-weight:700">${pdEsc(p.name.replace(/^\(.*?\)/,''))}</td><td>${pdEsc(pdTeamShort(p.team))}</td><td>${pdEsc(p.ctr)}</td>${pdTri(p.pn,p.pc)}${pdTri(p.n,p.c,'pd-tgt')}<td>${p.perDay.toFixed(1)}</td><td>${pdPct(p.e/p.n)}</td><td>${p.e.toFixed(1)}</td><td class="${pdTone(p.gap,.5)}"><b>${pdSgn(p.gap,1)}</b></td></tr>`).join('')+'</tbody></table>';
   const extra=[];
   if(bad.length){const sum=bad.reduce((s,p)=>s+p.gap,0);const tot=list.reduce((s,p)=>s+p.gap,0);
-    extra.push(`<b>개인 편차</b>: 받은 DB 구성 대비 계약이 8건 이상 모자란 코디 ${bad.length}명(${bad.slice(0,7).map(p=>pdEsc(p.name.replace(/^\(.*?\)/,''))).join('·')}${bad.length>7?' 외':''}) 합계 ${pdSgn(sum,0)}건${tot<0?` (전체 순부족 ${pdSgn(tot,0)}건 — 하락이 이 인원에 집중)`:''}.`+(good.length?` 반대로 ${good.length}명은 기대보다 +8건 이상.`:''));}
+    extra.push(`<b>개인 편차</b>: 받은 DB 구성 대비 계약수가 8건 이상 모자란 코디 ${bad.length}명(${bad.slice(0,7).map(p=>pdEsc(p.name.replace(/^\(.*?\)/,''))).join('·')}${bad.length>7?' 외':''}) 합계 ${pdSgn(sum,0)}건${tot<0?` (전체 순부족 ${pdSgn(tot,0)}건 — 하락이 이 인원에 집중)`:''}.`+(good.length?` 반대로 ${good.length}명은 기대보다 +8건 이상.`:''));}
   // 1인당 물량 변화
   const load=m=>{const pd=new Set();let n=0;for(const r of pdModel.recs){if(r.m!==m||r.day>W.flowDay||!pdPassTeam(r.team))continue;n++;pd.add(r.name+'|'+r.d);}return pd.size?n/pd.size:null;};
   const l8=load(W.prev),l9=load(W.tgt);
-  if(l8&&l9&&l9/l8>1.15)extra.push(`<b>물량</b>: 코디 1인·1일당 신규 DB ${l8.toFixed(1)} → ${l9.toFixed(1)}건 (${pdSgn((l9/l8-1)*100,0)}%). 늘어난 DB를 소화하지 못한 코디에서 전환 하락이 집중되는지 아래 개인표로 확인.`);
+  if(l8&&l9&&l9/l8>1.15)extra.push(`<b>물량</b>: 코디 1인·1일당 신규 DB수 ${l8.toFixed(1)} → ${l9.toFixed(1)}건 (${pdSgn((l9/l8-1)*100,0)}%). 늘어난 DB를 소화하지 못한 코디에서 계약률 하락이 집중되는지 아래 개인표로 확인.`);
   pdRenderInsights(extra);
 }
 
@@ -14561,21 +14570,23 @@ function pdRenderTrend(W){
   for(const r of pdModel.recs){
     if(r.d<from||r.d>lim||!pdPassTeam(r.team))continue;
     const w=spWeekKey(r.d);let o=T.get(w);if(!o){o={};T.set(w,o);}
-    for(const k of [r.team,'_all']){const b=o[k]||(o[k]=[0,0]);b[0]++;if(pdConv(r,PD_TREND_H))b[1]++;}
+    const b=o[r.team]||(o[r.team]=[0,0]);b[0]++;if(pdConv(r,PD_TREND_H))b[1]++;
   }
   const weeks=Array.from(T.keys()).sort();
-  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">분배 주차</th>${teams.map(t=>`<th>${pdEsc(pdTeamShort(t))} DB</th><th>${pdEsc(pdTeamShort(t))} ${PD_TREND_H}일내 전환</th>`).join('')}</tr></thead><tbody>`+
-    weeks.map(w=>`<tr><td style="text-align:left">${spWeekLabel(w)}</td>${teams.map(t=>{const b=T.get(w)[t]||[0,0];return `<td>${pdN(b[0])}</td><td>${b[0]?pdPct(b[1]/b[0]):'-'}</td>`;}).join('')}</tr>`).join('')+'</tbody></table>';
+  el.innerHTML=`<table class="pd-tbl"><thead>
+    <tr class="pd-grp"><th></th>${teams.map(t=>`<th colspan="3">${pdEsc(pdTeamShort(t))}</th>`).join('')}</tr>
+    <tr><th style="text-align:left">분배 주차</th>${teams.map(()=>PD_TRI_H).join('')}</tr></thead><tbody>`+
+    weeks.map(w=>`<tr><td style="text-align:left">${spWeekLabel(w)}</td>${teams.map(t=>{const b=T.get(w)[t]||[0,0];return pdTri(b[0],b[1]);}).join('')}</tr>`).join('')+'</tbody></table>';
   const cv=document.getElementById('pdTrendChart');
   if(pdChart){pdChart.destroy();pdChart=null;}
   if(typeof Chart==='undefined'||!cv)return;
   const colors=['#4361EE','#2EC4B6','#F0920E'];
   const ds=[];
-  teams.forEach((t,i)=>ds.push({type:'bar',label:pdTeamShort(t)+' 신규DB',data:weeks.map(w=>(T.get(w)[t]||[0])[0]),backgroundColor:colors[i]+'55',yAxisID:'y',stack:'db'}));
-  teams.forEach((t,i)=>ds.push({type:'line',label:pdTeamShort(t)+' 전환율',data:weeks.map(w=>{const b=T.get(w)[t];return b&&b[0]?+(b[1]/b[0]*100).toFixed(2):null;}),borderColor:colors[i],backgroundColor:colors[i],yAxisID:'y1',tension:.25,pointRadius:3}));
+  teams.forEach((t,i)=>ds.push({type:'bar',label:pdTeamShort(t)+' DB수',data:weeks.map(w=>(T.get(w)[t]||[0])[0]),backgroundColor:colors[i]+'55',yAxisID:'y',stack:'db'}));
+  teams.forEach((t,i)=>ds.push({type:'line',label:pdTeamShort(t)+' 계약률',data:weeks.map(w=>{const b=T.get(w)[t];return b&&b[0]?+(b[1]/b[0]*100).toFixed(2):null;}),borderColor:colors[i],backgroundColor:colors[i],yAxisID:'y1',tension:.25,pointRadius:3}));
   pdChart=new Chart(cv.getContext('2d'),{data:{labels:weeks.map(spWeekLabel),datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     plugins:{datalabels:{display:false},legend:{position:'bottom'}},
-    scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:PD_TREND_H+'일내 전환율(%)'},ticks:{callback:v=>v+'%'}}}}});
+    scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB수'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률(%, '+PD_TREND_H+'일 내 계약)'},ticks:{callback:v=>v+'%'}}}}});
 }
 
 async function pdDownloadExcel(){
@@ -14586,7 +14597,7 @@ async function pdDownloadExcel(){
   for(const [id,label] of secs){
     const tbls=document.querySelectorAll('#'+id+' table');if(!tbls.length)continue;
     const aoa=[];
-    tbls.forEach((tbl,i)=>{if(i)aoa.push([]);for(const tr of tbl.rows)aoa.push(Array.from(tr.cells).map(td=>td.innerText.replace(/\n/g,' ').trim()));});
+    tbls.forEach((tbl,i)=>{if(i)aoa.push([]);for(const tr of tbl.rows){const row=[];for(const td of tr.cells){row.push(td.innerText.replace(/\n/g,' ').trim());for(let k=1;k<(td.colSpan||1);k++)row.push('');}aoa.push(row);}});
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     cdStyleWs(ws,tbls[0]);
     XLSX.utils.book_append_sheet(wb,ws,label.slice(0,31));
