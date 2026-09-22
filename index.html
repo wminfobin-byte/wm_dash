@@ -670,6 +670,10 @@ table.pd-tbl.sm td{padding:5px 8px}
 .pd-new{display:inline-block;font-size:10.5px;font-weight:800;background:#ede9fe;color:#6d28d9;padding:1px 7px;border-radius:10px}
 table.pd-tbl thead tr.pd-grp th{background:#0f172a;border-bottom:1px solid #334155}
 table.pd-tbl tr.pd-diff td{background:#f8fafc;font-weight:700;border-top:2px solid #cbd5e1}
+table.pd-tbl thead tr:last-child th{cursor:pointer;user-select:none}
+table.pd-tbl thead tr:last-child th:hover{background:#334155}
+table.pd-tbl th.pd-sort-asc::after{content:' ▲';font-size:9px}
+table.pd-tbl th.pd-sort-desc::after{content:' ▼';font-size:9px}
 tr.pd-row-neg td{background:#fef2f2}tr.pd-row-pos td{background:#f0fdf4}
 .pd-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
 .pd-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
@@ -14384,8 +14388,8 @@ function pdGenerate(){
 function pdSetTeam(t){pdTeam=t;document.querySelectorAll('#pdTeamSeg button').forEach(b=>b.classList.toggle('active',b.dataset.team===t));pdRender();}
 function pdSetH(h){pdH=h;document.querySelectorAll('#pdHSeg button').forEach(b=>b.classList.toggle('active',+b.dataset.h===h));pdRender();}
 function pdSetMonth(m){pdMonth=m;pdRender();}
-function pdSetMinN(v){pdMinN=+v||0;pdRenderDim(pdWindows());}
-function pdSetDim(d){pdDim=d;document.querySelectorAll('#pdDimSeg button').forEach(b=>b.classList.toggle('active',b.dataset.dim===d));pdRenderDim(pdWindows());}
+function pdSetMinN(v){pdMinN=+v||0;pdRenderDim(pdWindows());pdApplySorts();}
+function pdSetDim(d){pdDim=d;document.querySelectorAll('#pdDimSeg button').forEach(b=>b.classList.toggle('active',b.dataset.dim===d));pdRenderDim(pdWindows());pdApplySorts();}
 
 function pdRender(){
   if(!pdModel||!pdModel.months.length)return;
@@ -14403,6 +14407,7 @@ function pdRender(){
   pdRenderDim(W);
   pdRenderPerson(W);
   pdRenderTrend(W);
+  pdApplySorts();
 }
 
 // 공용: DB수 | 계약수 | 계약률 3칸
@@ -14588,6 +14593,45 @@ function pdRenderTrend(W){
     plugins:{datalabels:{display:false},legend:{position:'bottom'}},
     scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB수'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률(%, '+PD_TREND_H+'일 내 계약)'},ticks:{callback:v=>v+'%'}}}}});
 }
+
+// 표 머리 클릭 정렬 — 성과진단 모든 표 공통. 마지막 헤더행의 칸 = 본문 칸(병합 없음).
+// 상태는 (컨테이너id#표순번)별로 기억해 필터 변경으로 다시 그려도 유지. pd-diff(증감) 행은 항상 맨 아래.
+const pdSort={};
+function pdCellVal(td){
+  let t=(td?td.textContent:'').trim();
+  if(t.includes('→'))t=t.slice(t.lastIndexOf('→')+1).trim();   // "282→2,161" = 기준월 값으로 정렬
+  const n=t.replace(/−/g,'-').replace(/,/g,'').match(/^[+\-]?\d+(?:\.\d+)?/);
+  return n?parseFloat(n[0]):(t===''||t==='-'?null:t);
+}
+function pdSortTable(tbl,col,dir){
+  const tb=tbl.tBodies[0];if(!tb)return;
+  const rows=Array.from(tb.rows);
+  const pinned=rows.filter(r=>r.classList.contains('pd-diff')),body=rows.filter(r=>!r.classList.contains('pd-diff'));
+  body.sort((a,b)=>{
+    const x=pdCellVal(a.cells[col]),y=pdCellVal(b.cells[col]);
+    if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;   // 빈 값은 방향과 무관하게 아래
+    const c=(typeof x==='number'&&typeof y==='number')?x-y:String(x).localeCompare(String(y),'ko');
+    return dir==='asc'?c:-c;
+  });
+  for(const r of body.concat(pinned))tb.appendChild(r);
+  const hr=tbl.tHead.rows[tbl.tHead.rows.length-1];
+  Array.from(hr.cells).forEach((th,i)=>{th.classList.toggle('pd-sort-asc',i===col&&dir==='asc');th.classList.toggle('pd-sort-desc',i===col&&dir==='desc');});
+}
+function pdSortKey(tbl){const box=tbl.parentElement.closest('[id]');return box.id+'#'+Array.from(box.querySelectorAll('table.pd-tbl')).indexOf(tbl);}
+function pdApplySorts(){
+  document.querySelectorAll('#pdDashboard table.pd-tbl').forEach(tbl=>{
+    if(!tbl.tHead)return;const st=pdSort[pdSortKey(tbl)];
+    if(st&&st.col<tbl.tHead.rows[tbl.tHead.rows.length-1].cells.length)pdSortTable(tbl,st.col,st.dir);
+  });
+}
+document.addEventListener('click',e=>{
+  const th=e.target.closest&&e.target.closest('#pdDashboard table.pd-tbl thead tr:last-child th');if(!th)return;
+  const tbl=th.closest('table'),col=th.cellIndex,k=pdSortKey(tbl),cur=pdSort[k];
+  let dir;
+  if(cur&&cur.col===col)dir=cur.dir==='asc'?'desc':'asc';
+  else{let v=null;for(const r of tbl.tBodies[0]?tbl.tBodies[0].rows:[]){v=pdCellVal(r.cells[col]);if(v!=null)break;}dir=typeof v==='number'?'desc':'asc';}
+  pdSort[k]={col,dir};pdSortTable(tbl,col,dir);
+});
 
 async function pdDownloadExcel(){
   if(!pdModel){alert('데이터가 없습니다.');return;}
