@@ -163,6 +163,21 @@ DB수는 파일 집계값을 그대로 쓰지 않고 **① 전역 제외 규칙 
 - **핵심 함수**: `spCompute()`(roster/keyMeta/dbRecs/grossRecs/netRecs 빌드), `spAggBySeries`/`spPerPerson`(집계), `spJudge`(판정), `spRender*`(섹션별 렌더), `spDrill`(세그먼트), `spDownloadExcel`.
 - **공용폴더 자동 연동 (File System Access API)**: 네트워크 공유드라이브 폴더를 1회 지정하면 **탭 열 때마다 자동 스캔**해 신규 엑셀을 가져옴. GitHub Pages(HTTPS)·Chromium 계열에서만 동작. 디렉터리 핸들은 IDB `handles` 스토어(`SP_DB_VER` 2)에 영구 보관. 권한은 페이지 새로고침 후 첫 1회 `requestPermission`(사용자 제스처=「지금 스캔」클릭) 필요, 이후 같은 세션은 무인 스캔. 타입 판별=하위폴더명 우선(`DB수/실계약/취소반영/명단`)→파일명 보조(신청자관리는 날짜 8자리=일마감·6자리=월간누적). 중복은 fileHash(name|size)로 스킵, `~$` 임시파일·비 .xlsx 무시, attend는 파일명 최신 1개만. 폴더 진입 단계에서 **알려진 타입(db/contDaily/contCum/attend) 폴더에만** 들어가고 무관 폴더(일일성과 등)는 진입 안 함(노이즈 방지). 월간누적도 자동 스캔 대상(월별 최신본은 `spCompute`가 선택, 중복은 fileHash로 스킵). 판별 실패 파일은 **미인식 모달(`spShowSkipModal`/`spSkipOverlay`)**로 파일명·폴더 표시(배너 「미인식 N개 보기」 링크 또는 사용자 직접 스캔 시 자동 표시). 가져온 파일은 기존 인제스트(`spIngestFile`)·클라우드 싱크에 그대로 합류. 탭 화면 상단 **배너(`spDirBanner`/`spSetBanner`)**: 권한 필요 시 원클릭 「공용폴더 새로고침」 버튼(클릭 제스처로 `requestPermission` 발동), 자동 스캔으로 신규 유입 시 결과 피드백, 신규 0건 무인 스캔이면 숨김. 드릴 모달은 ESC로 닫힘·6계열 한 줄(max-width 1160px). 핵심 함수: `spConnectFolder`/`spScanFolder`/`spAutoScanOnShow`/`spDetectType`/`spVerifyPerm`/`spUpdateDirStatus`/`spSetBanner`/`spShowSkipModal`.
 
+### sp DB 파서 v2 (`SP_DB_PARSER_VER`)
+
+DB 행에 **패키지 `pk`(U=20)·매체그룹 `mg`(S=18)**를 추가했다(성과진단 탭용, 문자열은 `spIntern`으로 공유). 파일 레코드에 `pv`를 남기고 싱크에도 싣는다. `spIngestFile`이 같은 fileHash라도 `pv`가 낮은 db 파일이면 **지우고 다시 파싱**한다 — 폴더에 실제로 있는 파일만 교체되므로 폴더에 없는 옛 업로드분은 유실되지 않는다(대신 그 기간은 성과진단에서 `(미수집)`으로 묶임). 파싱 필드를 또 바꾸면 이 값을 올릴 것.
+
+## 성과진단 탭 (pd* 네임스페이스)
+
+계열별성과 옆. "이번 달 성과가 왜 빠졌나"를 **센터·코디·패키지·매체·계열·연령대**로 쪼개 보는 분석 뷰. **자체 업로드·IDB·싱크 슬라이스가 없다** — 계열별성과(sp)의 `spFiles`(DB수·일마감·월간누적·명단)를 그대로 읽는다. 탭 열 때 sp 공용폴더를 스캔(`pdCheckFolder`)한다.
+
+- **핵심 지표 = 신규 DB 코호트 전환율**: 분배일 1~N일 신규(비재콜·IN/콜백 제외) DB 중 분배 후 H일(기본 7, 당일/3/14 토글) 안에 신청된 비율. 신청일은 고객키 조인(일마감 우선·월간누적 보조). **월마다 같은 일자 범위(N = 데이터 마지막일 − H)**로 잘라 성숙도 차이를 없앤다. 계약 '건수'만 보면 DB가 늘어난 달이 좋아 보이므로(2026-09 실제 사례: 계약 +21%, 전환율 −1.5%p) 반드시 전환율로 비교할 것.
+- **하락 분해 (`pdDecompose`)**: 직전월 **패키지×매체그룹** 세그 전환율 × 기준월 물량 = 기대치. 기대−직전 = **믹스효과**(DB 구성 변화), 실제−기대 = **전환율효과**(같은 세그 안에서 덜 팔림). 직전월 표본 < `PD_MIN_SEG`(30)인 세그는 '신규 세그'로 보고 믹스에 넣는다. 계열 기준 분해도 같이 표시(계열은 패키지 미스매치를 못 잡아 믹스가 과소 추정됨).
+- **개인별 (`pdRenderPerson`)**: 본인이 받은 DB 구성을 직전 월들의 **팀×세그 전환율**로 환산한 기대 계약 vs 실제. ±8건 이상 강조. 늘어난 DB를 못 소화한 사람을 가려낸다.
+- **팀 귀속** = 최신 명단(`spBuildRoster`)의 담당. 팀 토글: 뇌새김 전체(영어+제2) / 영어 / 제2외국어 / 톡이즈.
+- 섹션: 요약(자동 문장) → ① 월별 비교 → ② 하락 분해 카드 → ③ 차원별 표(`PD_DIMS`, 전환율 손실 = 기준월 DB × 증감) → ④ 개인별 → ⑤ 주차별 추이(3일 내 계약, `PD_TREND_H`). 엑셀 = 섹션별 시트.
+- 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin·admin) + 헤더 `headerRight-perf-diag`(`syncBtn13`).
+
 ## 타임보드성과 탭 (tb* 네임스페이스)
 
 부재인입↔유입분석 사이(부재인입 옆)에 배치. **naver_tb 타임보드 DB**를 **집행 시간대(8am/1pm 등)별·영어/제2외국어별로** 계약 성과를 본다. 기준 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`timeboardDashboard` v1, `files` 스토어). **공용폴더는 계열별성과(sp)와 같은 핸들 재사용**(`spDirHandle`/`spIdbGetHandle`/`spIdbPutHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tb` 독립 슬라이스, `tbCollectSync`/`tbRestoreSync`, 헤더 `syncBtn8`) — 폴더 없는 PC/사람도 봄. sp와 같은 파일을 읽으므로 싱크에 일부 중복되나 청크 분할로 감당.

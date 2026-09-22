@@ -653,6 +653,31 @@ tr.row-h td{background:var(--gh-light)}
 
 /* ═══════════ 계열별성과 (sp) ═══════════ */
 #page-series-perf .container{max-width:100%;padding:24px 36px}
+/* ── 성과진단 (pd*) ── */
+#page-perf-diag .container{max-width:100%;padding:24px 36px}
+.pd-sel{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer}
+.pd-meta{font-size:12px;color:var(--gray);font-weight:500}
+.pd-meta-h{font-size:10px;font-weight:500;opacity:.75}
+.pd-scroll{overflow-x:auto}
+table.pd-tbl{border-collapse:collapse;width:100%;font-size:12.5px}
+table.pd-tbl th,table.pd-tbl td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid #eef1f6;border-right:1px solid #f1f5f9}
+table.pd-tbl thead th{background:#1e293b;color:#fff;font-size:11.5px;font-weight:700;text-align:center;position:sticky;top:0}
+table.pd-tbl tbody tr:hover td{background:#f8fafc}
+table.pd-tbl td.pd-tgt{background:#f5f7ff}
+table.pd-tbl.sm{font-size:12px;margin-top:4px}
+table.pd-tbl.sm td{padding:5px 8px}
+.pd-neg{color:#dc2626;font-weight:700}.pd-pos{color:#16a34a;font-weight:700}.pd-up{color:#b45309}
+.pd-new{display:inline-block;font-size:10.5px;font-weight:800;background:#ede9fe;color:#6d28d9;padding:1px 7px;border-radius:10px}
+tr.pd-row-neg td{background:#fef2f2}tr.pd-row-pos td{background:#f0fdf4}
+.pd-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+.pd-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px}
+.pd-card-h{font-size:16px;font-weight:800;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.pd-verdict{margin:8px 0 10px;font-size:13px}
+.pd-bars>div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #eef1f6;font-size:13px}
+.pd-bars span{color:var(--gray)}
+.pd-sub-h{font-size:12.5px;font-weight:800;margin:12px 0 2px}
+.pd-insight ul{margin:0;padding-left:20px;line-height:1.75;font-size:13.5px}
+@media (max-width:760px){#page-perf-diag .container{padding:16px}.pd-card-grid{grid-template-columns:1fr}}
 .sp-control-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border-radius:12px;padding:12px 16px;box-shadow:0 2px 10px rgba(0,0,0,.05);position:sticky;top:0;z-index:30}
 .sp-control-bar label{font-size:12px;font-weight:700;color:var(--gray)}
 .sp-control-bar input[type=date]{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px}
@@ -1031,6 +1056,12 @@ tr.vc-left:hover{opacity:.75}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn6">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-perf-diag" style="display:none">
+    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">계열별성과 데이터 사용</span>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn13">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
   <div class="header-right" id="headerRight-timeboard-perf" style="display:none">
     <div class="status-dots" id="tbStatusDots" title="파일 상태: DB수 / 계약(일마감) / 명단">
       <div class="status-dot" id="tb-dot-db"></div>
@@ -1091,6 +1122,7 @@ tr.vc-left:hover{opacity:.75}
   <div class="tab-item" data-page="cancel-dash" onclick="switchPage('cancel-dash')">WM 취소율</div>
   <div class="tab-item" data-page="via-cancel" onclick="switchPage('via-cancel')">Via 취소율</div>
   <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
+  <div class="tab-item" data-page="perf-diag" onclick="switchPage('perf-diag')">성과진단</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
@@ -2227,6 +2259,71 @@ tr.vc-left:hover{opacity:.75}
 </div><!-- /page-missed-call -->
 
 <!-- ═══ Page: 타임보드성과 ═══ -->
+<!-- ═══ Page: 성과진단 (pd*) — 계열별성과 데이터를 읽는 분석 뷰 ═══ -->
+<div class="page" id="page-perf-diag">
+  <div class="container">
+    <div id="pdDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="pdDirBannerMsg" style="font-size:13px;font-weight:600;color:#92400e"></span>
+      <button class="btn btn-primary btn-sm" id="pdDirBannerBtn" onclick="pdRefreshFolder()">📁 공용폴더 새로고침</button>
+    </div>
+    <div id="pdEmpty" class="sp-empty">
+      <div style="font-size:48px;margin-bottom:16px;opacity:.5">🔎</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">분석할 데이터가 없습니다</div>
+      <div style="font-size:14px">성과진단은 <b>계열별성과</b> 탭의 데이터(DB수·실계약·취소반영·명단)를 그대로 씁니다. 계열별성과 탭에서 공용폴더를 연결하거나 파일을 업로드하세요.</div>
+    </div>
+    <div class="hidden" id="pdDashboard">
+      <div class="sp-control-bar">
+        <label>기준월</label>
+        <select id="pdMonthSel" onchange="pdSetMonth(this.value)" class="pd-sel"></select>
+        <div class="sp-divider"></div>
+        <label>담당</label>
+        <div class="sp-seg" id="pdTeamSeg">
+          <button class="active" data-team="nsg" onclick="pdSetTeam('nsg')">뇌새김 전체</button>
+          <button data-team="뇌새김영어" onclick="pdSetTeam('뇌새김영어')">영어</button>
+          <button data-team="제2외국어" onclick="pdSetTeam('제2외국어')">제2외국어</button>
+          <button data-team="톡이즈" onclick="pdSetTeam('톡이즈')">톡이즈</button>
+        </div>
+        <div class="sp-divider"></div>
+        <label>계약 인정</label>
+        <div class="sp-seg" id="pdHSeg">
+          <button data-h="0" onclick="pdSetH(0)">당일</button>
+          <button data-h="3" onclick="pdSetH(3)">3일</button>
+          <button class="active" data-h="7" onclick="pdSetH(7)">7일</button>
+          <button data-h="14" onclick="pdSetH(14)">14일</button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="sp-btn green" onclick="pdDownloadExcel()">📥 엑셀</button>
+        <button class="sp-btn" onclick="pdModel=null;pdGenerate()">🔄 재분석</button>
+      </div>
+      <div id="pdWinInfo" class="pd-meta" style="margin:10px 4px 0"></div>
+      <div id="pdWarnBar" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:12px;font-size:13px"></div>
+
+      <div class="sp-section pd-insight"><h3>요약</h3><div id="pdInsights"></div></div>
+      <div class="sp-section"><h3>① 월별 비교 <span class="sub">매월 같은 일자 범위로 자름</span></h3><div class="pd-scroll" id="pdSummary"></div></div>
+      <div class="sp-section"><h3>② 하락 분해 <span class="sub">직전월 패키지×매체 전환율을 유지했다면? → DB 구성 변화(믹스) vs 같은 DB에서 전환 하락</span></h3><div id="pdDecomp"></div></div>
+      <div class="sp-section">
+        <h3>③ 어디서 빠졌나 — <span id="pdDimTitle"></span> <span class="sub">전환율 손실 = 기준월 DB × 전환율 증감 (음수 = 계약 손실 건수)</span></h3>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <div class="sp-seg" id="pdDimSeg">
+            <button class="active" data-dim="pkmg" onclick="pdSetDim('pkmg')">패키지×매체</button>
+            <button data-dim="pk" onclick="pdSetDim('pk')">패키지</button>
+            <button data-dim="mg" onclick="pdSetDim('mg')">매체그룹</button>
+            <button data-dim="ctr" onclick="pdSetDim('ctr')">센터</button>
+            <button data-dim="se" onclick="pdSetDim('se')">계열</button>
+            <button data-dim="ag" onclick="pdSetDim('ag')">연령대</button>
+            <button data-dim="name" onclick="pdSetDim('name')">코디</button>
+          </div>
+          <label class="pd-meta">최소 DB(3개월 합)</label>
+          <select class="pd-sel" onchange="pdSetMinN(this.value)"><option value="0">전체</option><option value="50">50</option><option value="100" selected>100</option><option value="300">300</option></select>
+        </div>
+        <div class="pd-scroll" id="pdDimTable"></div>
+      </div>
+      <div class="sp-section"><h3>④ 개인별 — 받은 DB 대비 계약 <span class="sub">기대 = 본인이 받은 DB 구성을 직전 월들 팀 평균 전환율로 계산 · 차이 ±8건 이상 강조</span></h3><div class="pd-scroll" id="pdPerson"></div></div>
+      <div class="sp-section"><h3>⑤ 주차별 추이 <span class="sub">분배 주차 · 3일 내 계약 (최근 주까지 보기 위해 짧게)</span></h3><div class="sp-chart-wrap"><canvas id="pdTrendChart"></canvas></div><div class="pd-scroll" id="pdTrend" style="margin-top:14px"></div></div>
+    </div>
+  </div>
+</div><!-- /page-perf-diag -->
+
 <div class="page" id="page-timeboard-perf">
   <!-- Modal -->
   <div class="modal-overlay" id="tbModalOverlay" onclick="if(event.target===this)tbCloseModal()">
@@ -2910,8 +3007,8 @@ tr.vc-left:hover{opacity:.75}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
-  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -3450,8 +3547,8 @@ function showSyncActions(token){
   if(ck)ck.checked=localStorage.getItem(WM_AUTOPULL_KEY)!=='0';
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -3561,7 +3658,7 @@ function wmSyncToggleAutoPull(on){localStorage.setItem(WM_AUTOPULL_KEY,on?'1':'0
 async function doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12').forEach(b=>b.disabled=true);
+    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>b.disabled=true);
 
     // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
     const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
@@ -4101,6 +4198,8 @@ function switchPage(pageId){
   if(hrMc) hrMc.style.display = pageId==='missed-call' ? 'flex' : 'none';
   const hrSp=document.getElementById('headerRight-series-perf');
   if(hrSp) hrSp.style.display = pageId==='series-perf' ? 'flex' : 'none';
+  const hrPd=document.getElementById('headerRight-perf-diag');
+  if(hrPd) hrPd.style.display = pageId==='perf-diag' ? 'flex' : 'none';
   const hrTb=document.getElementById('headerRight-timeboard-perf');
   if(hrTb) hrTb.style.display = pageId==='timeboard-perf' ? 'flex' : 'none';
   const hrTz=document.getElementById('headerRight-talkis-perf');
@@ -4118,6 +4217,7 @@ function switchPage(pageId){
   if(pageId==='missed-call' && typeof mcOnShow==='function') mcOnShow();
   if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
   if(pageId==='timeboard-perf' && typeof tbOnShow==='function') tbOnShow();
+  if(pageId==='perf-diag' && typeof pdOnShow==='function') pdOnShow();
   if(pageId==='talkis-perf' && typeof tzOnShow==='function') tzOnShow();
   if(pageId==='grade-dash' && typeof gdAutoScanOnShow==='function') gdAutoScanOnShow();
 }
@@ -13204,6 +13304,11 @@ function spGapTitle(db,cont,s){
 
 // ── 파서 (업로드 시 슬림 행으로 변환) ──
 function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
+// DB 파서 버전 — 파싱 필드를 바꾸면 올릴 것. 공용폴더 스캔 때 pv가 낮은 db 파일을 같은 파일로 재파싱한다.
+// v2 = 패키지(U)·매체그룹(S) 추가 (성과진단 탭)
+const SP_DB_PARSER_VER=2;
+const _spIntern=new Map();
+function spIntern(s){let v=_spIntern.get(s);if(v===undefined){v=s;_spIntern.set(s,s);}return v;}
 function spParseDb(wb){
   const aoa=spReadAOA(wb),rows=[];
   for(let i=1;i<aoa.length;i++){
@@ -13220,7 +13325,9 @@ function spParseDb(wb){
       d:spNormDay(r[8]),
       rc:dbinfo.includes('재콜')?1:0,
       in:media===''?1:0,
-      mx:(media.includes('callback')||media.includes('tv_b'))?1:0
+      mx:(media.includes('callback')||media.includes('tv_b'))?1:0,
+      pk:spIntern(String(r[20]==null?'':r[20]).trim()),
+      mg:spIntern(String(r[18]==null?'':r[18]).trim())
     });
   }
   return rows;
@@ -13295,6 +13402,8 @@ async function spResetAll(){if(!confirm('계열별성과의 모든 업로드 파
 // ════════════ 파일 인제스트 (수동 업로드·폴더 스캔 공통) ════════════
 async function spIngestFile(type,file){
   const fileHash=`${file.name}|${file.size}`;
+  // 구버전 파서로 읽은 같은 db 파일은 지우고 다시 파싱 (폴더에 실제로 있는 파일만 교체되므로 데이터 유실 없음)
+  if(type==='db'){const old=spFiles.find(f=>f.type==='db'&&f.fileHash===fileHash&&(f.pv||1)<SP_DB_PARSER_VER);if(old){await spIdbDel(old.id);spFiles=spFiles.filter(f=>f!==old);}}
   if(type!=='attend'&&spFiles.some(f=>f.type===type&&f.fileHash===fileHash))return {status:'dup',name:file.name};
   if(type==='attend'){const cur=spFilesByType('attend')[0];if(cur&&cur.fileHash===fileHash)return {status:'dup',name:file.name};}
   const buf=await file.arrayBuffer();
@@ -13306,6 +13415,7 @@ async function spIngestFile(type,file){
   if(type==='attend'){for(const f of spFilesByType('attend')){await spIdbDel(f.id);}spFiles=spFiles.filter(f=>f.type!=='attend');}
   const rec={type,fileName:file.name,fileHash,uploadTime:Date.now(),rows,rowsCount:rows.length};
   if(type==='contCum')rec.ym=spParseYm(file.name);
+  if(type==='db')rec.pv=SP_DB_PARSER_VER;
   const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
   return {status:'ok',name:file.name};
 }
@@ -13532,7 +13642,7 @@ function spBindUploadBoxes(){
 
 // ── 로드 / 클라우드 싱크 ──
 async function spLoadFiles(){try{await spOpenIDB();spFiles=await spIdbGetAll();spLoaded=true;spUpdateUploadStatus();}catch(e){console.error('계열별성과 IDB 로드:',e);}}
-function spCollectSync(){return (spFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,ym:f.ym}));}
+function spCollectSync(){return (spFiles||[]).map(f=>({type:f.type,fileName:f.fileName,fileHash:f.fileHash,uploadTime:f.uploadTime,rows:f.rows,ym:f.ym,pv:f.pv}));}
 async function spRestoreSync(arr){
   if(!Array.isArray(arr))return;
   if(!spIdb)await spOpenIDB();
@@ -13540,6 +13650,7 @@ async function spRestoreSync(arr){
   for(const f of arr){
     const rec={type:f.type,fileName:f.fileName,fileHash:f.fileHash||`${f.fileName}|0`,uploadTime:f.uploadTime||Date.now(),rows:f.rows||[],rowsCount:(f.rows||[]).length};
     if(f.ym)rec.ym=f.ym;
+    if(f.pv)rec.pv=f.pv;
     const id=await spIdbAdd(rec);rec.id=id;spFiles.push(rec);
     if(window.wmLoadRowTick)wmLoadRowTick(rec.rowsCount||1);
   }
@@ -14106,6 +14217,388 @@ async function spDownloadExcel(){
     const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6},mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
   }catch(err){console.warn('눈금선 제거 실패, 기본 저장',err);XLSX.writeFile(wb,fname,{bookSST:true});}
+}
+
+// ════════════════════════════════════════════════════════════
+//  성과진단 (pd*) — 월간 성과 하락 원인 분석
+//  데이터: 계열별성과(sp)의 저장 파일(DB수·일마감·월간누적·명단)을 그대로 읽는 분석 전용 뷰.
+//          별도 업로드·IDB·싱크 슬라이스 없음. 패키지(U)·매체그룹(S)은 sp 파서 v2부터 수집.
+//  핵심 지표 = 코호트 전환율: 신규 DB(분배일 1~N일) 중 분배 후 H일 이내 계약된 비율.
+//          월마다 같은 일자 범위·같은 계약 인정기간으로 잘라 성숙도 차이를 없앤다.
+//  하락 분해: 직전월 세그먼트(패키지×매체그룹) 전환율로 기준월 물량을 다시 계산한 기대치와 비교
+//          → 믹스효과(DB 구성 변화) / 전환율효과(같은 세그 안에서 덜 팔림)
+// ════════════════════════════════════════════════════════════
+const PD_TEAMS=['뇌새김영어','제2외국어','톡이즈'];
+const PD_MIN_SEG=30;      // 세그먼트 전환율을 기준으로 쓸 최소 DB수 (미만이면 '신규 세그'로 보고 믹스로 분류)
+const PD_TREND_H=3;       // 주차 추이는 최근 주까지 보이도록 3일 이내 계약으로 본다
+let pdModel=null, pdTeam='nsg', pdH=7, pdMonth='', pdDim='pkmg', pdMinN=100, pdChart=null;
+
+function pdEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function pdUtc(d){return Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10));}
+function pdDD(a,b){return Math.round((pdUtc(a)-pdUtc(b))/864e5);}
+function pdAddDays(d,n){return new Date(pdUtc(d)+n*864e5).toISOString().slice(0,10);}
+function pdPct(r,dec=2){return r==null||!isFinite(r)?'-':(r*100).toFixed(dec)+'%';}
+function pdPp(x){if(x==null||!isFinite(x))return '-';const v=x*100;return (v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(2)+'%p';}
+function pdSgn(n,dec=0){if(n==null||!isFinite(n))return '-';const f=Math.pow(10,dec),r=Math.round(n*f)/f;return (r>0?'+':r<0?'−':'')+Math.abs(r).toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec});}
+function pdN(n){return (n||0).toLocaleString();}
+function pdTone(x,thr=0){return x==null?'':x<-thr?'pd-neg':x>thr?'pd-pos':'';}
+function pdHLabel(){return pdH===0?'당일':pdH+'일 내';}
+function pdMLabel(m){return m?`${+m.slice(5,7)}월`:'';}
+function pdPassTeam(t){return pdTeam==='nsg'?(t==='뇌새김영어'||t==='제2외국어'):t===pdTeam;}
+function pdTeamsInScope(){return pdTeam==='nsg'?['뇌새김영어','제2외국어']:[pdTeam];}
+function pdTeamShort(t){return t==='뇌새김영어'?'영어':t==='제2외국어'?'제2외국어':t;}
+const PD_DIMS={
+  pkmg:{label:'패키지 × 매체',f:r=>r.pk+' / '+r.mg},
+  pk:{label:'패키지',f:r=>r.pk},
+  mg:{label:'매체그룹',f:r=>r.mg},
+  ctr:{label:'센터',f:r=>r.ctr||'-'},
+  se:{label:'계열',f:r=>r.se>=0?r.se+'계열':'미상'},
+  ag:{label:'연령대',f:r=>r.ag==='00'?'미상(00)':r.ag+'대'},
+  name:{label:'코디',f:r=>r.name}
+};
+
+function pdCompute(){
+  const roster=spBuildRoster();
+  // 계약 신청일 — 고객키별 최초 신청일 (일마감 우선, 월간누적 보조)
+  const app=new Map();
+  const put=(k,d)=>{if(!k||!d)return;const c=app.get(k);if(!c||d<c)app.set(k,d);};
+  const daily=spFilesByType('contDaily');
+  for(const f of daily)for(const r of f.rows)put(r.k,r.d);
+  const dailyHashes=new Set(daily.map(f=>f.fileHash));
+  for(const f of spFilesByType('contCum'))if(!dailyHashes.has(f.fileHash))for(const r of f.rows)put(r.k,r.d);
+  // 계약(신청일 기준 flow) — 일마감 고객키 dedup, IN(분류 빈값) 제외, 담당자 귀속
+  const conts=[];const seenC=new Set();let maxDay='';
+  for(const f of daily)for(const r of f.rows){
+    if(!r.k||seenC.has(r.k))continue;seenC.add(r.k);
+    if(r.in||!r.d)continue;
+    const ent=spCanon(roster,r.mgr);if(!ent||!PD_TEAMS.includes(ent.team))continue;
+    conts.push({d:r.d,m:r.d.slice(0,7),day:+r.d.slice(8,10),name:ent.nm,team:ent.team,ctr:ent.ctr});
+    if(r.d>maxDay)maxDay=r.d;
+  }
+  // DB — 고객키 dedup, IN·callback/tv_b 제외. 신규(비재콜)만 코호트 모수, 재콜은 물량만 센다
+  const dbFiles=spFilesByType('db').slice().sort((a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:(a.uploadTime||0)-(b.uploadTime||0)));
+  const recs=[],recall=[];const seen=new Set();let staleFiles=0,noRoster=0;
+  for(const f of dbFiles){
+    if((f.pv||1)<SP_DB_PARSER_VER)staleFiles++;
+    for(const r of f.rows){
+      if(!r.k||seen.has(r.k))continue;seen.add(r.k);
+      if(r.in||r.mx||!r.d)continue;
+      const ent=spCanon(roster,r.ob);if(!ent||!PD_TEAMS.includes(ent.team)){noRoster++;continue;}
+      if(r.d>maxDay)maxDay=r.d;
+      const base={d:r.d,m:r.d.slice(0,7),day:+r.d.slice(8,10),name:ent.nm,team:ent.team,ctr:ent.ctr};
+      if(r.rc){recall.push(base);continue;}
+      const a=app.get(r.k);const lag=a?pdDD(a,r.d):null;
+      base.se=r.se;base.ag=r.ag||'00';
+      base.pk=r.pk==null?'(미수집)':(r.pk||'(없음)');
+      base.mg=r.mg==null?'(미수집)':(r.mg||'(없음)');
+      base.lag=(lag!=null&&lag>=0)?lag:null;
+      recs.push(base);
+    }
+  }
+  const months=Array.from(new Set(recs.map(r=>r.m))).sort();
+  pdModel={recs,recall,conts,months,maxDay,staleFiles,dbFileCnt:dbFiles.length,noRoster};
+  return pdModel;
+}
+
+// 기준월·비교월·일자 창 계산
+function pdWindows(){
+  const ms=pdModel.months;
+  const tgt=pdMonth&&ms.includes(pdMonth)?pdMonth:ms[ms.length-1];
+  const i=ms.indexOf(tgt);
+  const M=ms.slice(Math.max(0,i-2),i+1);
+  const maxDay=pdModel.maxDay;
+  const lastOf=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).getUTCDate();
+  // flow 창: 기준월이 데이터 마지막 달이면 1~마지막 일자, 아니면 월 전체
+  const flowDay=maxDay.slice(0,7)===tgt?+maxDay.slice(8,10):lastOf(tgt);
+  // 코호트 창: 분배 후 H일이 지나야 성숙 → 1~(마지막일−H)
+  const mature=pdAddDays(maxDay,-pdH);
+  let cohDay;
+  if(mature.slice(0,7)>tgt)cohDay=lastOf(tgt);
+  else if(mature.slice(0,7)===tgt)cohDay=+mature.slice(8,10);
+  else cohDay=0;
+  return {tgt,prev:M.length>1?M[M.length-2]:null,M,flowDay,cohDay};
+}
+const pdConv=(r,h)=>r.lag!=null&&r.lag<=h;
+
+// 하락 분해: prev 세그 전환율 × tgt 물량 = 기대. prev 표본 부족 세그는 tgt 실적 그대로(=믹스)
+function pdDecompose(rows,prev,tgt,segf){
+  const S=new Map();
+  for(const r of rows){if(r.m!==prev&&r.m!==tgt)continue;const s=segf(r);let o=S.get(s);if(!o){o={p:[0,0],t:[0,0]};S.set(s,o);}const b=r.m===tgt?o.t:o.p;b[0]++;if(pdConv(r,pdH))b[1]++;}
+  let n8=0,c8=0,n9=0,c9=0,E=0,newN=0,newC=0;const segs=[];
+  for(const [s,o] of S){
+    n8+=o.p[0];c8+=o.p[1];n9+=o.t[0];c9+=o.t[1];
+    if(!o.t[0])continue;
+    const r8=o.p[0]>=PD_MIN_SEG?o.p[1]/o.p[0]:null;
+    const exp=r8==null?o.t[1]:o.t[0]*r8;E+=exp;
+    if(r8==null){newN+=o.t[0];newC+=o.t[1];}
+    segs.push({seg:s,n8:o.p[0],n9:o.t[0],r8,r9:o.t[1]/o.t[0],c9:o.t[1],loss:o.t[1]-exp,isNew:r8==null});
+  }
+  const R8=n8?c8/n8:null,R9=n9?c9/n9:null,E9=n9?E/n9:null;
+  return {n8,c8,n9,c9,R8,R9,E,mix:(E9!=null&&R8!=null)?E9-R8:null,rate:(R9!=null&&E9!=null)?R9-E9:null,newN,newC,segs};
+}
+
+async function pdOnShow(){
+  if(!spLoaded)await spLoadFiles();
+  await pdCheckFolder(false);
+  if(!spFilesByType('db').length||!spFilesByType('attend').length){
+    document.getElementById('pdDashboard').classList.add('hidden');
+    document.getElementById('pdEmpty').classList.remove('hidden');
+    return;
+  }
+  if(!pdModel)pdGenerate();else pdRender();
+}
+// 공용폴더(계열별성과와 공유) 최신화. 권한이 없으면 배너로 안내.
+async function pdCheckFolder(request){
+  const b=document.getElementById('pdDirBanner'),msg=document.getElementById('pdDirBannerMsg'),btn=document.getElementById('pdDirBannerBtn');
+  const show=(text,busy)=>{b.classList.remove('hidden');msg.innerHTML=text;btn.disabled=!!busy;btn.style.display=busy?'none':'';};
+  try{
+    if(!window.showDirectoryPicker){b.classList.add('hidden');return;}
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=spDirHandle||await spIdbGetHandle();
+    if(!spDirHandle){b.classList.add('hidden');return;}
+    // 탭 진입(클릭) 제스처로 권한 재요청 — 계열별성과 탭과 같은 방식
+    if(await spVerifyPerm(spDirHandle,true)){
+      const stale=spFilesByType('db').filter(f=>(f.pv||1)<SP_DB_PARSER_VER).length;
+      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 패키지·매체 포함으로 다시 읽습니다 (처음 한 번, 수 분 소요)`:'⏳ 공용폴더 확인 중…',true);
+      const r=await spScanFolder({request:false,announce:false,fromShow:!request});
+      if(r&&r.okCnt>0)pdModel=null;
+      b.classList.add('hidden');
+    }else show('📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요',false);
+  }catch(e){console.error('성과진단 폴더 확인',e);b.classList.add('hidden');}
+}
+async function pdRefreshFolder(){await pdCheckFolder(true);pdModel=null;pdOnShow();}
+function pdGenerate(){
+  const t0=performance.now();
+  pdCompute();
+  const sel=document.getElementById('pdMonthSel');
+  const ms=pdModel.months;
+  if(!pdMonth||!ms.includes(pdMonth))pdMonth=ms[ms.length-1]||'';
+  sel.innerHTML=ms.slice().reverse().map(m=>`<option value="${m}"${m===pdMonth?' selected':''}>${m.slice(0,4)}년 ${pdMLabel(m)}</option>`).join('');
+  document.getElementById('pdEmpty').classList.add('hidden');
+  document.getElementById('pdDashboard').classList.remove('hidden');
+  pdRender();
+  console.log(`[성과진단] 계산 ${(performance.now()-t0).toFixed(0)}ms · 신규DB ${pdModel.recs.length.toLocaleString()}건`);
+}
+function pdSetTeam(t){pdTeam=t;document.querySelectorAll('#pdTeamSeg button').forEach(b=>b.classList.toggle('active',b.dataset.team===t));pdRender();}
+function pdSetH(h){pdH=h;document.querySelectorAll('#pdHSeg button').forEach(b=>b.classList.toggle('active',+b.dataset.h===h));pdRender();}
+function pdSetMonth(m){pdMonth=m;pdRender();}
+function pdSetMinN(v){pdMinN=+v||0;pdRenderDim(pdWindows());}
+function pdSetDim(d){pdDim=d;document.querySelectorAll('#pdDimSeg button').forEach(b=>b.classList.toggle('active',b.dataset.dim===d));pdRenderDim(pdWindows());}
+
+function pdRender(){
+  if(!pdModel||!pdModel.months.length)return;
+  const W=pdWindows();
+  const warns=[];
+  if(pdModel.staleFiles)warns.push(`패키지·매체그룹 정보가 없는 옛 DB 파일 ${pdModel.staleFiles}개가 있어 해당 기간은 「(미수집)」으로 묶입니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
+  if(!W.prev)warns.push('비교할 직전월 데이터가 없습니다.');
+  if(!W.cohDay)warns.push(`기준월 분배 DB 중 계약 인정기간(${pdH}일)이 지난 날이 아직 없어 코호트 전환율을 비교할 수 없습니다. 계약 인정기간을 줄이거나 이전 월을 고르세요.`);
+  const wb=document.getElementById('pdWarnBar');
+  wb.innerHTML=warns.map(w=>'⚠ '+pdEsc(w)).join('<br>');wb.classList.toggle('hidden',!warns.length);
+  document.getElementById('pdWinInfo').textContent=
+    `비교 ${W.M.map(pdMLabel).join(' · ')} — 물량·계약: 매월 1~${W.flowDay}일 · 전환율: 매월 1~${W.cohDay}일 분배 신규 DB 중 ${pdHLabel()} 계약 (데이터 ~${pdModel.maxDay})`;
+  pdRenderSummary(W);
+  pdRenderDecomp(W);
+  pdRenderDim(W);
+  pdRenderPerson(W);
+  pdRenderTrend(W);
+}
+
+// ① 월별 요약 (같은 일자 범위)
+function pdRenderSummary(W){
+  const el=document.getElementById('pdSummary');
+  const rows=[];
+  for(const m of W.M){
+    const nDb=pdModel.recs.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
+    const rDb=pdModel.recall.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
+    const ct=pdModel.conts.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
+    const coh=nDb.filter(r=>r.day<=W.cohDay);
+    const cc=coh.filter(r=>pdConv(r,pdH)).length;
+    const pd=new Set();const ppl=new Set();for(const r of nDb){pd.add(r.name+'|'+r.d);ppl.add(r.name);}
+    const days=new Set(nDb.map(r=>r.d)).size;
+    rows.push({m,newDb:nDb.length,recDb:rDb.length,cont:ct.length,days,flowRate:(nDb.length+rDb.length)?ct.length/(nDb.length+rDb.length):null,
+      cohN:coh.length,cohC:cc,cohR:coh.length?cc/coh.length:null,ppl:ppl.size,perDay:pd.size?nDb.length/pd.size:null,contPerDay:days?ct.length/days:null});
+  }
+  const t=rows[rows.length-1],p=rows.length>1?rows[rows.length-2]:null;
+  const defs=[
+    ['신규 DB',r=>pdN(r.newDb),(a,b)=>pdSgn(a.newDb-b.newDb)+` (${pdSgn((a.newDb/b.newDb-1)*100,0)}%)`,null],
+    ['재콜 DB',r=>pdN(r.recDb),(a,b)=>pdSgn(a.recDb-b.recDb),null],
+    ['계약 (신청일 기준)',r=>pdN(r.cont),(a,b)=>pdSgn(a.cont-b.cont)+` (${pdSgn((a.cont/b.cont-1)*100,0)}%)`,(a,b)=>a.cont-b.cont],
+    ['영업일 · 일평균 계약',r=>`${r.days}일 · ${r.contPerDay==null?'-':r.contPerDay.toFixed(1)}`,(a,b)=>pdSgn(a.contPerDay-b.contPerDay,1),(a,b)=>a.contPerDay-b.contPerDay],
+    ['계약 ÷ 분배 DB(신규+재콜)',r=>pdPct(r.flowRate),(a,b)=>pdPp(a.flowRate-b.flowRate),(a,b)=>a.flowRate-b.flowRate],
+    [`<b>신규 DB 전환율</b> (1~${W.cohDay}일 분배·${pdHLabel()})`,r=>`<b>${pdPct(r.cohR)}</b> <span class="pd-meta">${pdN(r.cohC)}/${pdN(r.cohN)}</span>`,(a,b)=>pdPp(a.cohR-b.cohR),(a,b)=>a.cohR-b.cohR],
+    ['활동 코디 (DB 받은 인원)',r=>pdN(r.ppl)+'명',(a,b)=>pdSgn(a.ppl-b.ppl)+'명',null],
+    ['코디 1인·1일당 신규 DB',r=>r.perDay==null?'-':r.perDay.toFixed(1)+'건',(a,b)=>pdSgn(a.perDay-b.perDay,1),null]
+  ];
+  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">지표</th>${rows.map(r=>`<th>${pdMLabel(r.m)}${r.m===W.tgt?' (기준)':''}</th>`).join('')}${p?`<th>${pdMLabel(t.m)} vs ${pdMLabel(p.m)}</th>`:''}</tr></thead><tbody>`+
+    defs.map(([l,f,d,tone])=>`<tr><td style="text-align:left">${l}</td>${rows.map(r=>`<td${r.m===W.tgt?' class="pd-tgt"':''}>${f(r)}</td>`).join('')}${p?`<td class="${tone?pdTone(tone(t,p)):''}">${d(t,p)}</td>`:''}</tr>`).join('')+'</tbody></table>';
+}
+
+// ② 하락 분해 (팀별 카드) + 자동 요약
+function pdRenderDecomp(W){
+  const el=document.getElementById('pdDecomp');const ins=[];
+  if(!W.prev||!W.cohDay){el.innerHTML='<div class="pd-meta">비교 불가</div>';pdInsightBase=[];return;}
+  const cards=[];
+  for(const team of pdTeamsInScope()){
+    const rows=pdModel.recs.filter(r=>r.team===team&&r.day<=W.cohDay);
+    const d=pdDecompose(rows,W.prev,W.tgt,PD_DIMS.pkmg.f);
+    const ds=pdDecompose(rows,W.prev,W.tgt,PD_DIMS.se.f);
+    if(!d.n9||!d.n8)continue;
+    const drop=d.R9-d.R8;
+    const newTop=d.segs.filter(s=>s.isNew).sort((a,b)=>b.n9-a.n9).slice(0,3);
+    const lossTop=d.segs.filter(s=>!s.isNew).sort((a,b)=>a.loss-b.loss).slice(0,6);
+    const mixShare=drop<0&&d.mix<0?Math.min(100,Math.round(d.mix/drop*100)):null;
+    const verdict=drop>=0?'<span class="pd-pos">하락 없음</span>':(d.mix<=d.rate?'<b>DB 구성 변화(믹스)</b>가 주원인':'<b>같은 DB에서 전환 하락</b>이 주원인');
+    cards.push(`<div class="pd-card">
+      <div class="pd-card-h">${pdEsc(pdTeamShort(team))} <span class="pd-meta">${pdMLabel(W.prev)} ${pdPct(d.R8)} → ${pdMLabel(W.tgt)} ${pdPct(d.R9)}</span> <span class="${pdTone(drop)}" style="font-weight:800">${pdPp(drop)}</span></div>
+      <div class="pd-verdict">${verdict}</div>
+      <div class="pd-bars">
+        <div><span>믹스효과 (DB 구성 변화)</span><b class="${pdTone(d.mix,.0005)}">${pdPp(d.mix)}</b></div>
+        <div><span>전환율효과 (같은 세그 내 하락)</span><b class="${pdTone(d.rate,.0005)}">${pdPp(d.rate)}</b></div>
+        <div><span>${pdMLabel(W.prev)} 전환율 유지 시 기대 계약</span><b>${d.E.toFixed(0)}건 → 실제 ${pdN(d.c9)}건 (${pdSgn(d.c9-d.E)})</b></div>
+        <div><span>계열 기준으로 보면</span><b>믹스 ${pdPp(ds.mix)} · 전환율 ${pdPp(ds.rate)}</b></div>
+      </div>
+      ${d.newN?`<div class="pd-sub-h">직전월에 없던 DB ${pdN(d.newN)}건 · 전환 ${pdPct(d.newC/d.newN)}</div>
+      <table class="pd-tbl sm"><tbody>${newTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td><td>${pdN(s.n9)}건</td><td>${pdPct(s.r9)}</td></tr>`).join('')}</tbody></table>`:''}
+      <div class="pd-sub-h">전환율 하락 손실 상위 (기존 세그)</div>
+      <table class="pd-tbl sm"><thead><tr><th style="text-align:left">패키지 / 매체</th><th>DB ${pdMLabel(W.prev)}→${pdMLabel(W.tgt)}</th><th>전환</th><th>손실</th></tr></thead><tbody>${lossTop.map(s=>`<tr><td style="text-align:left">${pdEsc(s.seg)}</td><td>${pdN(s.n8)}→${pdN(s.n9)}</td><td>${pdPct(s.r8,1)}→${pdPct(s.r9,1)}</td><td class="${pdTone(s.loss)}">${pdSgn(s.loss,1)}</td></tr>`).join('')}</tbody></table>
+    </div>`);
+    // 자동 요약 문장
+    if(drop<0){
+      let s=`<b>${pdEsc(pdTeamShort(team))}</b>: 신규 DB 전환율 ${pdPct(d.R8)} → ${pdPct(d.R9)} (${pdPp(drop)}). `;
+      if(mixShare!=null&&mixShare>=50){
+        s+=`하락의 약 ${mixShare}%가 <b>DB 구성 변화</b> — 직전월에 없던 DB ${pdN(d.newN)}건(전환 ${pdPct(d.newC/d.newN)})이 유입`;
+        if(newTop.length)s+=`, 최다: ${pdEsc(newTop[0].seg)} ${pdN(newTop[0].n9)}건`;
+        s+='.';
+      }else{
+        const g=lossTop[0];
+        s+=`<b>같은 패키지·매체 안에서 전환이 하락</b>한 몫이 큼(${pdPp(d.rate)})`;
+        if(g)s+=` — 최대 손실: ${pdEsc(g.seg)} (DB ${pdN(g.n8)}→${pdN(g.n9)}, ${pdPct(g.r8,1)}→${pdPct(g.r9,1)})`;
+        s+='.';
+      }
+      s+=` ${pdMLabel(W.prev)} 전환율이 유지됐다면 계약 ${pdSgn(d.E-d.c9)}건 더.`;
+      ins.push(s);
+    }
+  }
+  el.innerHTML=cards.length?`<div class="pd-card-grid">${cards.join('')}</div>`:'<div class="pd-meta">데이터 없음</div>';
+  // 인력·물량 요약 + 개인 편차 요약은 pdRenderPerson이 채운 뒤 합친다
+  pdInsightBase=ins;
+}
+let pdInsightBase=[];
+function pdRenderInsights(extra){
+  const all=pdInsightBase.concat(extra||[]);
+  document.getElementById('pdInsights').innerHTML=all.length?'<ul>'+all.map(s=>`<li>${s}</li>`).join('')+'</ul>':'<div class="pd-meta">기준월 전환율이 직전월보다 낮지 않습니다.</div>';
+}
+
+// ③ 차원별 비교
+function pdRenderDim(W){
+  const el=document.getElementById('pdDimTable');
+  document.getElementById('pdDimTitle').textContent=PD_DIMS[pdDim].label;
+  if(!W.cohDay){el.innerHTML='';return;}
+  const f=PD_DIMS[pdDim].f;const T=new Map();
+  for(const r of pdModel.recs){
+    if(r.day>W.cohDay||!W.M.includes(r.m)||!pdPassTeam(r.team))continue;
+    const k=f(r);let o=T.get(k);if(!o){o={};T.set(k,o);}
+    const b=o[r.m]||(o[r.m]=[0,0]);b[0]++;if(pdConv(r,pdH))b[1]++;
+  }
+  const out=[];
+  for(const [k,o] of T){
+    const tot=W.M.reduce((s,m)=>s+(o[m]?o[m][0]:0),0);if(tot<pdMinN)continue;
+    const t=o[W.tgt]||[0,0],p=W.prev?(o[W.prev]||[0,0]):[0,0];
+    const rt=t[0]?t[1]/t[0]:null,rp=p[0]>=PD_MIN_SEG?p[1]/p[0]:null;
+    out.push({k,o,rt,rp,dr:rt!=null&&rp!=null?rt-rp:null,loss:rt!=null&&rp!=null?t[0]*(rt-rp):null,ddb:t[0]-p[0],nt:t[0]});
+  }
+  out.sort((a,b)=>(a.loss==null)-(b.loss==null)||(a.loss??0)-(b.loss??0)||b.nt-a.nt);
+  const tp=W.prev?pdMLabel(W.prev):'';const tt=pdMLabel(W.tgt);
+  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">${pdEsc(PD_DIMS[pdDim].label)}</th>${W.M.map(m=>`<th>${pdMLabel(m)} DB</th><th>${pdMLabel(m)} 전환</th>`).join('')}<th>DB 증감<br><span class="pd-meta-h">${tt}−${tp}</span></th><th>전환 증감</th><th>전환율 손실<br><span class="pd-meta-h">${tt} DB×증감</span></th></tr></thead><tbody>`+
+    out.map(x=>`<tr><td style="text-align:left">${pdEsc(x.k)}</td>${W.M.map(m=>{const b=x.o[m];return `<td${m===W.tgt?' class="pd-tgt"':''}>${b?pdN(b[0]):'-'}</td><td${m===W.tgt?' class="pd-tgt"':''}>${b&&b[0]?pdPct(b[1]/b[0]):'-'}</td>`;}).join('')}
+      <td class="${x.ddb>0?'pd-up':''}">${pdSgn(x.ddb)}</td><td class="${pdTone(x.dr,.0005)}">${x.rp==null?'<span class="pd-new">신규</span>':pdPp(x.dr)}</td><td class="${pdTone(x.loss,.5)}"><b>${x.loss==null?'-':pdSgn(x.loss,1)}</b></td></tr>`).join('')+
+    `</tbody></table>${out.length?'':'<div class="pd-meta" style="padding:10px">표시할 행이 없습니다 (최소 DB수 조건 확인)</div>'}`;
+}
+
+// ④ 개인별 — 받은 DB 구성 기준 기대 계약 vs 실제
+function pdRenderPerson(W){
+  const el=document.getElementById('pdPerson');
+  if(!W.cohDay||W.M.length<2){el.innerHTML='<div class="pd-meta">비교 불가</div>';pdRenderInsights([]);return;}
+  const base=W.M.slice(0,-1);const seg=PD_DIMS.pkmg.f;
+  const B=new Map(),T9=new Map();
+  for(const r of pdModel.recs){
+    if(r.day>W.cohDay||!pdPassTeam(r.team))continue;
+    const k=r.team+'|'+seg(r);
+    const t=base.includes(r.m)?B:r.m===W.tgt?T9:null;if(!t)continue;
+    const o=t.get(k)||[0,0];o[0]++;if(pdConv(r,pdH))o[1]++;t.set(k,o);
+  }
+  const rateOf=k=>{const b=B.get(k);if(b&&b[0]>=PD_MIN_SEG)return b[1]/b[0];const t=T9.get(k);return t&&t[0]?t[1]/t[0]:0;};
+  const P=new Map();
+  for(const r of pdModel.recs){
+    if(r.day>W.cohDay||!pdPassTeam(r.team))continue;
+    if(r.m!==W.tgt&&r.m!==W.prev)continue;
+    let p=P.get(r.name);if(!p){p={name:r.name,team:r.team,ctr:r.ctr,n:0,c:0,e:0,days:new Set(),pn:0,pc:0};P.set(r.name,p);}
+    const cv=pdConv(r,pdH);
+    if(r.m===W.tgt){p.n++;if(cv)p.c++;p.e+=rateOf(r.team+'|'+seg(r));p.days.add(r.d);}
+    else{p.pn++;if(cv)p.pc++;}
+  }
+  const list=Array.from(P.values()).filter(p=>p.n>=50).map(p=>({...p,gap:p.c-p.e,perDay:p.days.size?p.n/p.days.size:0})).sort((a,b)=>a.gap-b.gap);
+  const bad=list.filter(p=>p.gap<=-8),good=list.filter(p=>p.gap>=8);
+  el.innerHTML=`<table class="pd-tbl"><thead><tr><th>#</th><th style="text-align:left">코디</th><th>팀</th><th>센터</th><th>${pdMLabel(W.prev)} DB</th><th>${pdMLabel(W.prev)} 전환</th><th>${pdMLabel(W.tgt)} DB</th><th>1일당 DB</th><th>기대 전환<br><span class="pd-meta-h">받은 DB 구성 기준</span></th><th>실제 전환</th><th>기대 계약</th><th>실제 계약</th><th>차이</th></tr></thead><tbody>`+
+    list.map((p,i)=>`<tr class="${p.gap<=-8?'pd-row-neg':p.gap>=8?'pd-row-pos':''}"><td>${i+1}</td><td style="text-align:left;font-weight:700">${pdEsc(p.name.replace(/^\(.*?\)/,''))}</td><td>${pdEsc(pdTeamShort(p.team))}</td><td>${pdEsc(p.ctr)}</td><td>${pdN(p.pn)}</td><td>${p.pn?pdPct(p.pc/p.pn,1):'-'}</td><td>${pdN(p.n)}</td><td>${p.perDay.toFixed(1)}</td><td>${pdPct(p.e/p.n)}</td><td><b>${pdPct(p.c/p.n)}</b></td><td>${p.e.toFixed(1)}</td><td>${pdN(p.c)}</td><td class="${pdTone(p.gap,.5)}"><b>${pdSgn(p.gap,1)}</b></td></tr>`).join('')+'</tbody></table>';
+  const extra=[];
+  if(bad.length){const sum=bad.reduce((s,p)=>s+p.gap,0);const tot=list.reduce((s,p)=>s+p.gap,0);
+    extra.push(`<b>개인 편차</b>: 받은 DB 구성 대비 계약이 8건 이상 모자란 코디 ${bad.length}명(${bad.slice(0,7).map(p=>pdEsc(p.name.replace(/^\(.*?\)/,''))).join('·')}${bad.length>7?' 외':''}) 합계 ${pdSgn(sum,0)}건${tot<0?` (전체 순부족 ${pdSgn(tot,0)}건 — 하락이 이 인원에 집중)`:''}.`+(good.length?` 반대로 ${good.length}명은 기대보다 +8건 이상.`:''));}
+  // 1인당 물량 변화
+  const load=m=>{const pd=new Set();let n=0;for(const r of pdModel.recs){if(r.m!==m||r.day>W.flowDay||!pdPassTeam(r.team))continue;n++;pd.add(r.name+'|'+r.d);}return pd.size?n/pd.size:null;};
+  const l8=load(W.prev),l9=load(W.tgt);
+  if(l8&&l9&&l9/l8>1.15)extra.push(`<b>물량</b>: 코디 1인·1일당 신규 DB ${l8.toFixed(1)} → ${l9.toFixed(1)}건 (${pdSgn((l9/l8-1)*100,0)}%). 늘어난 DB를 소화하지 못한 코디에서 전환 하락이 집중되는지 아래 개인표로 확인.`);
+  pdRenderInsights(extra);
+}
+
+// ⑤ 주차별 추이 (분배일 주차 · 3일 내 계약)
+function pdRenderTrend(W){
+  const el=document.getElementById('pdTrend');
+  const lim=pdAddDays(pdModel.maxDay,-PD_TREND_H);
+  const from=W.M[0]+'-01';
+  const teams=pdTeamsInScope();
+  const T=new Map();
+  for(const r of pdModel.recs){
+    if(r.d<from||r.d>lim||!pdPassTeam(r.team))continue;
+    const w=spWeekKey(r.d);let o=T.get(w);if(!o){o={};T.set(w,o);}
+    for(const k of [r.team,'_all']){const b=o[k]||(o[k]=[0,0]);b[0]++;if(pdConv(r,PD_TREND_H))b[1]++;}
+  }
+  const weeks=Array.from(T.keys()).sort();
+  el.innerHTML=`<table class="pd-tbl"><thead><tr><th style="text-align:left">분배 주차</th>${teams.map(t=>`<th>${pdEsc(pdTeamShort(t))} DB</th><th>${pdEsc(pdTeamShort(t))} ${PD_TREND_H}일내 전환</th>`).join('')}</tr></thead><tbody>`+
+    weeks.map(w=>`<tr><td style="text-align:left">${spWeekLabel(w)}</td>${teams.map(t=>{const b=T.get(w)[t]||[0,0];return `<td>${pdN(b[0])}</td><td>${b[0]?pdPct(b[1]/b[0]):'-'}</td>`;}).join('')}</tr>`).join('')+'</tbody></table>';
+  const cv=document.getElementById('pdTrendChart');
+  if(pdChart){pdChart.destroy();pdChart=null;}
+  if(typeof Chart==='undefined'||!cv)return;
+  const colors=['#4361EE','#2EC4B6','#F0920E'];
+  const ds=[];
+  teams.forEach((t,i)=>ds.push({type:'bar',label:pdTeamShort(t)+' 신규DB',data:weeks.map(w=>(T.get(w)[t]||[0])[0]),backgroundColor:colors[i]+'55',yAxisID:'y',stack:'db'}));
+  teams.forEach((t,i)=>ds.push({type:'line',label:pdTeamShort(t)+' 전환율',data:weeks.map(w=>{const b=T.get(w)[t];return b&&b[0]?+(b[1]/b[0]*100).toFixed(2):null;}),borderColor:colors[i],backgroundColor:colors[i],yAxisID:'y1',tension:.25,pointRadius:3}));
+  pdChart=new Chart(cv.getContext('2d'),{data:{labels:weeks.map(spWeekLabel),datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{datalabels:{display:false},legend:{position:'bottom'}},
+    scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:PD_TREND_H+'일내 전환율(%)'},ticks:{callback:v=>v+'%'}}}}});
+}
+
+async function pdDownloadExcel(){
+  if(!pdModel){alert('데이터가 없습니다.');return;}
+  const W=pdWindows();
+  const secs=[['pdSummary','월별 요약'],['pdDecomp','하락 분해'],['pdDimTable','차원별_'+PD_DIMS[pdDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdPerson','개인별'],['pdTrend','주차별 추이']];
+  const wb=XLSX.utils.book_new();
+  for(const [id,label] of secs){
+    const tbls=document.querySelectorAll('#'+id+' table');if(!tbls.length)continue;
+    const aoa=[];
+    tbls.forEach((tbl,i)=>{if(i)aoa.push([]);for(const tr of tbl.rows)aoa.push(Array.from(tr.cells).map(td=>td.innerText.replace(/\n/g,' ').trim()));});
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    cdStyleWs(ws,tbls[0]);
+    XLSX.utils.book_append_sheet(wb,ws,label.slice(0,31));
+  }
+  const fname=`성과진단_${W.tgt}_${pdTeam==='nsg'?'뇌새김':pdTeamShort(pdTeam)}.xlsx`;
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+    const blob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();URL.revokeObjectURL(a.href);
+  }catch(e){console.error(e);XLSX.writeFile(wb,fname);}
 }
 
 // ════════════════════════════════════════════════════════════
