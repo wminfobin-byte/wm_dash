@@ -2324,8 +2324,7 @@ tr.vc-left:hover{opacity:.75}
         </div>
         <div class="pd-scroll" id="pdDimTable"></div>
       </div>
-      <div class="sp-section"><h3>④ 개인별 — 이전 월 대비 계약률</h3><div class="pd-scroll" id="pdPerson"></div></div>
-      <div class="sp-section"><h3>⑤ 주차별 추이 <span class="sub">분배 주차 · 계약수 = 분배 후 3일 내 계약 (최근 주까지 보기 위해 짧게)</span></h3><div class="sp-chart-wrap"><canvas id="pdTrendChart"></canvas></div><div class="pd-scroll" id="pdTrend" style="margin-top:14px"></div></div>
+      <div class="sp-section"><h3>④ 주차별 추이 <span class="sub" id="pdTrendSub"></span></h3><div class="sp-chart-wrap"><canvas id="pdTrendChart"></canvas></div><div class="pd-scroll" id="pdTrend" style="margin-top:14px"></div></div>
     </div>
   </div>
 </div><!-- /page-perf-diag -->
@@ -14236,7 +14235,6 @@ async function spDownloadExcel(){
 // ════════════════════════════════════════════════════════════
 const PD_TEAMS=['뇌새김영어','제2외국어','톡이즈'];
 const PD_MIN_SEG=30;      // 세그먼트 전환율을 기준으로 쓸 최소 DB수 (미만이면 '신규 세그'로 보고 믹스로 분류)
-const PD_TREND_H=3;       // 주차 추이는 최근 주까지 보이도록 3일 이내 계약으로 본다
 let pdModel=null, pdTeam='nsg', pdH=7, pdMonth='', pdDim='pkmg', pdMinN=100, pdChart=null;
 
 function pdEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -14405,7 +14403,7 @@ function pdRender(){
   pdRenderSummary(W);
   pdRenderDecomp(W);
   pdRenderDim(W);
-  pdRenderPerson(W);
+  pdPersonInsights(W);
   pdRenderTrend(W);
   pdApplySorts();
 }
@@ -14526,63 +14524,39 @@ function pdRenderDim(W){
     `</tbody></table>${out.length?'':'<div class="pd-meta" style="padding:10px">표시할 행이 없습니다 (최소 DB수 조건 확인)</div>'}`;
 }
 
-// ④ 개인별 — 기준월 vs 이전 월들: [동기간(매월 1~N일 분배)] / [이전 월은 월 전체]
-function pdRenderPerson(W){
-  const el=document.getElementById('pdPerson');
-  if(!W.cohDay||W.M.length<2){el.innerHTML='<div class="pd-meta">비교 불가</div>';pdRenderInsights([]);return;}
-  const base=W.M.slice(0,-1);
-  const mature=pdAddDays(pdModel.maxDay,-pdH);   // 월 전체 = 계약 인정기간이 지난 분배일까지
+// 개인 편차·물량 요약 문장 (개인별 표는 ③ 차원별 '코디'로 대체)
+function pdPersonInsights(W){
+  if(!W.cohDay||!W.prev){pdRenderInsights([]);return;}
   const P=new Map();
   for(const r of pdModel.recs){
-    if(!W.M.includes(r.m)||!pdPassTeam(r.team))continue;
-    const isT=r.m===W.tgt;
-    const same=r.day<=W.cohDay,full=isT?same:r.d<=mature;
-    if(!same&&!full)continue;
-    let p=P.get(r.name);if(!p){p={name:r.name,team:r.team,ctr:r.ctr,s:{},f:{}};P.set(r.name,p);}
-    const cv=pdConv(r,pdH)?1:0;
-    if(same){const b=p.s[r.m]||(p.s[r.m]=[0,0]);b[0]++;b[1]+=cv;}
-    if(full&&!isT){const b=p.f[r.m]||(p.f[r.m]=[0,0]);b[0]++;b[1]+=cv;}
+    if((r.m!==W.tgt&&r.m!==W.prev)||r.day>W.cohDay||!pdPassTeam(r.team))continue;
+    let p=P.get(r.name);if(!p){p={name:r.name,t:[0,0],p:[0,0]};P.set(r.name,p);}
+    const b=r.m===W.tgt?p.t:p.p;b[0]++;if(pdConv(r,pdH))b[1]++;
   }
-  const rt=b=>b&&b[0]?b[1]/b[0]:null;
-  const dif=(a,b)=>a!=null&&b!=null?a-b:null;
-  const list=Array.from(P.values()).filter(p=>p.s[W.tgt]&&p.s[W.tgt][0]>=50).map(p=>{
-    const t=p.s[W.tgt],r9=rt(t),rp=rt(p.s[W.prev]);
-    return {...p,t,r9,loss:rp==null?null:t[0]*(r9-rp)};
-  }).sort((a,b)=>(a.loss==null)-(b.loss==null)||(a.loss??0)-(b.loss??0));
-  const T9=pdMLabel(W.tgt);
-  const dCell=v=>`<td class="${pdTone(v,.0005)}"><b>${v==null?'-':pdPp(v)}</b></td>`;
-  el.innerHTML=`<table class="pd-tbl"><thead>
-    <tr class="pd-grp"><th colspan="4"></th><th colspan="${base.length*3+3+base.length}">동기간 · 매월 1~${W.cohDay}일 분배</th><th colspan="${base.length*3+base.length}">월 전체 대비</th></tr>
-    <tr class="pd-grp"><th colspan="4"></th>${base.map(m=>`<th colspan="3">${pdMLabel(m)}</th>`).join('')}<th colspan="3">${T9} (기준)</th><th colspan="${base.length}">계약률 증감</th>${base.map(m=>`<th colspan="3">${pdMLabel(m)} 전체</th>`).join('')}<th colspan="${base.length}">${T9} 계약률 증감</th></tr>
-    <tr><th>#</th><th style="text-align:left">코디</th><th>팀</th><th>센터</th>${base.map(()=>PD_TRI_H).join('')}${PD_TRI_H}${base.map(m=>`<th>vs ${pdMLabel(m)}</th>`).join('')}${base.map(()=>PD_TRI_H).join('')}${base.map(m=>`<th>vs ${pdMLabel(m)}</th>`).join('')}</tr></thead><tbody>`+
-    list.map((p,i)=>{
-      const s=m=>p.s[m]||[0,0],f=m=>p.f[m]||[0,0];
-      return `<tr><td>${i+1}</td><td style="text-align:left;font-weight:700">${pdEsc(p.name.replace(/^\(.*?\)/,''))}</td><td>${pdEsc(pdTeamShort(p.team))}</td><td>${pdEsc(p.ctr)}</td>`+
-        base.map(m=>pdTri(s(m)[0],s(m)[1])).join('')+pdTri(p.t[0],p.t[1],'pd-tgt')+base.map(m=>dCell(dif(p.r9,rt(p.s[m])))).join('')+
-        base.map(m=>pdTri(f(m)[0],f(m)[1])).join('')+base.map(m=>dCell(dif(p.r9,rt(p.f[m])))).join('')+'</tr>';
-    }).join('')+'</tbody></table>';
+  const list=Array.from(P.values()).filter(p=>p.t[0]>=50&&p.p[0]).map(p=>({...p,loss:p.t[0]*(p.t[1]/p.t[0]-p.p[1]/p.p[0])})).sort((a,b)=>a.loss-b.loss);
   const extra=[];
-  const bad=list.filter(p=>p.loss!=null&&p.loss<=-8);
+  const bad=list.filter(p=>p.loss<=-8);
   if(bad.length){const sum=bad.reduce((s,p)=>s+p.loss,0);
-    extra.push(`<b>개인 편차</b>: ${pdMLabel(W.prev)} 동기간보다 계약률이 떨어져 계약수가 8건 이상 줄어든 코디 ${bad.length}명(${bad.slice(0,7).map(p=>pdEsc(p.name.replace(/^\(.*?\)/,''))).join('·')}${bad.length>7?' 외':''}) 합계 ${pdSgn(sum,0)}건 (${T9} DB수 × 계약률 증감).`);}
+    extra.push(`<b>개인 편차</b>: ${pdMLabel(W.prev)} 동기간보다 계약률이 떨어져 계약수가 8건 이상 줄어든 코디 ${bad.length}명(${bad.slice(0,7).map(p=>pdEsc(p.name.replace(/^(.*?)/,''))).join('·')}${bad.length>7?' 외':''}) 합계 ${pdSgn(sum,0)}건 (${pdMLabel(W.tgt)} DB수 × 계약률 증감).`);}
   // 1인당 물량 변화
   const load=m=>{const pd=new Set();let n=0;for(const r of pdModel.recs){if(r.m!==m||r.day>W.flowDay||!pdPassTeam(r.team))continue;n++;pd.add(r.name+'|'+r.d);}return pd.size?n/pd.size:null;};
   const l8=load(W.prev),l9=load(W.tgt);
-  if(l8&&l9&&l9/l8>1.15)extra.push(`<b>물량</b>: 코디 1인·1일당 신규 DB수 ${l8.toFixed(1)} → ${l9.toFixed(1)}건 (${pdSgn((l9/l8-1)*100,0)}%). 늘어난 DB를 소화하지 못한 코디에서 계약률 하락이 집중되는지 아래 개인표로 확인.`);
+  if(l8&&l9&&l9/l8>1.15)extra.push(`<b>물량</b>: 코디 1인·1일당 신규 DB수 ${l8.toFixed(1)} → ${l9.toFixed(1)}건 (${pdSgn((l9/l8-1)*100,0)}%). 늘어난 DB를 소화하지 못한 코디에서 계약률 하락이 집중되는지 ③ 차원별 '코디'로 확인.`);
   pdRenderInsights(extra);
 }
 
-// ⑤ 주차별 추이 (분배일 주차 · 3일 내 계약)
+// ④ 주차별 추이 (분배일 주차 · 계약 인정기간 = 글로벌 필터 pdH)
 function pdRenderTrend(W){
   const el=document.getElementById('pdTrend');
-  const lim=pdAddDays(pdModel.maxDay,-PD_TREND_H);
+  const lim=pdAddDays(pdModel.maxDay,-pdH);
+  document.getElementById('pdTrendSub').textContent=`분배 주차 · 계약수 = 분배 후 ${pdHLabel()} 계약 · 분배일 ~${lim}`;
   const from=W.M[0]+'-01';
   const teams=pdTeamsInScope();
   const T=new Map();
   for(const r of pdModel.recs){
     if(r.d<from||r.d>lim||!pdPassTeam(r.team))continue;
     const w=spWeekKey(r.d);let o=T.get(w);if(!o){o={};T.set(w,o);}
-    const b=o[r.team]||(o[r.team]=[0,0]);b[0]++;if(pdConv(r,PD_TREND_H))b[1]++;
+    const b=o[r.team]||(o[r.team]=[0,0]);b[0]++;if(pdConv(r,pdH))b[1]++;
   }
   const weeks=Array.from(T.keys()).sort();
   el.innerHTML=`<table class="pd-tbl"><thead>
@@ -14598,7 +14572,7 @@ function pdRenderTrend(W){
   teams.forEach((t,i)=>ds.push({type:'line',label:pdTeamShort(t)+' 계약률',data:weeks.map(w=>{const b=T.get(w)[t];return b&&b[0]?+(b[1]/b[0]*100).toFixed(2):null;}),borderColor:colors[i],backgroundColor:colors[i],yAxisID:'y1',tension:.25,pointRadius:3}));
   pdChart=new Chart(cv.getContext('2d'),{data:{labels:weeks.map(spWeekLabel),datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     plugins:{datalabels:{display:false},legend:{position:'bottom'}},
-    scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB수'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률(%, '+PD_TREND_H+'일 내 계약)'},ticks:{callback:v=>v+'%'}}}}});
+    scales:{y:{position:'left',stacked:true,title:{display:true,text:'신규 DB수'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'계약률(%, '+pdHLabel()+' 계약)'},ticks:{callback:v=>v+'%'}}}}});
 }
 
 // 표 머리 클릭 정렬 — 성과진단 모든 표 공통. 마지막 헤더행의 칸 = 본문 칸(병합 없음).
@@ -14643,7 +14617,7 @@ document.addEventListener('click',e=>{
 async function pdDownloadExcel(){
   if(!pdModel){alert('데이터가 없습니다.');return;}
   const W=pdWindows();
-  const secs=[['pdSummary','월별 요약'],['pdDecomp','하락 분해'],['pdDimTable','차원별_'+PD_DIMS[pdDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdPerson','개인별'],['pdTrend','주차별 추이']];
+  const secs=[['pdSummary','월별 요약'],['pdDecomp','하락 분해'],['pdDimTable','차원별_'+PD_DIMS[pdDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdTrend','주차별 추이']];
   const wb=XLSX.utils.book_new();
   for(const [id,label] of secs){
     const tbls=document.querySelectorAll('#'+id+' table');if(!tbls.length)continue;
