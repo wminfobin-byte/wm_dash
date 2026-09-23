@@ -16045,7 +16045,7 @@ const NC_CAT_LABEL={d0:'당일 DB 콜',d1:'이전 DB 콜',r1:'재콜 DB 콜',r2:
 const NC_CAT_SHORT={d0:'당일',d1:'이전',r1:'재콜',r2:'재재콜',r3:'회수콜'};
 const NC_CAT_COLOR={d0:'#4361ee',d1:'#14b8a6',r1:'#f0920e',r2:'#ef4444',r3:'#64748b'};
 let ncIdb=null, ncFiles=[], ncLoaded=false, ncModel=null, ncScanBusy=false, ncChart=null, ncEffChart=null, ncSel=null, ncLangSel=null;
-let ncStageAxis='cohort', ncStageView='day', ncStageCat='d0';   // 단계별 콜 섹션 상태
+let ncStageAxis='cohort', ncStageView='day', ncStageCat='all';   // 단계별 콜 섹션 상태 (all = 5단계 합계)
 let ncCtrSel=null;                     // 센터 필터 (null = 전체)
 
 // ── IndexedDB ──
@@ -16531,19 +16531,22 @@ function ncRenderStage(agg){
   // 하위 분해 — 선택한 단계 1개를 일자별 또는 코디별로
   const byCodi=ncStageView==='codi';
   const src=byCodi?agg.byCodi:agg.byDay;
-  let keys=Array.from(src.keys()).filter(k=>{const b=src.get(k)[ncStageCat];return b.tr||b.ct||b.db;});
-  if(byCodi)keys.sort((a,b)=>{const x=src.get(a)[ncStageCat],y=src.get(b)[ncStageCat];return (y.db-x.db)||(y.tr-x.tr)||a.localeCompare(b,'ko');});
+  // 'all' = 그 행의 5단계 합계(ncStageTotal — 이전(d1) 분배DB는 신규와 중복이라 제외)
+  const all=ncStageCat==='all',pick=new Map();
+  for(const [k,v] of src)pick.set(k,all?ncStageTotal(v):v[ncStageCat]);
+  let keys=Array.from(pick.keys()).filter(k=>{const b=pick.get(k);return b.tr||b.ct||b.db;});
+  if(byCodi)keys.sort((a,b)=>{const x=pick.get(a),y=pick.get(b);return (y.db-x.db)||(y.tr-x.tr)||a.localeCompare(b,'ko');});
   else keys.sort();
   let sub;
   if(!keys.length)sub=`<tr><td colspan="${nCol}" class="nc-empty">데이터 없음</td></tr>`;
   else{
     // 계약 비중 분모(=이 표의 계약수 합계)가 필요하므로 합계를 먼저 구한다
     const sum=ncStageBlank();
-    for(const k of keys){const b=src.get(k)[ncStageCat];sum.db+=b.db;sum.tr+=b.tr;sum.co+=b.co;sum.va+=b.va;sum.ct+=b.ct;b.tryDb.forEach(x=>sum.tryDb.add(x));b.connDb.forEach(x=>sum.connDb.add(x));}
+    for(const k of keys){const b=pick.get(k);sum.db+=b.db;sum.tr+=b.tr;sum.co+=b.co;sum.va+=b.va;sum.ct+=b.ct;b.tryDb.forEach(x=>sum.tryDb.add(x));b.connDb.forEach(x=>sum.connDb.add(x));}
     sub=`<tr class="nc-total"><td class="nc-lbl nc-l">합계</td>${ncStageCells(sum,cohort,false,sum.ct)}</tr>`
-      +keys.map(k=>`<tr><td class="nc-lbl nc-l">${byCodi?k:ncDayLabel(k)}</td>${ncStageCells(src.get(k)[ncStageCat],cohort,false,sum.ct)}</tr>`).join('');
+      +keys.map(k=>`<tr><td class="nc-lbl nc-l">${byCodi?k:ncDayLabel(k)}</td>${ncStageCells(pick.get(k),cohort,false,sum.ct)}</tr>`).join('');
   }
-  const catTabs=NC_CATS.map(c=>`<button class="nc-cat-tab${ncStageCat===c?' on':''}" style="--cc:${NC_CAT_COLOR[c]}" onclick="ncSetStageCat('${c}')">${NC_CAT_LABEL[c]}</button>`).join('');
+  const catTabs=`<button class="nc-cat-tab${all?' on':''}" style="--cc:#334155" onclick="ncSetStageCat('all')">전체 합계</button>`+NC_CATS.map(c=>`<button class="nc-cat-tab${ncStageCat===c?' on':''}" style="--cc:${NC_CAT_COLOR[c]}" onclick="ncSetStageCat('${c}')">${NC_CAT_LABEL[c]}</button>`).join('');
   const axisNote=cohort
     ? '분배일 기준 — 그날 <b>분배된 DB</b>를 이후 통화까지 끝까지 추적합니다. 최근 며칠은 아직 추적이 덜 끝나 낮게 보일 수 있습니다.'
     : '통화일 기준 — 그날 <b>실제 건 콜</b>만 셉니다. 분배DB·컨택률은 날짜 축이 달라 표시하지 않습니다.';
