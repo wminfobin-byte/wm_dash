@@ -5784,15 +5784,15 @@ async function cdGenerate(){
     const members=cdGetMembers(attendFile.data);
 
     // 일마감 → customerKey map
-    const dailyByKey={};
+    const dailyByKey={},hdrOf=new Map();   // hdrOf: 원본 행 → 그 파일의 헤더행 (취소고객 시트의 열 탐지용)
     let cdMaxAppDate=null;
     const sortedDaily=[...dailyFiles].sort((a,b)=>a.uploadTime-b.uploadTime);
-    for(const f of sortedDaily){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck){dailyByKey[ck]=r;const ad=parseDate(r[CD_APP.applicationDate]);if(ad&&(!cdMaxAppDate||ad>cdMaxAppDate))cdMaxAppDate=ad;}}}
+    for(const f of sortedDaily){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck){dailyByKey[ck]=r;hdrOf.set(r,f.data[0]);const ad=parseDate(r[CD_APP.applicationDate]);if(ad&&(!cdMaxAppDate||ad>cdMaxAppDate))cdMaxAppDate=ad;}}}
 
     // 전체 → customerKey map
     const fullByKey={};
     const sortedFull=[...appFiles].sort((a,b)=>a.uploadTime-b.uploadTime);
-    for(const f of sortedFull){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck)fullByKey[ck]=r;}}
+    for(const f of sortedFull){for(let i=1;i<f.data.length;i++){const r=f.data[i];const ck=str(r[CD_APP.customerKey]);if(ck){fullByKey[ck]=r;hdrOf.set(r,f.data[0]);}}}
 
     // 센터 → 브랜드 추론 (명단 매칭 실패 시 폴백)
     function cdBrandByCenter(c){
@@ -5828,7 +5828,7 @@ async function cdGenerate(){
         }
         const giftStr=str(dRow[CD_APP.gift]);
         const pt=cdClassifyProduct(str(dRow[CD_APP.classification]),giftStr);
-        contracts.push({ck,manager,cleanName:clean,center:mi.center||center,brand:mi.brand||'기타',group:mi.group||'',team:mi.team||'',appDate,status,cancelDays,productType:pt,giftStr});
+        contracts.push({ck,manager,cleanName:clean,center:mi.center||center,brand:mi.brand||'기타',group:mi.group||'',team:mi.team||'',appDate,status,cancelDays,productType:pt,giftStr,raw:dRow,rawHdr:hdrOf.get(dRow)});
       }
     }else{
       for(const[ck,fRow]of Object.entries(fullByKey)){
@@ -5843,7 +5843,7 @@ async function cdGenerate(){
         if(returnDate){status='취소';if(appDate){cancelDays=Math.ceil((returnDate-appDate)/864e5);if(cancelDays<0)cancelDays=null;}}
         const giftStr=str(fRow[CD_APP.gift]);
         const pt=cdClassifyProduct(str(fRow[CD_APP.classification]),giftStr);
-        contracts.push({ck,manager,cleanName:clean,center:mi.center||center,brand:mi.brand||'기타',group:mi.group||'',team:mi.team||'',appDate,status,cancelDays,productType:pt,giftStr});
+        contracts.push({ck,manager,cleanName:clean,center:mi.center||center,brand:mi.brand||'기타',group:mi.group||'',team:mi.team||'',appDate,status,cancelDays,productType:pt,giftStr,raw:fRow,rawHdr:hdrOf.get(fRow)});
       }
     }
 
@@ -5891,26 +5891,31 @@ async function cdGenerate(){
 // ═══════════════════════════════════════════
 //  필터 + 렌더링
 // ═══════════════════════════════════════════
-function cdFilterAndRender(){
+function cdDateFiltered(){
   let data=cdResult.contracts;
   if(cdDateStart||cdDateEnd){data=data.filter(c=>{if(!c.appDate)return false;if(cdDateStart&&c.appDate<cdDateStart)return false;if(cdDateEnd){const e=new Date(cdDateEnd);e.setHours(23,59,59);if(c.appDate>e)return false;}return true;});}
+  return data;
+}
+function cdViewFilter(data,view){
+  switch(view){
+    case'bk-provide':return data.filter(c=>c.bkProvide);
+    case'bk-noprovide':return data.filter(c=>!c.bkProvide);
+    case'bk-join':return data.filter(c=>c.bkSubscribe);
+    case'bk-nojoin':return data.filter(c=>c.bkProvide&&!c.bkSubscribe);
+    case'kim':return data.filter(c=>c.isKim);
+    case'hwalryuk':return data.filter(c=>c.hasHwalryuk&&!c.hasHyuldang);
+    case'hyuldang':return data.filter(c=>c.hasHyuldang&&!c.hasHwalryuk);
+    case'health':return data.filter(c=>c.hasHwalryuk||c.hasHyuldang);
+    case'no-health':return data.filter(c=>!c.hasHwalryuk&&!c.hasHyuldang);
+    default:return data;
+  }
+}
+function cdFilterAndRender(){
+  const data=cdDateFiltered();
   if(cdCurrentView==='all'){
     cdRenderKPI(data);cdRenderInsights(data);cdRenderMonthlyTable(data);cdRenderWeeklyTable(data);cdRenderCenterTable(data);cdRenderProductTable(data);cdRenderPersonTable(data);
   }else{
-    let filtered;
-    switch(cdCurrentView){
-      case'bk-provide':filtered=data.filter(c=>c.bkProvide);break;
-      case'bk-noprovide':filtered=data.filter(c=>!c.bkProvide);break;
-      case'bk-join':filtered=data.filter(c=>c.bkSubscribe);break;
-      case'bk-nojoin':filtered=data.filter(c=>c.bkProvide&&!c.bkSubscribe);break;
-      case'kim':filtered=data.filter(c=>c.isKim);break;
-      case'hwalryuk':filtered=data.filter(c=>c.hasHwalryuk&&!c.hasHyuldang);break;
-      case'hyuldang':filtered=data.filter(c=>c.hasHyuldang&&!c.hasHwalryuk);break;
-      case'health':filtered=data.filter(c=>c.hasHwalryuk||c.hasHyuldang);break;
-      case'no-health':filtered=data.filter(c=>!c.hasHwalryuk&&!c.hasHyuldang);break;
-      default:filtered=data;
-    }
-    cdRenderBkView(cdCurrentView,filtered);
+    cdRenderBkView(cdCurrentView,cdViewFilter(data,cdCurrentView));
   }
 }
 
@@ -6530,6 +6535,62 @@ function cdStyleWs(ws,tbl){
   for(let c=range.s.c;c<=range.e.c;c++){let w=5;for(let r=range.s.r;r<=range.e.r;r++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell&&cell.v!=null){const len=String(cell.v).length;if(len>w)w=len;}}cols.push({wch:Math.min(w+2,30)});}
   ws['!cols']=cols;
 }
+// ── 취소고객 명단 시트 (강동·당산만, 개인별 취소율 시트 바로 뒤) ──
+// 신청자관리 열 위치는 파일 헤더명으로 찾는다(CD_APP에 없는 열이라 위치가 바뀌어도 안전하게).
+const CD_CX_CENTERS=['강동','당산'];
+const CD_CX_COLS={
+  name:    [/^(고객명|고객이름|이름|성명)$/,/^(신청자|주문자|수령인)명?$/,/고객명|이름|성명/],
+  phone:   [/^(휴대폰|핸드폰|휴대전화|휴대폰번호|고객전화번호1?|전화번호1?|연락처1?)$/,/휴대|핸드폰|전화|연락처/],
+  orderKey:[/^주문키$/,/주문키|주문번호/],
+  pkg:     [/^패키지(명)?$/,/^(?!.*환급).*패키지/],
+};
+function cdFindCol(hdr,pats){
+  if(!hdr)return -1;
+  const h=hdr.map(x=>str(x).replace(/\s/g,''));
+  for(const re of pats){const i=h.findIndex(x=>x&&!x.includes('브레인키')&&re.test(x));if(i>=0)return i;}
+  return -1;
+}
+function cdFmtPhone(v){
+  let d=str(v).replace(/\D/g,'');
+  if(!d)return str(v);
+  if(d[0]!=='0'&&(d.length===10||d.length===9))d='0'+d;   // 숫자 셀로 읽혀 앞 0이 빠진 경우
+  if(d.length===11)return`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`;
+  if(d.length===10)return d.startsWith('02')?`${d.slice(0,2)}-${d.slice(2,6)}-${d.slice(6)}`:`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+  return d;
+}
+function cdBuildCancelCustSheet(data){
+  const rows=data.filter(c=>(c.status==='취소'||c.status==='배송전취소')&&CD_CX_CENTERS.includes(c.center));
+  const ci=k=>CD_CX_CENTERS.indexOf(k);
+  rows.sort((a,b)=>ci(a.center)-ci(b.center)||a.cleanName.localeCompare(b.cleanName,'ko')||((a.appDate||0)-(b.appDate||0)));
+  const colCache=new Map();
+  const colsOf=hdr=>{if(!colCache.has(hdr)){const o={};for(const k in CD_CX_COLS)o[k]=cdFindCol(hdr,CD_CX_COLS[k]);colCache.set(hdr,o);}return colCache.get(hdr);};
+  const get=(c,k)=>{const i=colsOf(c.rawHdr)[k];return i>=0&&c.raw?str(c.raw[i]):'';};
+  const HEAD=['센터','코디명','고객명','전화번호','주문키','패키지','신청일','취소구분'];
+  const aoa=[HEAD],kinds=['h'];
+  const cnt={};rows.forEach(c=>{const k=c.center+'|'+c.cleanName;cnt[k]=(cnt[k]||0)+1;});
+  let prev=null;
+  for(const c of rows){
+    const k=c.center+'|'+c.cleanName;
+    if(k!==prev){aoa.push([c.center,`${c.cleanName} (${cnt[k]}건)`,'','','','','','']);kinds.push('p');prev=k;}
+    aoa.push(['',c.cleanName,get(c,'name'),cdFmtPhone(get(c,'phone')),get(c,'orderKey')||c.ck,get(c,'pkg'),c.appDate?cdFmtISO(c.appDate):'',c.status==='배송전취소'?'배송전취소':'배송후취소']);
+    kinds.push('r');
+  }
+  if(!rows.length){aoa.push(['','해당 기간 강동·당산 취소 고객 없음','','','','','','']);kinds.push('r');}
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const bd={style:'thin',color:{rgb:'CBD5E1'}},border={top:bd,bottom:bd,left:bd,right:bd};
+  const st={
+    h:{font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2D3748'}},alignment:{horizontal:'center',vertical:'center'},border},
+    p:{font:{bold:true},fill:{fgColor:{rgb:'EEF2F7'}},alignment:{vertical:'center'},border},
+    r:{alignment:{horizontal:'center',vertical:'center'},border},
+  };
+  for(let r=0;r<aoa.length;r++)for(let c=0;c<HEAD.length;c++){
+    const a=XLSX.utils.encode_cell({r,c});
+    const v=str(aoa[r][c]);
+    ws[a]={t:'s',v,s:st[kinds[r]]};   // 전화번호·주문키가 숫자(지수표기)로 바뀌지 않게 전부 텍스트
+  }
+  ws['!cols']=[{wch:8},{wch:16},{wch:12},{wch:15},{wch:20},{wch:28},{wch:12},{wch:11}];
+  return ws;
+}
 async function cdDownloadExcel(){
   if(!cdResult){alert('먼저 신청자·명단 파일을 업로드하세요.');return;}
   const v=cdCurrentView;
@@ -6545,6 +6606,7 @@ async function cdDownloadExcel(){
     const ws=XLSX.utils.table_to_sheet(tbl);
     cdStyleWs(ws,tbl);
     XLSX.utils.book_append_sheet(wb,ws,label);added++;
+    if(dim==='Person')XLSX.utils.book_append_sheet(wb,cdBuildCancelCustSheet(cdViewFilter(cdDateFiltered(),v)),'취소고객(강동·당산)');
   }
   if(!added){alert('다운로드할 표가 없습니다. (현재 뷰의 표가 비어있습니다)');return;}
   const period=((document.getElementById('cdDateDisplay')||{}).textContent||'전체기간').replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,24)||'전체기간';

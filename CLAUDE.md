@@ -272,6 +272,12 @@ gd는 `{files,results}` 객체라 그룹 분할 대상이 아니므로 `files` �
 - **화면**: 기간·빠른기간 + 매체/패키지 칩 필터 → KPI 4종(총광고비·총DB·평균단가·일평균, 전기 대비) → 일자별 추이 차트(매체 스택 막대 + 단가 선) → 일자별 표(펼치면 매체·패키지 상세, **월누적·월 일평균 열은 기간 필터와 무관하게 그 달 전체 기준**) → 매체×패키지 매트릭스 → 매체별 요약 → 월별 요약 → 보고서 기재 월 누적 단가.
 - **핵심 함수**: `acParseReport`/`acCompute`/`acMonthStats`/`acRender`(+`acExportSection`·`acDailySection`·`acMatrixSection`·`acMediaSection`·`acMonthSection`·`acCumSection`)/`acTsv`/`acDownloadExcel`(당일·월누적·월별요약 3시트)/`acSavePaste`/`acRestoreSync`. 탭 등록 = `switchPage` 훅 + `AUTH_ACCOUNTS`(info_bin) + 헤더 `headerRight-ad-cost`.
 
+## WM 취소율 엑셀 — 취소고객(강동·당산) 시트
+
+`cdDownloadExcel`이 `개인별 취소율` 시트 바로 뒤에 `cdBuildCancelCustSheet`로 **강동·당산 센터(`CD_CX_CENTERS`) 취소 고객 명단**을 붙인다(현재 기간·서브탭 필터 그대로, 배송전·배송후 취소 모두). 열 = 센터·코디명·고객명·전화번호·주문키·패키지·신청일·취소구분, 코디별 소계 행(`코디 (N건)`).
+- 고객명/전화/주문키/패키지는 `CD_APP`에 없는 열이라 **신청자관리 헤더명으로 찾는다**(`CD_CX_COLS`/`cdFindCol`). 그래서 `cdGenerate`가 계약마다 원본 행(`raw`)과 그 파일 헤더행(`rawHdr`)을 들고 있다. 주문키 열을 못 찾으면 고객키로 대체.
+- 모든 셀을 텍스트로 써서 전화번호 앞 0·긴 주문키가 숫자로 깨지지 않게 한다.
+
 ## Via 취소율 탭 (vc* 네임스페이스)
 
 기존 취소율 탭은 **WM 취소율**로 이름을 바꿨고(`cancel-dash`/`cd*`), 그 옆에 비아지오 전용 **Via 취소율**(`via-cancel`/`vc*`)을 새로 뒀다. 지표·표 구성은 WM과 같지만 **RAW 파일 레이아웃이 다르고, 상품 분류 축이 매체코드가 아니라 U열 접수제품**이다. 별도 IndexedDB(`viaCancelDashboard` v1, `files`+`meta` 스토어), 클라우드 싱크 `payload.vc`(파일) + `payload.vcProducts`(접수제품 사전).
