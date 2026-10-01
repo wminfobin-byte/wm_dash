@@ -5642,6 +5642,7 @@ function cdCloseModal(){document.getElementById('cdModalOverlay').classList.remo
         const same=cdAllFiles.find(x=>x.type==='app'&&x.fileName===f.name);
         if(same){await cdIdbDelete(same.id);cdAllFiles=cdAllFiles.filter(x=>x.id!==same.id);}
       }
+      if(type==='app'||type==='app-daily'){try{await cdInfoHarvest(parsedData);}catch(e){console.warn('고객정보 캐시 오류:',e);}}
       const record={type,fileName:f.name,uploadTime:Date.now(),data:parsedData};
       const id=await cdIdbAdd(record);record.id=id;cdAllFiles.push(record);
       prog.classList.remove('loading');prog.classList.add('done');box.classList.add('loaded');
@@ -6564,7 +6565,7 @@ function cdBuildCancelCustSheet(data){
   rows.sort((a,b)=>ci(a.center)-ci(b.center)||a.cleanName.localeCompare(b.cleanName,'ko')||((a.appDate||0)-(b.appDate||0)));
   const colCache=new Map();
   const colsOf=hdr=>{if(!colCache.has(hdr)){const o={};for(const k in CD_CX_COLS)o[k]=cdFindCol(hdr,CD_CX_COLS[k]);colCache.set(hdr,o);}return colCache.get(hdr);};
-  const get=(c,k)=>{const i=colsOf(c.rawHdr)[k];return i>=0&&c.raw?str(c.raw[i]):'';};
+  const get=(c,k)=>{const o=cdCustInfo.get(c.ck);if(o&&o[k])return o[k];const i=colsOf(c.rawHdr)[k];return i>=0&&c.raw?str(c.raw[i]):'';};
   const HEAD=['센터','코디명','고객명','전화번호','주문키','패키지','신청일','취소구분'];
   const aoa=[HEAD],kinds=['h'];
   const cnt={};rows.forEach(c=>{const k=c.center+'|'+c.cleanName;cnt[k]=(cnt[k]||0)+1;});
@@ -6576,6 +6577,8 @@ function cdBuildCancelCustSheet(data){
     kinds.push('r');
   }
   if(!rows.length){aoa.push(['','해당 기간 강동·당산 취소 고객 없음','','','','','','']);kinds.push('r');}
+  const miss=rows.filter(c=>!get(c,'name')).length;
+  if(miss){aoa.push(['',`※ 고객정보 없는 ${miss}건: 이 PC에서 해당 기간 신청자관리 원본 파일을 업로드하면 표시됩니다(고객정보는 동기화되지 않음).`,'','','','','','']);kinds.push('n');}
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const bd={style:'thin',color:{rgb:'CBD5E1'}},border={top:bd,bottom:bd,left:bd,right:bd};
   const st={
@@ -6585,6 +6588,7 @@ function cdBuildCancelCustSheet(data){
   };
   for(let r=0;r<aoa.length;r++)for(let c=0;c<HEAD.length;c++){
     const a=XLSX.utils.encode_cell({r,c});
+    if(kinds[r]==='n'){if(c===1)ws[a]={t:'s',v:str(aoa[r][c]),s:{font:{color:{rgb:'B45309'}}}};else delete ws[a];continue;}   // 안내문은 옆 칸으로 넘쳐 보이게 단독 셀
     const v=str(aoa[r][c]);
     ws[a]={t:'s',v,s:st[kinds[r]]};   // 전화번호·주문키가 숫자(지수표기)로 바뀌지 않게 전부 텍스트
   }
@@ -6681,9 +6685,38 @@ function cdScrollToTop(){
   },{passive:true});
 })();
 
+// ── 고객정보 로컬 캐시 (고객명·전화번호·주문키·패키지명) ──
+// 싱크 레포가 공개 저장소라 이 열들은 동기화에 절대 싣지 않는다. 원본을 업로드한 PC의 브라우저에만 남는다.
+// cd files는 싱크 복원 때 슬림본으로 덮이므로, 업로드 시점에 여기로 따로 떠둔다.
+const cdCustInfo=new Map();   // 고객키 → {name,phone,orderKey,pkg}
+let cdInfoIdb=null;
+function cdInfoOpen(){return new Promise((r,j)=>{const q=indexedDB.open('cdCustInfo',1);q.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('info'))db.createObjectStore('info',{keyPath:'ck'});};q.onsuccess=e=>{cdInfoIdb=e.target.result;r(cdInfoIdb);};q.onerror=e=>j(e);});}
+async function cdInfoLoad(){
+  if(!cdInfoIdb)await cdInfoOpen();
+  const all=await new Promise((r,j)=>{const q=cdInfoIdb.transaction('info','readonly').objectStore('info').getAll();q.onsuccess=()=>r(q.result);q.onerror=e=>j(e);});
+  for(const o of all)cdCustInfo.set(o.ck,o);
+}
+// 신청자관리 AOA에서 고객정보를 뽑아 캐시에 저장 (슬림본이면 해당 칸이 비어 있어 자연히 건너뜀)
+async function cdInfoHarvest(data){
+  if(!data||data.length<2)return 0;
+  const hdr=data[0],col={};for(const k in CD_CX_COLS)col[k]=cdFindCol(hdr,CD_CX_COLS[k]);
+  if(col.name<0&&col.phone<0&&col.pkg<0&&col.orderKey<0)return 0;
+  const g=(r,k)=>col[k]>=0?str(r[col[k]]):'';
+  const out=[];
+  for(let i=1;i<data.length;i++){const r=data[i];const ck=str(r[CD_APP.customerKey]);if(!ck)continue;
+    const o={ck,name:g(r,'name'),phone:g(r,'phone'),orderKey:g(r,'orderKey'),pkg:g(r,'pkg')};
+    if(!o.name&&!o.phone&&!o.orderKey&&!o.pkg)continue;
+    cdCustInfo.set(ck,o);out.push(o);}
+  if(!out.length)return 0;
+  if(!cdInfoIdb)await cdInfoOpen();
+  await new Promise((r,j)=>{const tx=cdInfoIdb.transaction('info','readwrite');const st=tx.objectStore('info');for(const o of out)st.put(o);tx.oncomplete=()=>r();tx.onerror=e=>j(e);});
+  return out.length;
+}
+
 // ── Init ──
 (async function cdInit(){
   try{await cdOpenIDB();cdAllFiles=await cdIdbGetAll();cdUpdateStatusDots();cdUpdateUploadStatus();
+    try{await cdInfoLoad();for(const f of cdAllFiles)if(f.type==='app'||f.type==='app-daily')await cdInfoHarvest(f.data);}catch(e){console.warn('고객정보 캐시 오류:',e);}
     const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
     if(ok)cdGenerate();
   }catch(err){console.error('Cancel Dashboard IDB 오류:',err);}
