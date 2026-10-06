@@ -9112,7 +9112,11 @@ function gdCountContracts(data, members, uploadTime, cancelData, currentMaxDist,
 // 직전 회차 cancel D열에는 있었는데 이번 cancel D열에는 없는 고객키 = 시스템에서 행 삭제 = 배송전 취소 사후 발생
 // cutoff drop 가드: 직전 cancel 행의 distributeDate가 이번 cancel cutoff 이전이면 자연 만료로 간주 → 무시
 // 같은 고객키 중복 방지(prev cancel에 같은 키가 여러 행이어도 한 번만 카운트)
-function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart, keyCollect, swapCollect){
+// IN DB 제외: gdCountCancels와 동일 룰 — R열 코드에 'in' 포함이면 제외(단 정확히 'IN'+Q열 분류 있으면 포함, 직전 cancel 파일 업로드 시각 기준)
+// talkis 제외: Q열 분류에 talkis 포함이면 제외 (실계약수의 매체 talkis 제외와 동일)
+// 이번 회차 계약 제외: 오더일이 직전 회차 마지막 분배일(prevMaxDist) 이후면 이번 회차 계약 → 실계약수에서 배송전취소로 이미 빠지므로 여기서 세면 이중 차감
+// 반품 이력 제외: 직전 파일에서 이미 반품일이 있던 행은 그때 반품 취소로 셌으므로 사라져도 다시 세지 않음
+function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffStart, keyCollect, swapCollect, prevUploadTime, prevMaxDist){
   const memberSet=new Set(members);
   const counts={}; members.forEach(m=>counts[m]=0);
   if(!prevCancelData||!curCancelData) return counts;
@@ -9130,7 +9134,9 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
   }
 
   const seen=new Set();
-  let cutoffDrop=0, unmatched=0, counted=0, holidaySkip=0, swapSkip=0;
+  const applyIn=gdApplyInRule(prevUploadTime);
+  const prevEndMs=prevMaxDist ? new Date(prevMaxDist.getFullYear(),prevMaxDist.getMonth(),prevMaxDist.getDate(),23,59,59,999).getTime() : null;
+  let cutoffDrop=0, unmatched=0, counted=0, holidaySkip=0, swapSkip=0, inCodeSkip=0, talkisSkip=0, curRoundSkip=0, returnedSkip=0;
   for(let i=1;i<prevCancelData.length;i++){
     const row=prevCancelData[i];
     if(!row) continue;
@@ -9145,10 +9151,18 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
     if(cutoffStart && distDate && distDate<cutoffStart){ cutoffDrop++; continue; }
     // 분배일 주말·공휴일 제외 (gdCountCancels와 동일 룰 — 휴일 판정은 항상 분배일 기준)
     if(distDate && isHoliday(distDate)){ holidaySkip++; continue; }
+    // IN DB 제외 (gdCountCancels와 동일 룰)
+    const cxCodeRaw=str(row[GD_CANCEL_COL.code]).trim();
+    const cxClass=str(row[GD_CANCEL_COL.classification]).trim();
+    if(cxCodeRaw.toLowerCase().includes('in') && !(applyIn&&cxCodeRaw==='IN'&&cxClass)){ inCodeSkip++; continue; }
+    if(gdIsTalkisCls(cxClass)){ talkisSkip++; continue; }
+    if(str(row[GD_CANCEL_COL.returnDate])){ returnedSkip++; continue; }
+    const vcOrderDt=parseDate(row[GD_CANCEL_COL.orderDate]);
+    if(prevEndMs!==null && vcOrderDt && vcOrderDt.getTime()>prevEndMs){ curRoundSkip++; continue; }
 
     const cancelManager=str(row[GD_CANCEL_COL.manager]);
     if(!cancelManager) continue;
-    const vcOrder=gdFmtD(parseDate(row[GD_CANCEL_COL.orderDate]));   // 직전 취소파일의 신청일=오더일
+    const vcOrder=gdFmtD(vcOrderDt);   // 직전 취소파일의 신청일=오더일
     const target=memberSet.has(cancelManager)?cancelManager:(memberSet.has(cancelManager.replace(/\(R_[^)]+\)/,'').trim())?cancelManager.replace(/\(R_[^)]+\)/,'').trim():null);
     // 맞교환 제외: 같은 (전화|오더일)로 현재 활성계약이 있으면 취소 아님(제품 맞교환 = 옛 계약 삭제 + 동일 오더일 새 계약)
     const vcPhone=normPh(row[GD_CANCEL_COL.custPhone]);
@@ -9161,13 +9175,22 @@ function gdCountVanishedCancels(prevCancelData, curCancelData, members, cutoffSt
     counts[target]++; counted++;
     if(keyCollect)(keyCollect[target]=keyCollect[target]||[]).push({key:ck, name:str(row[GD_CANCEL_COL.custName]), phone:str(row[GD_CANCEL_COL.custPhone]), order:vcOrder, dist:gdFmtD(distDate)});
   }
-  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / 맞교환 제외 ${swapSkip}건 / cutoff drop ${cutoffDrop}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 담당자 미매칭 ${unmatched}건`);
+  console.log(`[gd] 사후 배송전 취소: ${counted}건 카운트 / 맞교환 제외 ${swapSkip}건 / 코드 in 제외 ${inCodeSkip}건 / talkis 제외 ${talkisSkip}건 / 반품 이력 제외 ${returnedSkip}건 / 이번 회차 계약 제외 ${curRoundSkip}건 / cutoff drop ${cutoffDrop}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 담당자 미매칭 ${unmatched}건`);
   return counts;
 }
 
 // 신청자관리 파일 + 계약 파일 매칭 — 반품일이 회차 내 + AP열 분배일이 평일 + R열 코드 'in' 제외(단 'IN'+Q열 분류 있으면 포함) + 매칭된 계약의 오더일이 달력상 1개월 이내(취소 파일 오더일 윈도우)
+// 취소 파일 Q열 분류(매체코드)가 talkis인지 — 실계약수의 매체 talkis 제외와 맞춤
+const gdIsTalkisCls=cls=>str(cls).toLowerCase().includes('talkis');
+// 마지막 gdGenerate가 반품 취소에 쓴 기간 — 디버그 함수가 같은 기간으로 추적하도록 보관
+let gdLastCxWindow=null;
+function gdCxWindow(minDD, maxDD){
+  const w=gdLastCxWindow, s=w?.start||minDD, e=w?.end||maxDD;
+  return {ps:new Date(s.getFullYear(),s.getMonth(),s.getDate()), pe:new Date(e.getFullYear(),e.getMonth(),e.getDate(),23,59,59,999)};
+}
 function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, uploadTime, keyCollect){
-  // 룰: cancel 파일에서 반품일이 회차 분배일 min~max 범위 안인 행을 카운트.
+  // 룰: cancel 파일에서 반품일이 periodStart~periodEnd 안인 행을 카운트.
+  //     gdGenerate는 (직전 회차 마지막 분배일 다음날 ~ 이번 회차 마지막 분배일)을 넘긴다 — 실계약 회차 매칭과 동일, 주말 반품 누락 방지.
   //     담당자는 cancel 파일 N열 그대로 사용 ((R_xxx) 접두 제거하여 멤버 매칭).
   //     계약(cont) 파일과의 고객키 매칭은 하지 않음 — cancel 파일의 오더일 범위가
   //     cont 스냅샷보다 훨씬 길기 때문에 cont 미존재 = 정상 케이스.
@@ -9180,7 +9203,7 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
   const pe=new Date(periodEnd.getFullYear(),periodEnd.getMonth(),periodEnd.getDate(),23,59,59,999);
   const applyIn=gdApplyInRule(uploadTime);
 
-  let unmatched=0, holidaySkip=0, inCodeSkip=0;
+  let unmatched=0, holidaySkip=0, inCodeSkip=0, talkisSkip=0;
   for(let i=1;i<cancelData.length;i++){
     const row=cancelData[i];
     if(!row) continue;
@@ -9195,6 +9218,7 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     const cxClass=str(row[GD_CANCEL_COL.classification]).trim();   // Q열 분류(매체코드)
     const isExactIn=cxCodeRaw==='IN';
     if(cxCode.includes('in') && !(applyIn&&isExactIn&&cxClass)){ inCodeSkip++; continue; }
+    if(gdIsTalkisCls(cxClass)){ talkisSkip++; continue; }
 
     if(!cancelManager) continue;
     const cxKey=str(row[GD_CANCEL_COL.customerKey]);
@@ -9205,8 +9229,8 @@ function gdCountCancels(cancelData, contData, members, periodStart, periodEnd, u
     if(set.has(stripped)){ counts[stripped]++; if(keyCollect)(keyCollect[stripped]=keyCollect[stripped]||[]).push({key:cxKey, name:cxName, phone:cxPhone, order:cxOrder, ret:gdFmtD(returnDt), dist:gdFmtD(cxDistDate)}); }
     else unmatched++;
   }
-  if(unmatched>0||holidaySkip>0||inCodeSkip>0){
-    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 코드 in 제외 ${inCodeSkip}건`);
+  if(unmatched>0||holidaySkip>0||inCodeSkip>0||talkisSkip>0){
+    console.log(`[gd] 취소수: 미매칭(이름) ${unmatched}건 / 분배일 주말·공휴일 ${holidaySkip}건 / 코드 in 제외 ${inCodeSkip}건 / talkis 제외 ${talkisSkip}건`);
   }
   return counts;
 }
@@ -9233,8 +9257,7 @@ window.gdDebugCancels=function(keys){
     const d=parseDate(dbFile.data[i][COL.distributeDate]);
     if(d){if(!maxDistDate||d>maxDistDate)maxDistDate=d;if(!minDistDate||d<minDistDate)minDistDate=d;}
   }
-  const ps=new Date(minDistDate.getFullYear(),minDistDate.getMonth(),minDistDate.getDate());
-  const pe=new Date(maxDistDate.getFullYear(),maxDistDate.getMonth(),maxDistDate.getDate(),23,59,59,999);
+  const {ps,pe}=gdCxWindow(minDistDate,maxDistDate);
 
   const cancelByKey={};
   for(let i=1;i<cancelFile.data.length;i++){
@@ -9265,6 +9288,7 @@ window.gdDebugCancels=function(keys){
       const _exactInCx=str(row[GD_CANCEL_COL.code]).trim()==='IN';
       const _classCx=str(row[GD_CANCEL_COL.classification]).trim();
       if(cxCode.includes('in') && !(_applyInCx&&_exactInCx&&_classCx)) reasons.push(`코드 'in' 포함("${cxCode}"${_exactInCx&&!_classCx?' / 분류(Q) 공란':''})`);
+      if(gdIsTalkisCls(_classCx)) reasons.push(`분류 talkis("${_classCx}")`);
       if(!memberOK && reasons.length===0) reasons.push(`담당자 미매칭("${mgrRaw}")`);
 
       out.push({
@@ -9416,8 +9440,7 @@ window.gdDebugByMember=function(names){
     const d=parseDate(dbFile.data[i][COL.distributeDate]);
     if(d){if(!maxDD||d>maxDD)maxDD=d;if(!minDD||d<minDD)minDD=d;}
   }
-  const ps=new Date(minDD.getFullYear(),minDD.getMonth(),minDD.getDate());
-  const pe=new Date(maxDD.getFullYear(),maxDD.getMonth(),maxDD.getDate(),23,59,59,999);
+  const {ps,pe}=gdCxWindow(minDD,maxDD);
   const fmt=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   const norm=n=>(n||'').replace(/\(R_[^)]+\)/,'').trim();
   const grouped={}; names.forEach(n=>grouped[n]=[]);
@@ -9443,6 +9466,7 @@ window.gdDebugByMember=function(names){
     if(cxDistDate && isHoliday(cxDistDate)) reasons.push(`분배일 휴일(${fmt(cxDistDate)})`);
     const _applyIn=gdApplyInRule(cancelFile.uploadTime);
     if(cxCode.includes('in') && !(_applyIn&&cxCodeRaw==='IN'&&cxClass)) reasons.push(`코드 'in' 포함("${cxCode}"${cxCodeRaw==='IN'&&!cxClass?' / 분류(Q) 공란':''})`);
+    if(gdIsTalkisCls(cxClass)) reasons.push(`분류 talkis("${cxClass}")`);
     const memberOK=memberSet.has(mgrRaw)||memberSet.has(mgrNorm);
     if(!memberOK && reasons.length===0) reasons.push(`담당자 미매칭("${mgrRaw}")`);
 
@@ -9498,7 +9522,12 @@ window.gdDebugVanished=function(refKey){
     seen.add(k);
     const dist=parseDate(r[C.distributeDate]);
     const drop=!!(dist&&dist.getTime()<cutoff);
-    out.push({담당자:mgr, 고객키:k, 분배일:r[C.distributeDate], 주말공휴일:dist?isHoliday(dist):'(null)', 반품일:r[C.returnDate], 판정:drop?'❌ cutoff-drop(제외)':'✅ COUNTED(사후취소 +1)'});
+    const code=String(r[C.code]||'').trim(), cls=String(r[C.classification]||'').trim();
+    const inSkip=code.toLowerCase().includes('in') && !(gdApplyInRule(prev.uploadTime)&&code==='IN'&&cls);
+    const od=parseDate(r[C.orderDate]), pm=gdLastCxWindow?.prevMax;
+    const curRound=!!(pm&&od&&od.getTime()>new Date(pm.getFullYear(),pm.getMonth(),pm.getDate(),23,59,59,999).getTime());
+    const judge=drop?'❌ cutoff-drop(제외)':inSkip?'❌ IN DB(제외)':gdIsTalkisCls(cls)?'❌ talkis(제외)':str(r[C.returnDate])?'❌ 반품 이력(제외)':curRound?'❌ 이번 회차 계약(제외)':'✅ COUNTED(사후취소 +1)';
+    out.push({담당자:mgr, 고객키:k, 분배일:r[C.distributeDate], 오더일:r[C.orderDate], 주말공휴일:dist?isHoliday(dist):'(null)', 코드:code, 분류:cls, 반품일:r[C.returnDate], 판정:judge});
   }
   console.table(out);
   const counted=out.filter(o=>o.판정.indexOf('COUNTED')>=0);
@@ -9636,7 +9665,11 @@ async function gdGenerate(dbFileId, opts={}){
     const _dbRuleStat={};
     const dbCounts=gdCountDb(dbFile.data, members, dbFile.uploadTime, minDistDate, maxDistDate, _dbRuleStat);
     const contCounts=gdCountContracts(contFile.data, members, contFile.uploadTime, cancelFile.data, maxDistDate, prevMaxDist, _contractKeys);
-    const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, minDistDate, maxDistDate, cancelFile.uploadTime, _banpumKeys);
+    // 반품 취소 기간 = 실계약과 동일하게 (직전 회차 마지막 분배일 다음날 ~ 이번 회차 마지막 분배일]
+    //   분배일 min~max를 쓰면 회차 사이 주말·연휴에 찍힌 반품일이 어느 회차에도 안 잡힌다(반품일은 주말에도 찍힘).
+    const _cxStart=prevMaxDist ? new Date(prevMaxDist.getFullYear(),prevMaxDist.getMonth(),prevMaxDist.getDate()+1) : minDistDate;
+    gdLastCxWindow={start:_cxStart, end:maxDistDate, prevMax:prevMaxDist};
+    const cancelCounts=gdCountCancels(cancelFile.data, contFile.data, members, _cxStart, maxDistDate, cancelFile.uploadTime, _banpumKeys);
 
     // 사후 배송전 취소 — 직전 회차 cancel 파일 diff 기반
     // 직전 cancel = 직전 dbFile에 가장 가까운 cancel 파일
@@ -9659,7 +9692,7 @@ async function gdGenerate(dbFileId, opts={}){
     // 이번 cancel cutoff start ≈ cancel 업로드 시점 - 30일(1개월) — cutoff drop 가드용
     // (취소 파일이 오더일 최근 1개월치만 담기므로, 1개월 지나 자연 만료된 행을 사후취소로 오인하지 않게 가드도 1개월로 맞춤)
     const _cancelCutoffStart=new Date(cancelFile.uploadTime - 30*24*60*60*1000);
-    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys, _swapKeys);
+    const vanishedCounts=gdCountVanishedCancels(_prevCancelFile?.data, cancelFile.data, members, _cancelCutoffStart, _huPreKeys, _swapKeys, _prevCancelFile?.uploadTime, prevMaxDist);
     members.forEach(name=>{ cancelCounts[name]=(cancelCounts[name]||0)+(vanishedCounts[name]||0); });
 
     // 회차별 수동 실계약수/취소수 조정 (해당 회차에만 적용 — sheetName 키)
