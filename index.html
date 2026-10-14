@@ -14780,8 +14780,12 @@ let tbIdb=null, tbFiles=[], tbLoaded=false, tbModel=null, tbScanBusy=false, tbCh
 const TB_TYPES=['db','contDaily','attend'];
 const TB_TYPE_LABEL={db:'DB수',contDaily:'계약(일마감)',attend:'명단'};
 const TB_MIN_DB=5; // DB수가 이 값 이하인 행(시간대·일자)은 표본 부족 → 리스트에서 제외(DB수·계약수 무시)
-// 타임보드 차등분배 시작일(분배일 기준) → 전후 비교. 언어뷰별로 시행일이 다름. 이 날짜부터 '후'
-const TB_DIFF_CUTOFFS={'더위크':'2026-06-24','제2외국어':'2026-06-29'};
+// 전후 비교 기준일(분배일) — 더위크/결합/제2외국어 뷰별로 사용자가 날짜 선택. 이 날짜부터 '후'. localStorage 보관
+const TB_DIFF_LANGS=['더위크','결합','제2외국어'];
+const TB_DIFF_KEY='tb_diff_cutoffs';
+const TB_DIFF_DEFAULTS={'더위크':'2026-06-24','제2외국어':'2026-06-29'};   // 미선택 시 기본값(기존 차등분배 시행일)
+function tbDiffCutoffs(){let o={};try{o=JSON.parse(localStorage.getItem(TB_DIFF_KEY)||'{}')||{};}catch(e){}return Object.assign({},TB_DIFF_DEFAULTS,o);}
+function tbSetDiffCutoff(lang,v){const o=tbDiffCutoffs();o[lang]=v||'';try{localStorage.setItem(TB_DIFF_KEY,JSON.stringify(o));}catch(e){}tbRender();}
 
 function tbOpenIDB(){return new Promise((res,rej)=>{const req=indexedDB.open(TB_DB_NAME,TB_DB_VER);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id',autoIncrement:true});};req.onsuccess=()=>{tbIdb=req.result;res();};req.onerror=()=>rej(req.error);});}
 function tbIdbAdd(rec){return new Promise((res,rej)=>{const tx=tbIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
@@ -15048,10 +15052,12 @@ function tbAggSlotSampledSplit(lang,s,e,cutoff){
 }
 function tbMD(iso){return iso.slice(5).replace('-','/').replace(/^0/,'');}   // '2026-06-24' → '6/24'
 function tbPrevDayISO(iso){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()-1);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
-// 차등분배 시행일(분배일) 기준으로 전·후를 나눠 시간대별 성과 비교. 시행일이 정의된 언어뷰에서만 노출.
+// 선택한 기준일(분배일)로 전·후를 나눠 시간대별 성과 비교. 더위크/결합/제2외국어 뷰에서만 노출.
 function tbBeforeAfterSection(lang,s,e){
-  const cutoff=TB_DIFF_CUTOFFS[lang];
-  if(!cutoff)return '';
+  if(!TB_DIFF_LANGS.includes(lang))return '';
+  const cutoff=tbDiffCutoffs()[lang]||'';
+  const picker=`<input type="date" value="${cutoff}" onchange="tbSetDiffCutoff('${lang}',this.value)" style="margin-left:6px;padding:2px 6px;font-size:12px;font-weight:600;border:1px solid #cbd5e1;border-radius:6px">`;
+  if(!cutoff)return `<div class="tb-sub-h" style="margin-top:24px">🔀 전후 비교 · 기준일${picker}</div><div class="tb-empty">기준일(분배일)을 선택하면 그 날짜 전·후로 시간대별 성과를 비교합니다.</div>`;
   const mdd=tbMD(cutoff), bdd=tbMD(tbPrevDayISO(cutoff));   // '6/24' / '6/23'
   const [mapB,mapA]=tbAggSlotSampledSplit(lang,s,e,cutoff);
   const hasB=mapB.size>0, hasA=mapA.size>0;
@@ -15059,7 +15065,7 @@ function tbBeforeAfterSection(lang,s,e){
   const slots=Array.from(new Set([...mapB.keys(),...mapA.keys()]))
     .filter(sl=>dbOf(mapB,sl)>TB_MIN_DB||dbOf(mapA,sl)>TB_MIN_DB)   // 어느 한쪽이라도 표본 충분
     .sort((a,b)=>tbSlotMin(a)-tbSlotMin(b));
-  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 타임보드 차등분배 전후 비교 <span class="tb-sub-s">(분배일 ${mdd} 차등분배 기준 · 좌 ~${bdd} · 우 ${mdd}~ · DB수 ${TB_MIN_DB}건 이하 유입일 제외)</span></div>`;
+  const head=`<div class="tb-sub-h" style="margin-top:24px">🔀 전후 비교 · 기준일${picker} <span class="tb-sub-s">(분배일 ${mdd} 기준 · 좌 ~${bdd} · 우 ${mdd}~ · DB수 ${TB_MIN_DB}건 이하 유입일 제외)</span></div>`;
   if(!slots.length)return head+`<div class="tb-empty">비교할 데이터가 없습니다. (조회기간·표본 확인)</div>`;
   const c=v=>v.toLocaleString();
   const rc=(n,d)=>d?(n/d*100).toFixed(1)+'%':'-';
