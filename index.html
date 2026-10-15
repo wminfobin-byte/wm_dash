@@ -347,6 +347,13 @@ tr.row-h td{background:var(--gh-light)}
 .cd-wide-table th{font-size:12px}
 .cd-wide-table td,.cd-wide-table th{border-left:1px solid #e8e8e8}
 .cd-wide-table td:first-child,.cd-wide-table th:first-child{border-left:none}
+.cd-wide-table table.cd-bk-tbl{min-width:0}
+.cd-bk-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;font-size:12px;color:#475569}
+.cd-bk-ctl input[type=date],.cd-bk-ctl select{padding:4px 8px;font-size:12px;font-weight:600;border:1px solid #cbd5e1;border-radius:6px}
+.cd-bk-cap{font-size:12px;color:#64748b;margin:0 0 10px}
+.cd-bk-warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:8px 12px;font-size:12px;margin:0 0 12px}
+.cd-bk-cut td{background:#fef9c3!important}
+.cd-bk-after td:first-child{color:#047857}
 .dp-table-wrap{overflow-x:auto}
 .cd-sep{border-left:2px solid #aab!important}
 .cd-sep-light{border-left:1.5px solid #ccd!important}
@@ -1390,6 +1397,7 @@ tr.vc-left:hover{opacity:.75}
       <div class="cd-subtab" data-view="bk-noprovide" onclick="cdSwitchView('bk-noprovide')">브레인키 미제공</div>
       <div class="cd-subtab" data-view="bk-join" onclick="cdSwitchView('bk-join')">브레인키 가입</div>
       <div class="cd-subtab" data-view="bk-nojoin" onclick="cdSwitchView('bk-nojoin')">브레인키 미가입</div>
+      <div class="cd-subtab" data-view="bk-analysis" onclick="cdSwitchView('bk-analysis')">브레인키 분석</div>
     </div>
 
     <div class="est-banner hidden" id="cdEstBanner">추정모드 ON — 과거 취소 패턴 기반으로 미래 취소를 추정한 수치입니다</div>
@@ -1509,6 +1517,15 @@ tr.vc-left:hover{opacity:.75}
       <div class="table-section"><h3>센터별 취소율</h3><div class="cd-wide-table" id="cdCenter-no-health"></div></div>
       <div class="table-section"><h3>종류별 취소율</h3><div class="cd-wide-table" id="cdProduct-no-health"></div></div>
       <div class="table-section"><h3 style="cursor:pointer;user-select:none" onclick="cdToggleBkPerson('no-health')"><span><span class="cd-bk-arrow" id="cdArrow-no-health" style="display:inline-block;transition:transform .2s;margin-right:6px">▶</span>개인별 취소율</span></h3><div class="cd-wide-table hidden" id="cdPerson-no-health"></div></div>
+    </div>
+    <!-- 브레인키 분석 (cdBk*) — 가입/제공·미가입/미제공 비교 + 기준일 전후 비교 -->
+    <div id="cdView-bk-analysis" class="cd-view hidden">
+      <div id="cdBkWarn"></div>
+      <div class="kpi-grid" id="cdKpi-bk-analysis"></div>
+      <div class="table-section"><h3>기준일 전후 비교</h3><div id="cdBkBA"></div></div>
+      <div class="table-section"><h3>가입 여부별 취소율 <span class="table-sub">조회기간</span></h3><div class="cd-wide-table" id="cdBkSeg"></div></div>
+      <div class="table-section"><h3>기간별 추이</h3><div class="cd-bk-ctl" id="cdBkUnitCtl"></div><div style="height:280px;margin-bottom:12px"><canvas id="cdBkChartCv"></canvas></div><div class="cd-wide-table" id="cdBkTrend"></div></div>
+      <div class="table-section"><h3>차원별 비교</h3><div class="cd-bk-ctl" id="cdBkDimCtl"></div><div class="cd-wide-table" id="cdBkDim"></div></div>
     </div>
   </div>
   <!-- TOP 버튼 -->
@@ -5575,7 +5592,7 @@ const CD_CUST={customerKey:6,bkPhone:32,bkAccount:34}; // AG=32 브레인키전�
 let cdCurrentView='all';
 const CD_KIM_DATES=new Set(['2026-02-20','2026-02-23','2026-02-24','2026-03-24','2026-03-25','2026-03-26']);
 function cdFmtISO(d){return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';}
-const CD_ALL_VIEWS=['all','bk-provide','bk-noprovide','bk-join','bk-nojoin','kim','hwalryuk','hyuldang','health','no-health'];
+const CD_ALL_VIEWS=['all','bk-provide','bk-noprovide','bk-join','bk-nojoin','bk-analysis','kim','hwalryuk','hyuldang','health','no-health'];
 const CD_MEMBER_KEY='cd_member_history';
 const CD_CENTER_ORDER=['노원','대전','유성','당산','강동','송내','군자'];
 const CD_GROUP_ORDER=['W그룹','E그룹','N그룹','A그룹','B그룹','C그룹'];
@@ -5863,6 +5880,7 @@ async function cdGenerate(){
     }
     for(const c of contracts){
       const bk=bkMap[c.ck];
+      c.bkMatched=!!bk;   // 고객관리 파일에 고객키가 없으면 미제공과 구분(브레인키 분석에서 별도 집계)
       c.bkProvide=bk?bk.provide:false;
       c.bkSubscribe=bk?bk.subscribe:false;
     }
@@ -5874,7 +5892,7 @@ async function cdGenerate(){
       c.hasHyuldang=(c.giftStr||'').includes('혈당');
     }
 
-    cdResult={contracts,members};
+    cdResult={contracts,members,bkHasCust:!!custFile};
     // 최종업데이트일자 표시 (일마감 파일 신청일 기준 최신)
     const _dw=['일','월','화','수','목','금','토'];
     if(cdMaxAppDate){
@@ -5915,6 +5933,8 @@ function cdFilterAndRender(){
   const data=cdDateFiltered();
   if(cdCurrentView==='all'){
     cdRenderKPI(data);cdRenderInsights(data);cdRenderMonthlyTable(data);cdRenderWeeklyTable(data);cdRenderCenterTable(data);cdRenderProductTable(data);cdRenderPersonTable(data);
+  }else if(cdCurrentView==='bk-analysis'){
+    cdRenderBkAnalysis(data);
   }else{
     cdRenderBkView(cdCurrentView,cdViewFilter(data,cdCurrentView));
   }
@@ -6345,6 +6365,202 @@ function cdSwitchView(view){
   if(cdResult)cdFilterAndRender();
 }
 
+// ═══ 브레인키 분석 (cdBk*) ═══
+// 세그먼트: 가입(계정 있음) / 제공·미가입(전화번호만) / 미제공 / 미매칭(고객관리 파일에 고객키 없음 — 비율 모수에서 제외)
+// 가입 여부는 '최신 고객관리 파일' 시점의 상태다(가입 일자 없음) → 모든 집계는 계약 신청일 코호트 기준.
+let cdBkUnit='month',cdBkDim='center',cdBkChart=null;
+const CD_BK_CUT_KEY='cd_bk_cutoff',CD_BK_WIN_KEY='cd_bk_win';
+function cdBkGet(k,d){try{return localStorage.getItem(k)||d;}catch(e){return d;}}
+function cdBkSet(k,v){try{localStorage.setItem(k,v);}catch(e){}if(cdResult)cdFilterAndRender();}
+function cdBkSetUnit(u){cdBkUnit=u;if(cdResult)cdFilterAndRender();}
+function cdBkSetDim(d){cdBkDim=d;if(cdResult)cdFilterAndRender();}
+function cdBkSeg(c){if(!c.bkMatched)return'na';if(c.bkSubscribe)return'join';if(c.bkProvide)return'nojoin';return'noprov';}
+function cdBkStat(list){
+  const s={n:0,m:0,prov:0,join:0,b:{all:cdNewBucket(),join:cdNewBucket(),nojoin:cdNewBucket(),noprov:cdNewBucket(),na:cdNewBucket()}};
+  for(const c of list){s.n++;cdAddToBucket(s.b.all,c);const g=cdBkSeg(c);cdAddToBucket(s.b[g],c);
+    if(g!=='na'){s.m++;if(g!=='noprov')s.prov++;if(g==='join')s.join++;}}
+  return s;
+}
+const cdBkR=(a,b)=>b?a/b:null;
+const cdBkP=v=>v==null?'-':pct2(v);
+function cdBkCx(b){return b.initial?(b.preCx+b.cancel)/b.initial:null;}
+// 증감 셀: good=+1이면 오를수록 좋음(녹색), -1이면 오를수록 나쁨(빨강)
+function cdBkDelta(before,after,good){
+  if(before==null||after==null)return'<td>-</td>';
+  const d=(after-before)*100,col=Math.abs(d)<0.05?'#64748b':((d>0)===(good>0)?'#16a34a':'#dc2626');
+  return `<td style="color:${col};font-weight:800">${d>0?'+':''}${d.toFixed(1)}%p</td>`;
+}
+function cdBkCntDelta(before,after,dec){
+  if(!before&&!after)return'<td>-</td>';
+  const d=after-before,r=before?` (${d>0?'+':''}${(d/before*100).toFixed(1)}%)`:'';
+  return `<td style="color:${d>0?'#16a34a':d<0?'#dc2626':'#64748b'};font-weight:800">${d>0?'+':''}${dec?d.toFixed(dec):Math.round(d).toLocaleString()}${r}</td>`;
+}
+function cdBkInRange(c,sIso,eIso){if(!c.appDate)return false;const d=cdFmtISO(c.appDate);return(!sIso||d>=sIso)&&(!eIso||d<=eIso);}
+function cdBkAddDays(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return cdFmtISO(d);}
+function cdBkDays(sIso,eIso){return Math.round((new Date(eIso+'T00:00:00')-new Date(sIso+'T00:00:00'))/864e5)+1;}
+
+// 추이·차원별 공통 표: 계약 / 제공 / 가입 / 세그먼트별 취소 / 격차
+function cdBkHead(first){
+  return `<thead><tr><th rowspan="2">${first}</th><th rowspan="2">계약수</th><th colspan="2" class="cd-sep">브레인키 제공</th><th colspan="3" class="cd-sep">브레인키 가입</th>`+
+    `<th colspan="2" class="cd-sep">가입 취소</th><th colspan="2" class="cd-sep">제공·미가입 취소</th><th colspan="2" class="cd-sep">미제공 취소</th><th rowspan="2" class="cd-sep">취소율 격차<br>(가입−미가입)</th></tr>`+
+    `<tr><th class="cd-sep">제공수</th><th>제공률</th><th class="cd-sep">가입수</th><th>가입률</th><th>제공 대비<br>가입률</th>`+
+    `<th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">취소수</th><th>취소율</th><th class="cd-sep">취소수</th><th>취소율</th></tr></thead>`;
+}
+function cdBkRow(label,s,opt){
+  opt=opt||{};
+  const cx=b=>{const r=cdBkCx(b);return `<td class="cd-sep">${cdNum(b.preCx+b.cancel)}</td><td style="color:${r==null?'inherit':cdRateColor(r)};font-weight:700">${cdBkP(r)}</td>`;};
+  const cls=[opt.cls||''].join(' ');
+  return `<tr class="${cls}" style="${opt.bold?'font-weight:800;background:#f8f9fc':''}"><td class="text-left" style="padding-left:14px">${label}</td><td>${cdNum(s.n)}</td>`+
+    `<td class="cd-sep">${cdNum(s.prov)}</td><td>${cdBkP(cdBkR(s.prov,s.m))}</td>`+
+    `<td class="cd-sep">${cdNum(s.join)}</td><td style="font-weight:700;color:#4361ee">${cdBkP(cdBkR(s.join,s.m))}</td><td>${cdBkP(cdBkR(s.join,s.prov))}</td>`+
+    cx(s.b.join)+cx(s.b.nojoin)+cx(s.b.noprov)+
+    cdBkDelta(cdBkCx(s.b.nojoin),cdBkCx(s.b.join),-1).replace('<td','<td class="cd-sep"')+`</tr>`;
+}
+
+function cdRenderBkAnalysis(data){
+  const all=cdResult.contracts;
+  // 경고: 고객관리 파일 없음 / 미매칭
+  const warns=[];
+  if(!cdResult.bkHasCust)warns.push('고객관리 (브레인키) 파일이 없습니다. 업로드해야 제공·가입 여부를 판정할 수 있습니다.');
+  const na=data.filter(c=>!c.bkMatched).length;
+  if(cdResult.bkHasCust&&na)warns.push(`조회기간 계약 ${data.length.toLocaleString()}건 중 ${na.toLocaleString()}건(${pct2(na/data.length)})은 고객관리 파일에 고객키가 없어 제공률·가입률 모수에서 제외했습니다. 고객관리 파일이 계약 기간을 모두 덮는지 확인하세요.`);
+  document.getElementById('cdBkWarn').innerHTML=warns.map(w=>`<div class="cd-bk-warn">${w}</div>`).join('');
+
+  // KPI
+  const S=cdBkStat(data);
+  const cj=cdBkCx(S.b.join),cn=cdBkCx(S.b.nojoin),cp=cdBkCx(S.b.noprov);
+  const gap=(cj!=null&&cn!=null)?((cj-cn)*100):null;
+  document.getElementById('cdKpi-bk-analysis').innerHTML=`
+    <div class="kpi-card"><div class="kl">최초 계약수</div><div class="kv">${S.n.toLocaleString()}</div></div>
+    <div class="kpi-card" style="border-left-color:#2ec4b6"><div class="kl">브레인키 제공</div><div class="kv">${S.prov.toLocaleString()} / ${cdBkP(cdBkR(S.prov,S.m))}</div></div>
+    <div class="kpi-card" style="border-left-color:#4361ee"><div class="kl">브레인키 가입</div><div class="kv">${S.join.toLocaleString()} / ${cdBkP(cdBkR(S.join,S.m))}</div></div>
+    <div class="kpi-card" style="border-left-color:#4361ee"><div class="kl">제공 대비 가입률</div><div class="kv">${cdBkP(cdBkR(S.join,S.prov))}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--danger)"><div class="kl">취소율 가입 / 제공·미가입 / 미제공</div><div class="kv" style="font-size:18px">${cdBkP(cj)} / ${cdBkP(cn)} / ${cdBkP(cp)}</div></div>
+    <div class="kpi-card" style="border-left-color:${gap==null?'#94a3b8':gap<0?'var(--success)':'var(--danger)'}"><div class="kl">취소율 격차 (가입−미가입)</div><div class="kv">${gap==null?'-':(gap>0?'+':'')+gap.toFixed(1)+'%p'}</div></div>`;
+
+  cdRenderBkBA(all);
+
+  // 세그먼트 비교 (기존 취소율 표 형식 — 취소 경과일 구간까지)
+  let h=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
+  h+=cdTR('전체',S.b.all,true);
+  h+=cdTR(`가입 (${cdBkP(cdBkR(S.join,S.m))})`,S.b.join,false,28);
+  h+=cdTR(`제공·미가입 (${cdBkP(cdBkR(S.prov-S.join,S.m))})`,S.b.nojoin,false,28);
+  h+=cdTR(`미제공 (${cdBkP(cdBkR(S.m-S.prov,S.m))})`,S.b.noprov,false,28);
+  if(S.b.na.initial)h+=cdTR('고객관리 미매칭',S.b.na,false,28);
+  document.getElementById('cdBkSeg').innerHTML=h+'</tbody></table>';
+
+  // 기간별 추이
+  const cut=cdBkGet(CD_BK_CUT_KEY,'');
+  const units=[['day','일별'],['week','주차별'],['month','월별']];
+  document.getElementById('cdBkUnitCtl').innerHTML=units.map(([k,l])=>`<button class="cd-quick-btn${cdBkUnit===k?' active':''}" onclick="cdBkSetUnit('${k}')">${l}</button>`).join('')+
+    (cut?`<span style="margin-left:8px">노란 행 = 기준일(${cut}) 포함 구간, 초록 글자 = 기준일 이후</span>`:'');
+  const keyOf=d=>cdBkUnit==='day'?cdFmtISO(d):cdBkUnit==='week'?cdWeekKey(d):cdFmtISO(d).slice(0,7);
+  const labOf=k=>cdBkUnit==='day'?k.slice(5).replace('-','/'):cdBkUnit==='week'?cdWeekLabel(k):`${k.slice(0,4)}년 ${+k.slice(5)}월`;
+  const byK={};for(const c of data){if(!c.appDate)continue;const k=keyOf(c.appDate);(byK[k]=byK[k]||[]).push(c);}
+  const keys=Object.keys(byK).sort();
+  const cutKey=cut?keyOf(new Date(cut+'T00:00:00')):null;
+  const stats=keys.map(k=>cdBkStat(byK[k]));
+  let t=`<table class="cd-bk-tbl">${cdBkHead(units.find(u=>u[0]===cdBkUnit)[1].replace('별',''))}<tbody>`;
+  t+=cdBkRow('전체',S,{bold:true});
+  keys.forEach((k,i)=>{t+=cdBkRow(labOf(k),stats[i],{cls:(k===cutKey?'cd-bk-cut ':'')+(cutKey&&k>cutKey?'cd-bk-after':'')});});
+  document.getElementById('cdBkTrend').innerHTML=t+'</tbody></table>';
+  cdBkRenderChart(keys.map(labOf),stats,keys.map(k=>cutKey&&k>=cutKey));
+
+  // 차원별
+  const dims=[['center','센터별'],['product','종류별'],['person','코디별']];
+  document.getElementById('cdBkDimCtl').innerHTML=dims.map(([k,l])=>`<button class="cd-quick-btn${cdBkDim===k?' active':''}" onclick="cdBkSetDim('${k}')">${l}</button>`).join('');
+  const dk=c=>cdBkDim==='center'?(c.center||'기타'):cdBkDim==='product'?(c.productType||'기타'):`${c.cleanName}${c.center?' ('+c.center+')':''}`;
+  const byD={};for(const c of data){const k=dk(c);(byD[k]=byD[k]||[]).push(c);}
+  const dRows=Object.entries(byD).map(([k,l])=>[k,cdBkStat(l)]).sort((a,b)=>b[1].n-a[1].n);
+  let dt=`<table class="cd-bk-tbl">${cdBkHead(dims.find(x=>x[0]===cdBkDim)[1].replace('별',''))}<tbody>`;
+  dt+=cdBkRow('전체',S,{bold:true});
+  for(const[k,s]of dRows)dt+=cdBkRow(k,s);
+  document.getElementById('cdBkDim').innerHTML=dt+'</tbody></table>';
+}
+
+function cdBkRenderChart(labels,stats,after){
+  const cv=document.getElementById('cdBkChartCv');if(!cv||typeof Chart==='undefined')return;
+  if(cdBkChart){cdBkChart.destroy();cdBkChart=null;}
+  const pc=v=>v==null?null:+(v*100).toFixed(2);
+  cdBkChart=new Chart(cv,{
+    data:{labels,datasets:[
+      {type:'bar',label:'가입률',data:stats.map(s=>pc(cdBkR(s.join,s.m))),backgroundColor:after.map(a=>a?'rgba(46,196,182,.75)':'rgba(67,97,238,.55)'),order:3},
+      {type:'line',label:'가입 취소율',data:stats.map(s=>pc(cdBkCx(s.b.join))),borderColor:'#4361ee',backgroundColor:'#4361ee',tension:.25,spanGaps:true,order:1},
+      {type:'line',label:'제공·미가입 취소율',data:stats.map(s=>pc(cdBkCx(s.b.nojoin))),borderColor:'#f0920e',backgroundColor:'#f0920e',tension:.25,spanGaps:true,order:1},
+      {type:'line',label:'미제공 취소율',data:stats.map(s=>pc(cdBkCx(s.b.noprov))),borderColor:'#94a3b8',backgroundColor:'#94a3b8',borderDash:[4,4],tension:.25,spanGaps:true,order:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{datalabels:{display:false},legend:{position:'bottom'},tooltip:{callbacks:{label:x=>`${x.dataset.label}: ${x.parsed.y==null?'-':x.parsed.y.toFixed(1)+'%'}`}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}}
+  });
+}
+
+// 기준일 전후 비교. 기간 방식: same=기준일~데이터 마지막일과 같은 길이로 직전 구간, 숫자=전후 N일씩, range=조회기간을 기준일로 분할
+function cdRenderBkBA(all){
+  const box=document.getElementById('cdBkBA');
+  const cut=cdBkGet(CD_BK_CUT_KEY,''),win=cdBkGet(CD_BK_WIN_KEY,'same');
+  let maxIso='',minIso='';for(const c of all){if(!c.appDate)continue;const d=cdFmtISO(c.appDate);if(!maxIso||d>maxIso)maxIso=d;if(!minIso||d<minIso)minIso=d;}
+  const opts=[['same','동일 기간 (기준일~마지막 데이터일과 같은 길이)'],['7','전후 7일'],['14','전후 14일'],['30','전후 30일'],['range','조회기간을 기준일로 분할']];
+  const ctl=`<div class="cd-bk-ctl">기준일 <input type="date" value="${cut}" onchange="cdBkSet('${CD_BK_CUT_KEY}',this.value)">`+
+    `<select onchange="cdBkSet('${CD_BK_WIN_KEY}',this.value)">${opts.map(([k,l])=>`<option value="${k}"${k===win?' selected':''}>${l}</option>`).join('')}</select>`+
+    (maxIso?`<span>데이터 신청일 ${minIso} ~ ${maxIso}</span>`:'')+`</div>`;
+  if(!cut){box.innerHTML=ctl+'<div class="cd-bk-cap">프로모션 시작일 등 기준일을 선택하면 그 날짜 전·후의 계약·제공·가입·취소를 비교합니다. 기준일 당일은 \'후\'에 포함됩니다.</div>';return;}
+  let bS,bE,aS,aE,trunc=false;
+  if(win==='range'){
+    bS=cdDateStart?cdFmtISO(cdDateStart):minIso;bE=cdBkAddDays(cut,-1);aS=cut;aE=cdDateEnd?cdFmtISO(cdDateEnd):maxIso;
+    if(aE>maxIso)aE=maxIso;
+  }else{
+    const N=win==='same'?(maxIso>=cut?cdBkDays(cut,maxIso):0):+win;
+    aS=cut;aE=cdBkAddDays(cut,Math.max(N,1)-1);if(aE>maxIso){aE=maxIso;trunc=true;}
+    bS=cdBkAddDays(cut,-Math.max(N,1));bE=cdBkAddDays(cut,-1);
+  }
+  if(aE<aS||!maxIso||cut>maxIso){box.innerHTML=ctl+`<div class="cd-bk-cap">기준일(${cut}) 이후 계약 데이터가 없습니다.</div>`;return;}
+  const LB=all.filter(c=>cdBkInRange(c,bS,bE)),LA=all.filter(c=>cdBkInRange(c,aS,aE));
+  const B=cdBkStat(LB),A=cdBkStat(LA);
+  const dB=cdBkDays(bS,bE),dA=cdBkDays(aS,aE);
+  const md=iso=>`${+iso.slice(5,7)}/${+iso.slice(8)}`;
+  // 성숙도: 데이터 마지막일 기준 신청 후 14일이 안 지난 계약 비중 (취소가 아직 덜 잡힘)
+  const young=l=>{if(!l.length)return 0;const lim=cdBkAddDays(maxIso,-13);return l.filter(c=>cdFmtISO(c.appDate)>=lim).length/l.length;};
+  const yB=young(LB),yA=young(LA);
+  const n=v=>Math.round(v).toLocaleString();
+  const fr=(a,b)=>b?`${pct2(a/b)} <span style="color:#94a3b8;font-weight:400">(${n(a)}/${n(b)})</span>`:'-';
+  const cxN=b=>b.preCx+b.cancel;
+  const rows=[
+    ['계약수',n(B.n),n(A.n),cdBkCntDelta(B.n,A.n)],
+    ['일평균 계약수',(B.n/dB).toFixed(1),(A.n/dA).toFixed(1),cdBkCntDelta(B.n/dB,A.n/dA,1)],
+    ['브레인키 제공률',fr(B.prov,B.m),fr(A.prov,A.m),cdBkDelta(cdBkR(B.prov,B.m),cdBkR(A.prov,A.m),1)],
+    ['브레인키 가입수',n(B.join),n(A.join),cdBkCntDelta(B.join,A.join)],
+    ['일평균 가입수',(B.join/dB).toFixed(1),(A.join/dA).toFixed(1),cdBkCntDelta(B.join/dB,A.join/dA,1)],
+    ['가입률 (계약 대비)',fr(B.join,B.m),fr(A.join,A.m),cdBkDelta(cdBkR(B.join,B.m),cdBkR(A.join,A.m),1)],
+    ['제공 대비 가입률',fr(B.join,B.prov),fr(A.join,A.prov),cdBkDelta(cdBkR(B.join,B.prov),cdBkR(A.join,A.prov),1)],
+    ['전체 취소율',fr(cxN(B.b.all),B.n),fr(cxN(A.b.all),A.n),cdBkDelta(cdBkCx(B.b.all),cdBkCx(A.b.all),-1)],
+    ['가입자 취소율',fr(cxN(B.b.join),B.b.join.initial),fr(cxN(A.b.join),A.b.join.initial),cdBkDelta(cdBkCx(B.b.join),cdBkCx(A.b.join),-1)],
+    ['제공·미가입 취소율',fr(cxN(B.b.nojoin),B.b.nojoin.initial),fr(cxN(A.b.nojoin),A.b.nojoin.initial),cdBkDelta(cdBkCx(B.b.nojoin),cdBkCx(A.b.nojoin),-1)],
+    ['미제공 취소율',fr(cxN(B.b.noprov),B.b.noprov.initial),fr(cxN(A.b.noprov),A.b.noprov.initial),cdBkDelta(cdBkCx(B.b.noprov),cdBkCx(A.b.noprov),-1)],
+  ];
+  const gapOf=S=>{const j=cdBkCx(S.b.join),x=cdBkCx(S.b.nojoin);return(j==null||x==null)?null:j-x;};
+  const gB=gapOf(B),gA=gapOf(A),gf=g=>g==null?'-':`${g>0?'+':''}${(g*100).toFixed(1)}%p`;
+  rows.push(['취소율 격차 (가입−미가입)',gf(gB),gf(gA),cdBkDelta(gB,gA,-1)]);
+  rows.push(['신청 14일 미경과 비중',pct2(yB),pct2(yA),'<td style="color:#64748b">-</td>']);
+  let t=`<table class="cd-bk-tbl"><thead><tr><th>지표</th><th style="background:#eef2ff">전 · ${md(bS)}~${md(bE)} (${dB}일)</th><th style="background:#ecfdf5">후 · ${md(aS)}~${md(aE)} (${dA}일)</th><th>증감</th></tr></thead><tbody>`;
+  for(const[l,b,a,d]of rows)t+=`<tr><td class="text-left" style="padding-left:14px;font-weight:700">${l}</td><td>${b}</td><td>${a}</td>${d}</tr>`;
+  t+='</tbody></table>';
+  const notes=[];
+  if(trunc)notes.push(`후 구간이 마지막 데이터일(${maxIso})에서 잘려 ${dA}일입니다. 전 구간은 ${dB}일이라 계약수·가입수는 일평균으로 비교하세요.`);
+  if(yA-yB>0.1)notes.push(`후 구간 계약의 ${pct2(yA)}가 신청 후 14일이 안 지나 취소가 아직 덜 잡혔습니다. 취소율 비교는 아래 표의 '14일이내' 열(경과일 구간별 취소율)로 보거나, 시간이 지난 뒤 다시 확인하세요.`);
+  // 세그먼트 × 전후 상세 (경과일 구간별 취소)
+  let d=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
+  for(const[tag,S]of[['전',B],['후',A]]){
+    d+=cdTR(`${tag} · 전체`,S.b.all,true);
+    d+=cdTR(`${tag} · 가입`,S.b.join,false,28);
+    d+=cdTR(`${tag} · 제공·미가입`,S.b.nojoin,false,28);
+    d+=cdTR(`${tag} · 미제공`,S.b.noprov,false,28);
+  }
+  d+='</tbody></table>';
+  box.innerHTML=ctl+notes.map(x=>`<div class="cd-bk-warn">${x}</div>`).join('')+
+    `<div class="cd-wide-table" id="cdBkBATbl">${t}</div><div class="cd-bk-cap" style="margin-top:14px">세그먼트별 상세 (경과일 구간별 취소)</div><div class="cd-wide-table" id="cdBkBADetail">${d}</div>`;
+}
+
 // ── 브레인키 뷰 렌더 ──
 function cdRenderBkView(viewKey,filtered){
 
@@ -6361,13 +6577,17 @@ function cdRenderBkView(viewKey,filtered){
   cdRenderInsights(filtered,`cdInsight-${viewKey}`);
 
   // 월별
-  const byBM={};
+  const byBM={},byM={};
   for(const c of filtered){if(!c.appDate)continue;const mk=`${c.appDate.getFullYear()}-${String(c.appDate.getMonth()+1).padStart(2,'0')}`;
+    if(!byM[mk])byM[mk]=cdNewBucket();cdAddToBucket(byM[mk],c);
     const bk=`${c.brand}|${mk}`;if(!byBM[bk])byBM[bk]=cdNewBucket();cdAddToBucket(byBM[bk],c);}
-  const months=[...new Set(Object.keys(byBM).map(k=>k.split('|')[1]))].sort();
+  const months=Object.keys(byM).sort();
   const bkTotalM=cdNewBucket();filtered.forEach(c=>cdAddToBucket(bkTotalM,c));
   let mHtml=`<table><thead><tr>${cdTH()}</tr></thead><tbody>`;
-  mHtml+=cdTR('전체',bkTotalM,true);
+  // 전체 합계 + 월별 소계 (전체 탭과 동일하게 접기 가능, gid는 뷰별로 분리)
+  const moAll=`mo-${viewKey}-all`;
+  mHtml+=cdMWHeaderTR('전체',bkTotalM,moAll,'');
+  months.forEach(mk=>{const x=byM[mk];if(x&&x.initial>0){const[,m]=mk.split('-');mHtml+=cdMWChildTR(`${+m}월`,x,moAll,'');}});
   for(const brand of CD_BRAND_ORDER){const bt=cdNewBucket();months.forEach(mk=>{const x=byBM[`${brand}|${mk}`];if(x)cdMergeBuckets(bt,x);});
     if(bt.initial===0)continue;mHtml+=cdTR(brand,bt,true,14,brand);
     months.forEach(mk=>{const x=byBM[`${brand}|${mk}`];if(x&&x.initial>0){const[,m]=mk.split('-');mHtml+=cdTR(`${+m}월`,x,false,28,brand);}});}
@@ -6600,6 +6820,7 @@ async function cdDownloadExcel(){
   const v=cdCurrentView;
   const sub=document.querySelector(`.cd-subtab[data-view="${v}"]`);
   const viewLabel=(sub?sub.textContent:v).replace(/"/g,'').trim();
+  if(v==='bk-analysis')return cdBkDownloadExcel(viewLabel);
   const idOf=dim=> v==='all'?`cd${dim}Table`:`cd${dim}-${v}`;
   const dims=[['Monthly','월별 취소율'],['Weekly','주차별 취소율'],['Center','센터별 취소율'],['Product','종류별 취소율'],['Person','개인별 취소율']];
   const wb=XLSX.utils.book_new();let added=0;
@@ -6613,6 +6834,27 @@ async function cdDownloadExcel(){
     if(dim==='Person')XLSX.utils.book_append_sheet(wb,cdBuildCancelCustSheet(cdViewFilter(cdDateFiltered(),v)),'취소고객(강동·당산)');
   }
   if(!added){alert('다운로드할 표가 없습니다. (현재 뷰의 표가 비어있습니다)');return;}
+  const period=((document.getElementById('cdDateDisplay')||{}).textContent||'전체기간').replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,24)||'전체기간';
+  const fname=`취소율_${viewLabel}_${period}.xlsx`;
+  const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  try{
+    const zip=await JSZip.loadAsync(wbBuf);
+    for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=fname;a.click();URL.revokeObjectURL(url);
+  }catch(e){console.error(e);XLSX.writeFile(wb,fname);}
+}
+
+// 브레인키 분석 엑셀 — 화면의 표를 그대로 시트로
+async function cdBkDownloadExcel(viewLabel){
+  const unitL={day:'일별',week:'주차별',month:'월별'}[cdBkUnit],dimL={center:'센터별',product:'종류별',person:'코디별'}[cdBkDim];
+  const sheets=[['cdBkBATbl','전후비교'],['cdBkBADetail','전후 세그먼트상세'],['cdBkSeg','가입여부별 취소율'],['cdBkTrend',`추이_${unitL}`],['cdBkDim',`차원_${dimL}`]];
+  const wb=XLSX.utils.book_new();let added=0;
+  for(const[id,label]of sheets){
+    const tbl=document.querySelector(`#${id} table`);if(!tbl||!tbl.rows.length)continue;
+    const ws=XLSX.utils.table_to_sheet(tbl);cdStyleWs(ws,tbl);XLSX.utils.book_append_sheet(wb,ws,label);added++;
+  }
+  if(!added){alert('다운로드할 표가 없습니다.');return;}
   const period=((document.getElementById('cdDateDisplay')||{}).textContent||'전체기간').replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,24)||'전체기간';
   const fname=`취소율_${viewLabel}_${period}.xlsx`;
   const wbBuf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
