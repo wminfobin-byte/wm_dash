@@ -6502,6 +6502,7 @@ function cdRenderBkBA(all){
   let maxIso='',minIso='';for(const c of all){if(!c.appDate)continue;const d=cdFmtISO(c.appDate);if(!maxIso||d>maxIso)maxIso=d;if(!minIso||d<minIso)minIso=d;}
   const opts=[['same','동일 기간 (기준일~마지막 데이터일과 같은 길이)'],['7','전후 7일'],['14','전후 14일'],['30','전후 30일'],['range','조회기간을 기준일로 분할']];
   const ctl=`<div class="cd-bk-ctl">기준일 <input type="date" value="${cut}" onchange="cdBkSet('${CD_BK_CUT_KEY}',this.value)">`+
+    (cut?`<button class="cd-quick-btn" onclick="cdBkSet('${CD_BK_CUT_KEY}','')">기준일 해제</button>`:'')+
     `<select onchange="cdBkSet('${CD_BK_WIN_KEY}',this.value)">${opts.map(([k,l])=>`<option value="${k}"${k===win?' selected':''}>${l}</option>`).join('')}</select>`+
     (maxIso?`<span>데이터 신청일 ${minIso} ~ ${maxIso}</span>`:'')+`</div>`;
   if(!cut){box.innerHTML=ctl+'<div class="cd-bk-cap">프로모션 시작일 등 기준일을 선택하면 그 날짜 전·후의 계약·제공·가입·취소를 비교합니다. 기준일 당일은 \'후\'에 포함됩니다.</div>';return;}
