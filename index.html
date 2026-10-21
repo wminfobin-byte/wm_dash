@@ -13729,8 +13729,8 @@ function spGapTitle(db,cont,s){
 function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
 // DB 파서 버전 — 파싱 필드를 바꾸면 올릴 것. 공용폴더 스캔 때 pv가 낮은 db 파일을 같은 파일로 재파싱한다.
 // v2 = 패키지(U)·매체그룹(S) 추가 (성과진단 탭)
-const SP_DB_PARSER_VER=3;   // v3: DB정보 IN 포함 여부(di) 추가 — 성과진단 계약 유형용
-const SP_CONT_PARSER_VER=2;   // v2 = 계약 행에 분류(Q) 원문 q 추가. 올리면 공용폴더 스캔 때 같은 계약 파일도 다시 파싱
+const SP_DB_PARSER_VER=2;
+const SP_CONT_PARSER_VER=3;   // v2 = 분류(Q) 원문 q, v3 = 코드번호(R) IN·재콜 플래그 ci/cr + 분배일(AP) dd. 올리면 공용폴더 스캔 때 같은 계약 파일도 다시 파싱
 const _spIntern=new Map();
 function spIntern(s){let v=_spIntern.get(s);if(v===undefined){v=s;_spIntern.set(s,s);}return v;}
 function spParseDb(wb){
@@ -13748,7 +13748,6 @@ function spParseDb(wb){
       st:String(r[24]==null?'':r[24]).trim()||'',
       d:spNormDay(r[8]),
       rc:dbinfo.includes('재콜')?1:0,
-      di:dbinfo.includes('IN')?1:0,   // DB정보에 IN (IN, 렌탈_IN, 고객센터IN …)
       in:media===''?1:0,
       mx:(media.includes('callback')||media.includes('tv_b'))?1:0,
       pk:spIntern(String(r[20]==null?'':r[20]).trim()),
@@ -13764,7 +13763,9 @@ function spParseCont(wb){
     const mgr=String(r[13]==null?'':r[13]).trim();if(!mgr)continue;
     const k=String(r[3]==null?'':r[3]).trim();
     const cat=String(r[16]==null?'':r[16]).trim();
-    rows.push({k, mgr, d:spNormDay(r[15]), in:cat===''?1:0, rt:spNormDay(r[42]), q:spIntern(cat)});   // q = 분류 원문 (v2~, 군자 계약 팀 판정용)
+    const code=String(r[17]==null?'':r[17]);   // R 코드번호: IN·렌탈_IN·고객센터_IN / (통화재콜)(부재재콜)… / 특가판매 …
+    rows.push({k, mgr, d:spNormDay(r[15]), in:cat===''?1:0, rt:spNormDay(r[42]), q:spIntern(cat),   // q = 분류 원문 (v2~, 군자 계약 팀 판정용)
+      ci:code.includes('IN')?1:0, cr:code.includes('재콜')?1:0, dd:spNormDay(r[41])});   // v3~ 성과진단 계약 유형용
   }
   return rows;
 }
@@ -14713,13 +14714,13 @@ function pdCompute(){
     //  월별 섹션(conts)에는 넣지 않는다 — 군자는 DB 분배 모수가 없어 계약률이 왜곡된다.
     if(String(r.mgr).includes('군자')){
       if(r.q===undefined){dayGunjaStale.set(r.d,(dayGunjaStale.get(r.d)||0)+1);continue;}   // v1 파싱본 — 분류 원문 없음
-      dayConts.push({k:r.k,q:r.q,in:r.in,gj:1,d:r.d,m:r.d.slice(0,7),day:+r.d.slice(8,10),name:r.mgr,team:pdTeamFromCls(r.q),ctr:'군자'});
+      dayConts.push({k:r.k,q:r.q,in:r.in,ci:r.ci,cr:r.cr,dd:r.dd,gj:1,d:r.d,m:r.d.slice(0,7),day:+r.d.slice(8,10),name:r.mgr,team:pdTeamFromCls(r.q),ctr:'군자'});
       continue;
     }
     const ent=spCanon(roster,r.mgr);
     if(!ent||!PD_TEAMS.includes(ent.team)){dayNoRoster.set(r.d,(dayNoRoster.get(r.d)||0)+1);continue;}
     const c={d:r.d,m:r.d.slice(0,7),day:+r.d.slice(8,10),name:ent.nm,team:ent.team,ctr:ent.ctr};
-    dayConts.push(Object.assign({k:r.k,q:r.q,in:r.in},c));
+    dayConts.push(Object.assign({k:r.k,q:r.q,in:r.in,ci:r.ci,cr:r.cr,dd:r.dd},c));
     if(r.in)continue;
     conts.push(c);
     if(r.d>maxDay)maxDay=r.d;
@@ -14748,20 +14749,23 @@ function pdCompute(){
   }
   // 일자 비교용 계약 — 고객키로 DB에 붙여 패키지·매체·계열·연령대·계약유형 부여
   //  유형: IN(분류 빈값) / DB미매칭 / 재콜(DB정보 재콜) / 당일(분배일=신청일) / 이전(분배일<신청일)
-  //  판정 순서(사용자 지정, 일마감 보고 숫자와 맞춤): ① 담당자 군자 → 군자 ② DB정보에 IN → IN ③ DB정보에 재콜 → 재콜
-  //   ④ 분배일=신청일 → 당일, 아니면 이전. DB 파일에 고객키가 없으면 분류(Q) 빈값 → IN, 그 외 → DB미매칭.
-  //   di 없는 옛 파싱본(v2)은 매체 빈값(in)으로 대신한다.
+  //  판정은 계약 파일(신청자관리)만으로 — 일마감 보고 숫자와 맞춤(사용자 지정 순서):
+  //   ① 담당자 군자 → 군자 ② 코드번호(R)에 IN → IN ③ 코드번호에 재콜 → 재콜 ④ 분배일(AP)=신청일 → 당일, 아니면 이전
+  //   ci/dd 없는 옛 파싱본(v2 이하)만 예전 방식(DB 조인)으로 판정하고, 그때만 DB미매칭이 생긴다.
   for(const c of dayConts){
     const m=keyMeta.get(c.k);
     if(m){c.pk=pkOf(m);c.mg=mgOf(m);c.se=m.se;c.ag=m.ag||'00';}
     else{const u=c.gj?'(군자)':'(DB미매칭)';c.pk=u;c.mg=u;c.se=-1;c.ag='00';}
-    const dbIn=m?(m.di==null?m.in:m.di):0;
-    c.ty=c.gj?'군자':!m?(c.in?'IN':'DB미매칭'):dbIn?'IN':m.rc?'재콜':(m.d===c.d?'당일':'이전');
-    if(c.ty!=='DB미매칭'){delete c.k;delete c.q;}   // 고객키·분류는 DB미매칭 목록용으로만 남긴다
+    if(c.gj)c.ty='군자';
+    else if(c.dd!==undefined)c.ty=c.ci?'IN':c.cr?'재콜':(c.dd&&c.dd===c.d?'당일':'이전');
+    else c.ty=c.in?'IN':!m?'DB미매칭':m.rc?'재콜':(m.d===c.d?'당일':'이전');
+    c.nodb=m?0:1;
+    delete c.ci;delete c.cr;delete c.dd;
+    if(m){delete c.k;delete c.q;}   // 고객키·분류는 DB 미매칭 목록용으로만 남긴다
   }
   const dayList=Array.from(new Set(dayConts.map(c=>c.d))).sort();
   const months=Array.from(new Set(recs.map(r=>r.m))).sort();
-  pdModel={recs,recall,conts,dayConts,dayList,dayRaw,dayNoRoster,dayGunjaStale,months,maxDay,staleFiles,dbFileCnt:dbFiles.length,noRoster};
+  pdModel={recs,recall,conts,dayConts,dayList,dayRaw,dayNoRoster,dayGunjaStale,months,maxDay,staleFiles,contStale:daily.filter(f=>(f.pv||1)<SP_CONT_PARSER_VER).length,dbFileCnt:dbFiles.length,noRoster};
   return pdModel;
 }
 
@@ -14855,7 +14859,8 @@ function pdRender(){
   if(!pdModel||!pdModel.months.length)return;
   const W=pdWindows();
   const warns=[];
-  if(pdModel.staleFiles)warns.push(`옛 형식으로 저장된 DB 파일 ${pdModel.staleFiles}개가 있습니다(패키지 「(미수집)」 또는 계약 유형 IN을 DB정보 대신 매체 빈값으로 판정). 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
+  if(pdModel.contStale)warns.push(`옛 형식으로 저장된 일마감 계약 파일 ${pdModel.contStale}개가 있어, 그 기간의 계약 유형은 코드번호(R) 대신 DB 조인으로 판정됩니다(DB미매칭 발생). 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
+  if(pdModel.staleFiles)warns.push(`패키지·매체그룹 정보가 없는 옛 DB 파일 ${pdModel.staleFiles}개가 있어 해당 기간은 「(미수집)」으로 묶입니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
   if(!W.prev)warns.push('비교할 직전월 데이터가 없습니다.');
   if(!W.cohDay)warns.push(`기준월 분배 DB 중 계약 인정기간(${pdH}일)이 지난 날이 아직 없어 신규 DB 계약률을 비교할 수 없습니다. 계약 인정기간을 줄이거나 이전 월을 고르세요.`);
   const wb=document.getElementById('pdWarnBar');
@@ -15165,7 +15170,8 @@ function pdRenderDayTrend(ctx){
   // 값 벡터: [사업부별 (DB,계약)…, 합계 (DB,계약), 계약 유형…]
   const pairs=[...teams.map(t=>d=>[gn(TT,t,d),g(TT,t,d)]),d=>[teams.reduce((s,t)=>s+gn(TT,t,d),0),teams.reduce((s,t)=>s+g(TT,t,d),0)]];
   const nP=pairs.length;
-  const cells=d=>[...pairs.flatMap(p=>p(d)),...PD_DAY_TYPES.map(y=>g(TY,y,d))];
+  const types=PD_DAY_TYPES.filter(y=>ctx.cRows.some(r=>r.ty===y));
+  const cells=d=>[...pairs.flatMap(p=>p(d)),...types.map(y=>g(TY,y,d))];
   const fmtRow=(v,isAvg)=>{const f=isAvg?pdF1:pdN;let h='';
     for(let i=0;i<nP;i++){const n=v[2*i],c=v[2*i+1],tot=i===nP-1;h+=`<td class="pd-gs">${f(n)}</td><td>${tot?`<b>${f(c)}</b>`:f(c)}</td><td>${pdPct(pdRt(c,n))}</td>`;}
     return h+v.slice(2*nP).map(x=>`<td>${f(x)}</td>`).join('');};
@@ -15182,8 +15188,8 @@ function pdRenderDayTrend(ctx){
     dRow=`<tr class="pd-diff"><td style="text-align:left">기준일 − 평균</td>${h}</tr>`;
   }
   document.getElementById('pdDayTrend').innerHTML=`<table class="pd-tbl"><thead>
-    <tr class="pd-grp"><th></th>${teams.map(t=>`<th colspan="3">${pdEsc(pdTeamShort(t))}</th>`).join('')}<th colspan="3">합계</th><th colspan="${PD_DAY_TYPES.length}">계약 유형</th></tr>
-    <tr><th style="text-align:left">신청일</th>${PD_TRI_H.repeat(nP)}${PD_DAY_TYPES.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
+    <tr class="pd-grp"><th></th>${teams.map(t=>`<th colspan="3">${pdEsc(pdTeamShort(t))}</th>`).join('')}<th colspan="3">합계</th><th colspan="${types.length}">계약 유형</th></tr>
+    <tr><th style="text-align:left">신청일</th>${PD_TRI_H.repeat(nP)}${types.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
     <tbody>${rows}${avgRow}${dRow}</tbody></table>`;
   // 차트: 팀별 계약수 누적 막대 + DB수 선
   const cv=document.getElementById('pdDayChart');
@@ -15235,12 +15241,12 @@ function pdRenderDayDim(ctx){
 // DB미매칭 계약 고객키 목록 (기준일 + 비교일). 고객키·담당자·분류만 — 고객명·전화번호 없음
 function pdDayUnmatchedHtml(ctx){
   const {base}=ctx;
-  const L=ctx.cRows.filter(r=>r.ty==='DB미매칭').sort((a,b)=>(a.d===base?0:1)-(b.d===base?0:1)||(a.d<b.d?1:a.d>b.d?-1:0)||String(a.name).localeCompare(String(b.name),'ko'));
-  if(!L.length)return '<div class="pd-meta" style="margin-top:8px">DB미매칭 계약 없음</div>';
+  const L=ctx.cRows.filter(r=>r.nodb).sort((a,b)=>(a.d===base?0:1)-(b.d===base?0:1)||(a.d<b.d?1:a.d>b.d?-1:0)||String(a.name).localeCompare(String(b.name),'ko'));
+  if(!L.length)return '<div class="pd-meta" style="margin-top:8px">DB 미매칭 계약 없음</div>';
   const nB=L.filter(r=>r.d===base).length;
-  return `<details style="margin-top:10px"><summary class="pd-meta" style="cursor:pointer"><b>DB미매칭 고객키 보기</b> — 기준일 ${pdN(nB)}건 · 비교일 포함 ${pdN(L.length)}건</summary>
-    <div class="pd-scroll" style="max-height:360px;margin-top:6px"><table class="pd-tbl"><thead><tr><th>신청일</th><th>고객키</th><th style="text-align:left">담당자</th><th>사업부</th><th>센터</th><th style="text-align:left">분류</th></tr></thead><tbody>${
-      L.map(r=>`<tr${r.d===base?' class="pd-tgt-row"':''}><td>${pdDayLabel(r.d)}</td><td>${pdEsc(r.k)}</td><td style="text-align:left">${pdEsc(r.name)}</td><td>${pdEsc(pdTeamShort(r.team))}</td><td>${pdEsc(r.ctr||'-')}</td><td style="text-align:left">${pdEsc(r.q==null||r.q===''?'-':r.q)}</td></tr>`).join('')}</tbody></table></div></details>`;
+  return `<details style="margin-top:10px"><summary class="pd-meta" style="cursor:pointer"><b>DB 미매칭 고객키 보기</b> (DB수 파일에 고객키가 없어 패키지·매체를 못 붙인 계약) — 기준일 ${pdN(nB)}건 · 비교일 포함 ${pdN(L.length)}건</summary>
+    <div class="pd-scroll" style="max-height:360px;margin-top:6px"><table class="pd-tbl"><thead><tr><th>신청일</th><th>계약 유형</th><th>고객키</th><th style="text-align:left">담당자</th><th>사업부</th><th>센터</th><th style="text-align:left">분류</th></tr></thead><tbody>${
+      L.map(r=>`<tr${r.d===base?' class="pd-tgt-row"':''}><td>${pdDayLabel(r.d)}</td><td>${pdEsc(r.ty)}</td><td>${pdEsc(r.k)}</td><td style="text-align:left">${pdEsc(r.name)}</td><td>${pdEsc(pdTeamShort(r.team))}</td><td>${pdEsc(r.ctr||'-')}</td><td style="text-align:left">${pdEsc(r.q==null||r.q===''?'-':r.q)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
 // 자동 요약 — 무엇이 늘었는지 차원별 상위 기여 요인
