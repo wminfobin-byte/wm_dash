@@ -15116,7 +15116,33 @@ function pdRenderDaySummary(ctx){
   document.getElementById('pdDaySummary').innerHTML=`<table class="pd-tbl"><thead>
     <tr class="pd-grp"><th></th><th colspan="3">기준일 ${pdDayLabel(base)}</th><th colspan="3">비교 평균 (${N}일)</th><th colspan="3">증감</th><th colspan="2">비교일 계약수</th></tr>
     <tr><th style="text-align:left">사업부</th>${PD_TRI_H}${PD_TRI_H}<th>계약수</th><th>계약수 %</th><th>DB수 %</th><th>최고</th><th>최저</th></tr></thead>
-    <tbody>${body}${teams.length>1?one('합계',tot,'pd-diff'):''}</tbody></table>`;
+    <tbody>${body}${teams.length>1?one('합계',tot,'pd-diff'):''}</tbody></table>`+pdDayPerPersonHtml(ctx,teams);
+}
+
+// 사업부별 1인 평균 — 인원 = 그날 신규 DB를 1건 이상 받은 코디. 계약은 그 인원의 계약만(군자·DB 없는 담당 제외)
+function pdDayPerPersonHtml(ctx,teams){
+  const {base,cmp}=ctx,N=cmp.length;
+  const P=new Map();   // team|d → Map(name → {n,c})
+  const g=(t,d)=>{const k=t+'|'+d;let m=P.get(k);if(!m){m=new Map();P.set(k,m);}return m;};
+  for(const r of ctx.nRows){const m=g(r.team,r.d);const o=m.get(r.name)||{n:0,c:0};o.n++;m.set(r.name,o);}
+  for(const r of ctx.cRows){const m=P.get(r.team+'|'+r.d);const o=m&&m.get(r.name);if(o)o.c++;}
+  // 하루치 지표: 인원·1인 DB·1인 계약·개인 계약률 평균
+  const day=(ts,d)=>{let p=0,n=0,c=0,rs=0;for(const t of ts){const m=P.get(t+'|'+d);if(!m)continue;for(const o of m.values()){p++;n+=o.n;c+=o.c;rs+=o.c/o.n;}}
+    return p?{p,n:n/p,c:c/p,r:rs/p}:null;};
+  const avg=(ts)=>{const v=cmp.map(d=>day(ts,d)).filter(Boolean);if(!v.length)return null;
+    const s=k=>v.reduce((a,x)=>a+x[k],0)/v.length;return {p:s('p'),n:s('n'),c:s('c'),r:s('r')};};
+  const cells=(o,cls)=>{const k=cls?` class="${cls}"`:'';return o?`<td${k}>${pdF1(o.p)}</td><td${k}>${pdF1(o.n)}</td><td${k}><b>${o.c.toFixed(2)}</b></td><td${k}>${pdPct(o.r)}</td>`:`<td${k}>-</td>`.repeat(4);};
+  const row=(label,ts,cls)=>{const B=day(ts,base),A=avg(ts);
+    const dl=(k)=>B&&A?B[k]-A[k]:null;
+    return `<tr${cls?` class="${cls}"`:''}><td style="text-align:left;font-weight:700">${label}</td>${cells(B,'pd-tgt')}${cells(A)}
+      <td class="${pdTone(dl('p'),.05)}">${pdSgn(dl('p'),1)}</td><td class="${pdTone(dl('n'),.05)}">${pdSgn(dl('n'),1)}</td>
+      <td class="${pdTone(dl('c'),.005)}"><b>${pdSgn(dl('c'),2)}</b></td><td class="${pdTone(dl('r'),.0005)}">${pdPp(dl('r'))}</td></tr>`;};
+  const H='<th>인원</th><th>1인 DB수</th><th>1인 계약수</th><th>계약률</th>';
+  return `<div class="pd-sub-h">사업부별 1인 평균 — 기준일 vs 비교 평균 <span style="font-weight:400;color:#718096">(인원 = 그날 신규 DB를 받은 코디 · 계약률 = 코디별 계약률의 평균 · 군자·DB 없는 담당 계약은 제외)</span></div>
+    <table class="pd-tbl"><thead>
+    <tr class="pd-grp"><th></th><th colspan="4">기준일 ${pdDayLabel(base)}</th><th colspan="4">비교 평균 (${N}일)</th><th colspan="4">증감</th></tr>
+    <tr><th style="text-align:left">사업부</th>${H}${H}${H}</tr></thead>
+    <tbody>${teams.map(t=>row(pdEsc(pdTeamShort(t)),[t])).join('')}${teams.length>1?row('합계',teams,'pd-diff'):''}</tbody></table>`;
 }
 
 // 일자별 추이 — 비교일 + 기준일, 팀별 계약수 + 계약 유형 분해
