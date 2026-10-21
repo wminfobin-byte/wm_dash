@@ -694,6 +694,7 @@ table.pd-tbl td.pd-seg-name{text-align:left;white-space:normal;word-break:keep-a
 .pd-day-ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .pd-day-box{margin:12px 0 14px;padding:12px 16px;border:1px solid #c7d2fe;border-radius:10px;background:#f8faff}
 table.pd-tbl tr.pd-tgt-row td{background:#eef2ff;font-weight:700}
+table.pd-tbl td.pd-gs,table.pd-tbl td[data-g]{border-left:2px solid #cbd5e0}
 table.pd-tbl td.pd-off{color:#cbd5e1}
 @media (max-width:760px){#page-perf-diag .container{padding:16px}.pd-card-grid{grid-template-columns:1fr}}
 .sp-control-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border-radius:12px;padding:12px 16px;box-shadow:0 2px 10px rgba(0,0,0,.05);position:sticky;top:0;z-index:30}
@@ -15150,23 +15151,29 @@ function pdRenderDayTrend(ctx){
   const {base,cmp,all}=ctx,N=cmp.length,teams=pdTeamsInScope();
   const TT=pdDayAgg(ctx,r=>r.team),TY=pdDayAgg(ctx,r=>r.ty);
   const g=(T,k,d)=>{const o=T.get(k);return o?(o.c[d]||0):0;};
-  const dbOf=d=>teams.reduce((s,t)=>{const o=TT.get(t);return s+(o?(o.n[d]||0):0);},0);
-  const cOf=d=>teams.reduce((s,t)=>s+g(TT,t,d),0);
-  const cells=d=>[...teams.map(t=>g(TT,t,d)),dbOf(d),cOf(d),...PD_DAY_TYPES.map(y=>g(TY,y,d))];
-  const fmtRow=(v,isAvg)=>{const f=isAvg?pdF1:pdN;const nT=teams.length;
-    return v.slice(0,nT).map(x=>`<td>${f(x)}</td>`).join('')+`<td>${f(v[nT])}</td><td><b>${f(v[nT+1])}</b></td><td>${pdPct(pdRt(v[nT+1],v[nT]))}</td>`+v.slice(nT+2).map(x=>`<td>${f(x)}</td>`).join('');};
+  const gn=(T,k,d)=>{const o=T.get(k);return o?(o.n[d]||0):0;};
+  // 값 벡터: [사업부별 (DB,계약)…, 합계 (DB,계약), 계약 유형…]
+  const pairs=[...teams.map(t=>d=>[gn(TT,t,d),g(TT,t,d)]),d=>[teams.reduce((s,t)=>s+gn(TT,t,d),0),teams.reduce((s,t)=>s+g(TT,t,d),0)]];
+  const nP=pairs.length;
+  const cells=d=>[...pairs.flatMap(p=>p(d)),...PD_DAY_TYPES.map(y=>g(TY,y,d))];
+  const fmtRow=(v,isAvg)=>{const f=isAvg?pdF1:pdN;let h='';
+    for(let i=0;i<nP;i++){const n=v[2*i],c=v[2*i+1],tot=i===nP-1;h+=`<td class="pd-gs">${f(n)}</td><td>${tot?`<b>${f(c)}</b>`:f(c)}</td><td>${pdPct(pdRt(c,n))}</td>`;}
+    return h+v.slice(2*nP).map(x=>`<td>${f(x)}</td>`).join('');};
   const rows=all.map(d=>`<tr${d===base?' class="pd-tgt-row"':''}><td style="text-align:left">${pdDayLabel(d)}${d===base?' ★':''}</td>${fmtRow(cells(d))}</tr>`).join('');
   let avgRow='',dRow='';
   if(N){
     const avg=cells(cmp[0]).map((_,i)=>cmp.reduce((s,d)=>s+cells(d)[i],0)/N);
     const b=cells(base);
     avgRow=`<tr class="pd-diff"><td style="text-align:left">비교 평균</td>${fmtRow(avg,true)}</tr>`;
-    const nT=teams.length;
-    dRow=`<tr class="pd-diff"><td style="text-align:left">기준일 − 평균</td>`+b.map((x,i)=>{const v=x-avg[i];return (i===nT+2?`<td>${pdPp(pdRt(b[nT+1],b[nT])-pdRt(avg[nT+1],avg[nT]))}</td>`:'')+`<td class="${pdTone(v,.05)}">${pdSgn(v,1)}</td>`;}).join('')+'</tr>';
+    const dc=i=>{const v=b[i]-avg[i];return `<td class="${pdTone(v,.05)}">${pdSgn(v,1)}</td>`;};
+    let h='';
+    for(let i=0;i<nP;i++){const r=pdRt(b[2*i+1],b[2*i])-pdRt(avg[2*i+1],avg[2*i]);h+=dc(2*i).replace("<td ","<td data-g ")+dc(2*i+1)+`<td class="${pdTone(r,.0005)}">${pdPp(r)}</td>`;}
+    for(let i=2*nP;i<b.length;i++)h+=dc(i);
+    dRow=`<tr class="pd-diff"><td style="text-align:left">기준일 − 평균</td>${h}</tr>`;
   }
   document.getElementById('pdDayTrend').innerHTML=`<table class="pd-tbl"><thead>
-    <tr class="pd-grp"><th></th><th colspan="${teams.length}">사업부별 계약수</th><th colspan="3">합계</th><th colspan="${PD_DAY_TYPES.length}">계약 유형</th></tr>
-    <tr><th style="text-align:left">신청일</th>${teams.map(t=>`<th>${pdEsc(pdTeamShort(t))}</th>`).join('')}${PD_TRI_H}${PD_DAY_TYPES.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
+    <tr class="pd-grp"><th></th>${teams.map(t=>`<th colspan="3">${pdEsc(pdTeamShort(t))}</th>`).join('')}<th colspan="3">합계</th><th colspan="${PD_DAY_TYPES.length}">계약 유형</th></tr>
+    <tr><th style="text-align:left">신청일</th>${PD_TRI_H.repeat(nP)}${PD_DAY_TYPES.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
     <tbody>${rows}${avgRow}${dRow}</tbody></table>`;
   // 차트: 팀별 계약수 누적 막대 + DB수 선
   const cv=document.getElementById('pdDayChart');
