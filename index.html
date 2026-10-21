@@ -13729,7 +13729,7 @@ function spGapTitle(db,cont,s){
 function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
 // DB 파서 버전 — 파싱 필드를 바꾸면 올릴 것. 공용폴더 스캔 때 pv가 낮은 db 파일을 같은 파일로 재파싱한다.
 // v2 = 패키지(U)·매체그룹(S) 추가 (성과진단 탭)
-const SP_DB_PARSER_VER=2;
+const SP_DB_PARSER_VER=3;   // v3: DB정보 IN 포함 여부(di) 추가 — 성과진단 계약 유형용
 const SP_CONT_PARSER_VER=2;   // v2 = 계약 행에 분류(Q) 원문 q 추가. 올리면 공용폴더 스캔 때 같은 계약 파일도 다시 파싱
 const _spIntern=new Map();
 function spIntern(s){let v=_spIntern.get(s);if(v===undefined){v=s;_spIntern.set(s,s);}return v;}
@@ -13748,6 +13748,7 @@ function spParseDb(wb){
       st:String(r[24]==null?'':r[24]).trim()||'',
       d:spNormDay(r[8]),
       rc:dbinfo.includes('재콜')?1:0,
+      di:dbinfo.includes('IN')?1:0,   // DB정보에 IN (IN, 렌탈_IN, 고객센터IN …)
       in:media===''?1:0,
       mx:(media.includes('callback')||media.includes('tv_b'))?1:0,
       pk:spIntern(String(r[20]==null?'':r[20]).trim()),
@@ -14747,12 +14748,15 @@ function pdCompute(){
   }
   // 일자 비교용 계약 — 고객키로 DB에 붙여 패키지·매체·계열·연령대·계약유형 부여
   //  유형: IN(분류 빈값) / DB미매칭 / 재콜(DB정보 재콜) / 당일(분배일=신청일) / 이전(분배일<신청일)
-  //  군자 담당 계약은 DB 파일에 없어도 DB미매칭이 아니라 '이전'으로 본다(사용자 요청 — 군자는 DB관리 이월 DB)
+  //  판정 순서(사용자 지정, 일마감 보고 숫자와 맞춤): ① 담당자 군자 → 군자 ② DB정보에 IN → IN ③ DB정보에 재콜 → 재콜
+  //   ④ 분배일=신청일 → 당일, 아니면 이전. DB 파일에 고객키가 없으면 분류(Q) 빈값 → IN, 그 외 → DB미매칭.
+  //   di 없는 옛 파싱본(v2)은 매체 빈값(in)으로 대신한다.
   for(const c of dayConts){
     const m=keyMeta.get(c.k);
     if(m){c.pk=pkOf(m);c.mg=mgOf(m);c.se=m.se;c.ag=m.ag||'00';}
     else{const u=c.gj?'(군자)':'(DB미매칭)';c.pk=u;c.mg=u;c.se=-1;c.ag='00';}
-    c.ty=c.in?'IN':!m?(c.gj?'이전':'DB미매칭'):m.rc?'재콜':(m.d===c.d?'당일':'이전');
+    const dbIn=m?(m.di==null?m.in:m.di):0;
+    c.ty=c.gj?'군자':!m?(c.in?'IN':'DB미매칭'):dbIn?'IN':m.rc?'재콜':(m.d===c.d?'당일':'이전');
     if(c.ty!=='DB미매칭'){delete c.k;delete c.q;}   // 고객키·분류는 DB미매칭 목록용으로만 남긴다
   }
   const dayList=Array.from(new Set(dayConts.map(c=>c.d))).sort();
@@ -14851,7 +14855,7 @@ function pdRender(){
   if(!pdModel||!pdModel.months.length)return;
   const W=pdWindows();
   const warns=[];
-  if(pdModel.staleFiles)warns.push(`패키지·매체그룹 정보가 없는 옛 DB 파일 ${pdModel.staleFiles}개가 있어 해당 기간은 「(미수집)」으로 묶입니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
+  if(pdModel.staleFiles)warns.push(`옛 형식으로 저장된 DB 파일 ${pdModel.staleFiles}개가 있습니다(패키지 「(미수집)」 또는 계약 유형 IN을 DB정보 대신 매체 빈값으로 판정). 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
   if(!W.prev)warns.push('비교할 직전월 데이터가 없습니다.');
   if(!W.cohDay)warns.push(`기준월 분배 DB 중 계약 인정기간(${pdH}일)이 지난 날이 아직 없어 신규 DB 계약률을 비교할 수 없습니다. 계약 인정기간을 줄이거나 이전 월을 고르세요.`);
   const wb=document.getElementById('pdWarnBar');
@@ -15039,7 +15043,7 @@ function pdRenderTrend(W){
 //  비교일 = 기준일 이전 + 주말·공휴일(isHoliday) 제외 + 일마감 계약이 1건 이상 있는 날.
 //  DB수 = 그날 분배된 신규 DB — DB정보(P)에 '재콜' 포함이면 제외, IN·콜백 제외. 월별 '당월 흐름'과 같은 정의.
 const PD_DAY_N=10, PD_WD=['일','월','화','수','목','금','토'];
-const PD_DAY_TYPES=['당일','이전','재콜','IN','DB미매칭'];
+const PD_DAY_TYPES=['당일','이전','재콜','IN','군자','DB미매칭'];
 let pdDayBase='', pdDayCmp='wd', pdDayDim='ty', pdDayChart=null, pdDayCtx=null;
 const PD_DAY_DIMS={
   ty:{label:'계약 유형',f:r=>r.ty},
@@ -15221,7 +15225,7 @@ function pdRenderDayDim(ctx){
   };
   const totO={c:{},n:{}};for(const x of out)for(const d in x.o.c)totO.c[d]=(totO.c[d]||0)+x.o.c[d];
   const tot={cB:tB,cS:tS,nB:nTB,nS:nTS,dl:tDl,o:totO};
-  const note=pdDayDim==='ty'?'<div class="pd-meta" style="margin-top:6px">계약 유형의 DB수: 당일 행 = 그날 분배된 신규 DB (재콜 DB는 DB수에서 제외). 이전·재콜·IN·DB미매칭은 그날 분배 DB와 대응하지 않아 비워 둡니다.</div>':'';
+  const note=pdDayDim==='ty'?'<div class="pd-meta" style="margin-top:6px">계약 유형의 DB수: 당일 행 = 그날 분배된 신규 DB (재콜 DB는 DB수에서 제외). 이전·재콜·IN·군자·DB미매칭은 그날 분배 DB와 대응하지 않아 비워 둡니다.</div>':'';
   el.innerHTML=`<table class="pd-tbl"><thead>
     <tr class="pd-grp"><th></th><th colspan="4">계약수</th><th colspan="2">DB수</th><th colspan="2">계약률</th>${N?`<th colspan="${N}">비교일별 계약수</th>`:''}</tr>
     <tr><th style="text-align:left">${pdEsc(D.label)}</th><th>${pdDayLabel(base)}</th><th>비교 평균</th><th>증감</th><th>증감 기여</th><th>${pdDayLabel(base)}</th><th>비교 평균</th><th>${pdDayLabel(base)}</th><th>비교 평균</th>${cmp.map(d=>`<th>${pdDayLabel(d)}</th>`).join('')}</tr></thead>
@@ -15260,7 +15264,7 @@ function pdRenderDayInsights(ctx){
   //  ④ 기타: IN·DB미매칭
   const cnt=(rows,d,pred)=>rows.reduce((s,r)=>s+(r.d===d&&pred(r)?1:0),0);
   const avgOf=(rows,pred)=>cmp.reduce((s,d)=>s+cnt(rows,d,pred),0)/N;
-  const isT=r=>r.ty==='당일',isO=r=>r.ty==='이전'||r.ty==='재콜',isE=r=>r.ty==='IN'||r.ty==='DB미매칭',isNewDb=r=>r.ty==='당일';
+  const isT=r=>r.ty==='당일',isO=r=>r.ty==='이전'||r.ty==='재콜',isE=r=>r.ty==='IN'||r.ty==='군자'||r.ty==='DB미매칭',isNewDb=r=>r.ty==='당일';
   const tB=cnt(ctx.cRows,base,isT),tA=avgOf(ctx.cRows,isT);
   const ndB=cnt(ctx.nRows,base,isNewDb),ndA=avgOf(ctx.nRows,isNewDb);
   const rA=ndA?tA/ndA:0;
@@ -15269,7 +15273,7 @@ function pdRenderDayInsights(ctx){
   const parts=[['① DB 물량',vol,'신규 DB를 평소만큼 넣으면 재현 — 그날 매체·분배량 확인'],
     ['② 당일 효율',eff,'같은 DB에서 당일 더 판 몫 — 코디 당일 컨택·클로징 행동 (뇌새김 콜 현황에서 당일 시도·유효 확인)'],
     ['③ 이월 수확',old,'이전·재콜 DB에서 거둔 몫 — 쌓여 있던 DB를 소진한 것이라 매일 반복되기 어려움'],
-    ['④ IN·기타',etc,'IN·DB미매칭']];
+    ['④ IN·기타',etc,'IN·군자·DB미매칭']];
   out.push(`<b>왜 늘었나 — 요인 분해</b> (증감 ${pdSgn(tDl,1)}건)<br>`+parts.map(([l,v,h])=>`${l} <span class="${pdTone(v,.05)}"><b>${pdSgn(v,1)}건</b></span>${tDl>0&&v>0?` (${Math.round(v/tDl*100)}%)`:''} <span class="pd-meta">${h}</span>`).join('<br>')+
     `<br><span class="pd-meta">당일계약률 ${pdPct(pdRt(tB,ndB))} vs 평균 ${pdPct(rA)} · 당일 신규 DB ${pdN(ndB)} vs ${pdF1(ndA)}</span>`);
   for(const key of ['ty','team','pk','mg','ctr','name']){
@@ -15362,7 +15366,7 @@ function pdDayReportText(ctx){
   }
   L.push('');
   // 2. 요인 — 화면 '계약 유형' 표와 같은 행(당일·이전·재콜·IN·DB미매칭)·같은 숫자. 당일만 물량/계약률로 한 번 더 나눈다.
-  const isT=r=>r.ty==='당일',isO=r=>r.ty==='이전'||r.ty==='재콜',isE=r=>r.ty==='IN'||r.ty==='DB미매칭';
+  const isT=r=>r.ty==='당일',isO=r=>r.ty==='이전'||r.ty==='재콜',isE=r=>r.ty==='IN'||r.ty==='군자'||r.ty==='DB미매칭';
   const tB=cnt(ctx.cRows,base,isT),tA=avg(ctx.cRows,isT),ndB=cnt(ctx.nRows,base,isT),ndA=avg(ctx.nRows,isT);
   const rA=ndA?tA/ndA:0,rB=ndB?tB/ndB:null,vol=(ndB-ndA)*rA,eff=(tB-tA)-vol;
   const oB=cnt(ctx.cRows,base,isO),oA=avg(ctx.cRows,isO),eB=cnt(ctx.cRows,base,isE),eA=avg(ctx.cRows,isE);
@@ -15405,16 +15409,16 @@ function pdDayReportText(ctx){
   const byAbs=F.slice().sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
   const main=F.filter(f=>Math.sign(f.v)===Math.sign(dl)&&Math.abs(f.v/dl)>=0.2).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
   const top=main[0]||byAbs.find(f=>Math.sign(f.v)===Math.sign(dl))||byAbs[0];
-  const nmM=up?{vol:'신규 DB 물량 증가',eff:'당일 계약률 상승',old:'이월 DB 계약 증가',etc:'IN 계약 증가'}
-    :{vol:'신규 DB 물량 감소',eff:'당일 계약률 하락',old:'이월 DB 계약 감소',etc:'IN 계약 감소'};
+  const nmM=up?{vol:'신규 DB 물량 증가',eff:'당일 계약률 상승',old:'이월 DB 계약 증가',etc:'IN·군자 계약 증가'}
+    :{vol:'신규 DB 물량 감소',eff:'당일 계약률 하락',old:'이월 DB 계약 감소',etc:'IN·군자 계약 감소'};
   const msgUp={vol:`신규 DB 물량에 따른 증가분은 같은 수준(당일 ${pdN(ndB)}건)의 DB 분배가 이어지면 재현 가능한 부분입니다.`,
     eff:`당일 계약률 상승분은 분배 당일 컨택·클로징에서 나온 것으로, ${P(rB)} 수준을 유지하는 것이 핵심으로 보입니다.`,
     old:`이월 DB 계약은 쌓여 있던 DB를 소진한 결과로, 매일 반복되기는 어려운 부분입니다.`,
-    etc:`IN 계약 증가는 영업 활동과 별개로 발생한 부분입니다.`};
+    etc:`IN·군자 계약 증가분은 신규 DB 분배와 별개로 발생한 부분입니다.`};
   const msgDn={vol:`신규 DB 분배가 평균 대비 ${A(ndB-ndA)}건 적었던 영향이 있습니다.`,
     eff:`당일 계약률이 ${PA(rA-(rB||0))} 하락해, 분배 당일 컨택·클로징 점검이 필요한 부분입니다.`,
     old:`이월 DB 계약이 평균 대비 ${A(oB-oA)}건 줄었습니다.`,
-    etc:`IN 계약이 평균 대비 ${A(eB-eA)}건 줄었습니다.`};
+    etc:`IN·군자 계약이 평균 대비 ${A(eB-eA)}건 줄었습니다.`};
   const rest=main.filter(f=>f!==top);
   L.push(`종합적으로 보면 이번 계약 ${UP}는 ${nmM[top.k]}의 영향이 가장 컸으며`+
     (rest.length?`, ${rest.map(f=>nmM[f.k]).join('·')}도 일부 작용한 것으로 판단됩니다.`:`, 그 외 요인의 영향은 크지 않았습니다.`));
