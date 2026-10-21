@@ -14870,12 +14870,11 @@ function pdRenderSummary(W){
   const rows=[];
   for(const m of W.M){
     const nDb=pdModel.recs.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
-    const rDb=pdModel.recall.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
     const ct=pdModel.conts.filter(r=>r.m===m&&r.day<=W.flowDay&&pdPassTeam(r.team));
     const coh=nDb.filter(r=>r.day<=W.cohDay);
     const cc=coh.filter(r=>pdConv(r,pdH)).length;
     const pd=new Set();const ppl=new Set();for(const r of nDb){pd.add(r.name+'|'+r.d);ppl.add(r.name);}
-    rows.push({m,fN:nDb.length+rDb.length,fC:ct.length,cN:coh.length,cC:cc,ppl:ppl.size,perDay:pd.size?nDb.length/pd.size:null});
+    rows.push({m,fN:nDb.length,fC:ct.length,cN:coh.length,cC:cc,ppl:ppl.size,perDay:pd.size?nDb.length/pd.size:null});
   }
   const t=rows[rows.length-1],p=rows.length>1?rows[rows.length-2]:null;
   const rt=(c,n)=>n?c/n:null;
@@ -14886,7 +14885,7 @@ function pdRenderSummary(W){
     <td>${pdSgn(t.cN-p.cN)}${pctChg(t.cN,p.cN)}</td><td class="${pdTone(t.cC-p.cC)}">${pdSgn(t.cC-p.cC)}</td><td class="${pdTone(rt(t.cC,t.cN)-rt(p.cC,p.cN),.0005)}"><b>${pdPp(rt(t.cC,t.cN)-rt(p.cC,p.cN))}</b></td>
     <td>${pdSgn(t.ppl-p.ppl)}명</td><td>${pdSgn(t.perDay-p.perDay,1)}</td></tr>`:'';
   el.innerHTML=`<table class="pd-tbl"><thead>
-    <tr class="pd-grp"><th></th><th colspan="3">당월 흐름 · 매월 1~${W.flowDay}일<br><span class="pd-meta-h">DB수 = 분배 신규+재콜 · 계약수 = 신청일 기준</span></th><th colspan="3">신규 DB 성과 · 매월 1~${W.cohDay}일 분배<br><span class="pd-meta-h">계약수 = 그 DB 중 ${pdHLabel()} 계약</span></th><th colspan="2">인력</th></tr>
+    <tr class="pd-grp"><th></th><th colspan="3">당월 흐름 · 매월 1~${W.flowDay}일<br><span class="pd-meta-h">DB수 = 분배 신규(재콜 제외) · 계약수 = 신청일 기준</span></th><th colspan="3">신규 DB 성과 · 매월 1~${W.cohDay}일 분배<br><span class="pd-meta-h">계약수 = 그 DB 중 ${pdHLabel()} 계약</span></th><th colspan="2">인력</th></tr>
     <tr><th style="text-align:left">월</th>${PD_TRI_H}${PD_TRI_H}<th>활동 코디</th><th>1인·1일당 DB수</th></tr></thead><tbody>${body}${diff}</tbody></table>`;
 }
 
@@ -15031,7 +15030,7 @@ function pdRenderTrend(W){
 
 // ⓪ 일자 비교 — 특정일 계약수를 같은 요일/최근 영업일 N일과 비교 (일마감 신청일 기준, IN 포함)
 //  비교일 = 기준일 이전 + 주말·공휴일(isHoliday) 제외 + 일마감 계약이 1건 이상 있는 날.
-//  DB수 = 그날 분배된 신규+재콜 DB(IN·콜백 제외) — 월별 '당월 흐름'과 같은 정의.
+//  DB수 = 그날 분배된 신규 DB — DB정보(P)에 '재콜' 포함이면 제외, IN·콜백 제외. 월별 '당월 흐름'과 같은 정의.
 const PD_DAY_N=10, PD_WD=['일','월','화','수','목','금','토'];
 const PD_DAY_TYPES=['당일','이전','재콜','IN','DB미매칭'];
 let pdDayBase='', pdDayCmp='wd', pdDayDim='ty', pdDayChart=null, pdDayCtx=null;
@@ -15080,7 +15079,7 @@ function pdRenderDay(){
   document.getElementById('pdDayCmpWd').textContent=`같은 요일(${PD_WD[spDateObj(base).getDay()]}) 최근 ${PD_DAY_N}개`;
   const S=new Set(all);
   const cRows=M.dayConts.filter(r=>S.has(r.d)&&pdPassTeam(r.team));
-  const nRows=[];for(const arr of [M.recs,M.recall])for(const r of arr)if(S.has(r.d)&&pdPassTeam(r.team))nRows.push(r);
+  const nRows=M.recs.filter(r=>S.has(r.d)&&pdPassTeam(r.team));   // DB수 = 신규만 (재콜 DB 제외)
   const ctx=pdDayCtx={base,cmp,all,cRows,nRows};
   const raw=M.dayRaw.get(base)||0,nr=M.dayNoRoster.get(base)||0,stale=M.dayGunjaStale.get(base)||0;
   const gjT={};let gjN=0,gjIn=0;
@@ -15182,7 +15181,7 @@ function pdRenderDayDim(ctx){
   };
   const totO={c:{},n:{}};for(const x of out)for(const d in x.o.c)totO.c[d]=(totO.c[d]||0)+x.o.c[d];
   const tot={cB:tB,cS:tS,nB:nTB,nS:nTS,dl:tDl,o:totO};
-  const note=pdDayDim==='ty'?'<div class="pd-meta" style="margin-top:6px">계약 유형의 DB수: 당일 행 = 그날 분배된 신규 DB, 재콜 행 = 그날 분배된 재콜 DB. 이전·IN·DB미매칭은 그날 분배 DB와 대응하지 않아 비워 둡니다.</div>':'';
+  const note=pdDayDim==='ty'?'<div class="pd-meta" style="margin-top:6px">계약 유형의 DB수: 당일 행 = 그날 분배된 신규 DB (재콜 DB는 DB수에서 제외). 이전·재콜·IN·DB미매칭은 그날 분배 DB와 대응하지 않아 비워 둡니다.</div>':'';
   el.innerHTML=`<table class="pd-tbl"><thead>
     <tr class="pd-grp"><th></th><th colspan="4">계약수</th><th colspan="2">DB수</th><th colspan="2">계약률</th>${N?`<th colspan="${N}">비교일별 계약수</th>`:''}</tr>
     <tr><th style="text-align:left">${pdEsc(D.label)}</th><th>${pdDayLabel(base)}</th><th>비교 평균</th><th>증감</th><th>증감 기여</th><th>${pdDayLabel(base)}</th><th>비교 평균</th><th>${pdDayLabel(base)}</th><th>비교 평균</th>${cmp.map(d=>`<th>${pdDayLabel(d)}</th>`).join('')}</tr></thead>
