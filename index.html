@@ -15184,6 +15184,7 @@ function pdRenderDayTrend(ctx){
   const cv=document.getElementById('pdDayChart');
   if(pdDayChart){pdDayChart.destroy();pdDayChart=null;}
   if(typeof Chart==='undefined'||!cv)return;
+  const dbOf=d=>teams.reduce((s,t)=>s+gn(TT,t,d),0),cOf=d=>teams.reduce((s,t)=>s+g(TT,t,d),0);
   const colors={'뇌새김영어':'#4361EE','제2외국어':'#2EC4B6','톡이즈':'#F0920E'};
   const ds=teams.map(t=>({type:'bar',label:pdTeamShort(t)+' 계약수',data:all.map(d=>g(TT,t,d)),yAxisID:'y',stack:'c',
     backgroundColor:all.map(d=>d===base?colors[t]:colors[t]+'88')}));
