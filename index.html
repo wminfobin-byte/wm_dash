@@ -15289,10 +15289,53 @@ function pdDayReportText(ctx){
   L.push(`[${pdDayLabel(base)} 계약 실적]`);
   L.push(`기준: 일마감 신청일, ${scope}, IN·군자 포함 / 비교: ${cmpLbl}`);
   L.push('');
-  // 1. 결과
+  // 0. 종합 — 사업부별로 1인당 DB 변화 + 계약 증감을 이끈 패키지(DB 증감·비중 변화)를 한 문장으로
+  const syn=[];
+  {
+    const isT0=r=>r.ty==='당일';
+    const tB0=cnt(ctx.cRows,base,isT0),tA0=avg(ctx.cRows,isT0),nd0B=cnt(ctx.nRows,base,isT0),nd0A=avg(ctx.nRows,isT0);
+    const rA0=nd0A?tA0/nd0A:0,vol0=(nd0B-nd0A)*rA0;
+    const fx=[['신규 DB 물량 증가',vol0],['당일 계약률 상승',(tB0-tA0)-vol0],
+      ['이월 DB 계약',cnt(ctx.cRows,base,r=>r.ty==='이전'||r.ty==='재콜')-avg(ctx.cRows,r=>r.ty==='이전'||r.ty==='재콜')],
+      ['IN 계약',cnt(ctx.cRows,base,r=>r.ty==='IN'||r.ty==='DB미매칭')-avg(ctx.cRows,r=>r.ty==='IN'||r.ty==='DB미매칭')]]
+      .filter(x=>Math.sign(x[1])===Math.sign(dl)).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+    const dnW={'신규 DB 물량 증가':'신규 DB 물량 감소','당일 계약률 상승':'당일 계약률 하락','이월 DB 계약':'이월 DB 계약 감소','IN 계약':'IN 계약 감소'};
+    syn.push(`- 전체: 계약 ${pdN(cB)}건, 평균 대비 ${S(dl)}건${G(cB,cA)}`+(fx.length&&Math.abs(dl)>=1?`. ${up?'증가분':'감소분'}의 ${Math.round(fx[0][1]/dl*100)}%가 ${up?fx[0][0]:dnW[fx[0][0]]}에서 발생`:''));
+    for(const t of (teams.length>1?teams:[teams[0]])){
+      const nR=ctx.nRows.filter(r=>r.team===t),cR=ctx.cRows.filter(r=>r.team===t);
+      const b=cnt(cR,base),a=avg(cR),td=b-a;
+      const per=d=>{const s=new Set();let n=0;for(const r of nR)if(r.d===d){s.add(r.name);n++;}return s.size?n/s.size:null;};
+      const perB=per(base),pv=cmp.map(per).filter(v=>v!=null),perA=pv.length?pv.reduce((x,y)=>x+y,0)/pv.length:null;
+      const nB=cnt(nR,base),nA=avg(nR);
+      const pk=new Map();const g=k=>{let o=pk.get(k);if(!o){o={nB:0,nS:0,cB:0,cS:0};pk.set(k,o);}return o;};
+      for(const r of nR){if(!r.pk)continue;const o=g(r.pk);if(r.d===base)o.nB++;else o.nS++;}
+      for(const r of cR){if(!r.pk)continue;const o=g(r.pk);if(r.d===base)o.cB++;else o.cS++;}
+      const arr=[...pk].map(([k,o])=>({k,nB:o.nB,nA:o.nS/N,cB:o.cB,cA:o.cS/N,dc:o.cB-o.cS/N}));
+      const mainPk=arr.slice().sort((x,y)=>y.nA-x.nA)[0];
+      const key=arr.filter(x=>td>=0?x.dc>=1:x.dc<=-1).sort((x,y)=>td>=0?y.dc-x.dc:x.dc-y.dc)[0];
+      let s=`- ${pdTeamShort(t)}: 계약 ${pdN(b)}건(${S(td)})`;
+      if(perB!=null&&perA!=null){const dn=perB<perA-0.05;s+=`. 1인당 DB ${perB.toFixed(1)}건(평균 ${perA.toFixed(1)}건)으로 ${dn?(td>0?'줄었으나':'줄었고'):(perB>perA+0.05?(td<0?'늘었으나':'늘었고'):'평소 수준이고')},`;}
+      if(key){
+        const shB=nB?key.nB/nB:null,shA=nA?key.nA/nA:null,grow=key.nB>key.nA+0.5;
+        const nm=(mainPk&&mainPk.k===key.k?'주력 ':'')+key.k;
+        const rt=`계약률 ${P(key.nA?key.cA/key.nA:null)}→${P(key.nB?key.cB/key.nB:null)}`;
+        const pc=Math.abs(td)>=1?`, 사업부 증감의 ${Math.round(key.dc/td*100)}%`:'';
+        if(key.nB<1&&key.nA<1)s+=` ${nm} 계약 ${S(key.dc)}건${td>=0?' 견인':''}${pc} (당일 분배 DB 없음, 이월 DB 계약)`;
+        else s+=td>=0
+          ?(grow?` ${nm} DB가 ${pdN(key.nB)}건(${S(key.nB-key.nA)})${shB!=null&&shA!=null&&shB>shA+0.005?`으로 늘고 비중이 ${P(shA)}→${P(shB)}로 커지며`:`으로 늘며(비중 ${P(shA)}→${P(shB)})`} 계약 ${S(key.dc)}건 견인${pc}`
+                :` ${nm} DB는 ${pdN(key.nB)}건(${S(key.nB-key.nA)})이나 ${rt}로 올라 계약 ${S(key.dc)}건 견인${pc}`)
+          :` ${nm} 계약 ${S(key.dc)}건${pc} (DB ${pdN(key.nB)}건(${S(key.nB-key.nA)}), 비중 ${P(shA)}→${P(shB)}, ${rt})`;
+      }
+      if(!key)s=s.replace(/으로 (평소 수준이고|줄었으나|줄었고|늘었으나|늘었고),$/,(m,w)=>'으로 '+({'평소 수준이고':'평소 수준','줄었으나':'감소','줄었고':'감소','늘었으나':'증가','늘었고':'증가'})[w]);
+      syn.push(s);
+    }
+  }
+  let sec=0;
+  L.push(`${++sec}. 종합`);syn.forEach(x=>L.push(x));L.push('');
+  // 결과
   const byDay=cmp.map(d=>({d,c:cnt(ctx.cRows,d)})).sort((a,b)=>b.c-a.c);
   const rank=byDay.filter(x=>x.c>cB).length+1;
-  L.push('1. 결과');
+  L.push(`${++sec}. 결과`);
   L.push(`- 계약 ${pdN(cB)}건, 평균 ${R(cA)}건 대비 ${S(dl)}건${G(cB,cA)}`);
   L.push(cB>byDay[0].c?`- 비교 기간 최고치 상회: 직전 최고 ${pdDayLabel(byDay[0].d)} ${pdN(byDay[0].c)}건`:`- 비교일 포함 ${N+1}일 중 ${rank}위, 최고 ${pdDayLabel(byDay[0].d)} ${pdN(byDay[0].c)}건`);
   if(teams.length>1)L.push('- 사업부: '+teams.map(t=>{const p=r=>r.team===t,b=cnt(ctx.cRows,base,p),a=avg(ctx.cRows,p);return `${pdTeamShort(t)} ${pdN(b)}건(${S(b-a)})`;}).join(' / '));
@@ -15307,11 +15350,11 @@ function pdDayReportText(ctx){
     {k:'old',n:'이월 DB',v:oB-oA,t:`이전·재콜 DB 계약 ${pdN(oB)}건, 평균 ${R(oA)}건`},
     {k:'etc',n:'IN 등',v:eB-eA,t:`IN·DB미매칭 계약 ${pdN(eB)}건, 평균 ${R(eA)}건`}];
   const sh=v=>dl&&Math.sign(v)===Math.sign(dl)&&Math.abs(dl)>=1?` (${Math.round(v/dl*100)}%)`:'';
-  L.push(`2. ${up?'증가':'감소'} 요인 (${S(dl)}건)`);
+  L.push(`${++sec}. ${up?'증가':'감소'} 요인 (${S(dl)}건)`);
   F.forEach((f,i)=>L.push(`${i+1}) ${f.n} ${S(f.v)}건${sh(f.v)}: ${f.t}`));
   L.push('');
   // 3. 어디서 — 평균 대비 증감 상위
-  L.push(`3. ${up?'증가':'감소'} 구간 (평균 대비)`);
+  L.push(`${++sec}. ${up?'증가':'감소'} 구간 (평균 대비)`);
   for(const [key,lbl] of [['pk','패키지'],['mg','매체'],['ctr','센터']]){
     const T=pdDayAgg(ctx,PD_DAY_DIMS[key].f),A=[];
     for(const [k,o] of T)A.push({k,v:(o.c[base]||0)-pdSumD(o.c,cmp)/N});
@@ -15333,7 +15376,7 @@ function pdDayReportText(ctx){
     old:`이월 DB 계약 ${S(oB-oA)}건 감소`,
     etc:`IN 계약 ${S(eB-eA)}건 감소`};
   if(main.length){
-    L.push(up?'4. 유지 포인트':'4. 점검 포인트');
+    L.push(`${++sec}. ${up?'유지 포인트':'점검 포인트'}`);
     main.forEach(f=>L.push(`- ${(up?msgUp:msgDn)[f.k]}`));
     if(up&&pB-pA>=pA*0.1)L.push(`- 계약 코디 수 ${S(pB-pA)}명 증가, 특정 인원 쏠림 아님`);
     else if(up)L.push(`- 계약 코디 수는 평소 수준, 1인당 실적 증가에 따른 결과`);
