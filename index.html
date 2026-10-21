@@ -2306,7 +2306,7 @@ tr.vc-left:hover{opacity:.75}
         <div class="sp-divider"></div>
         <label>담당</label>
         <div class="sp-seg" id="pdTeamSeg">
-          <button class="active" data-team="all" onclick="pdSetTeam('all')">3팀 전체</button>
+          <button class="active" data-team="all" onclick="pdSetTeam('all')">3사업부 전체</button>
           <button data-team="nsg" onclick="pdSetTeam('nsg')">뇌새김 전체</button>
           <button data-team="뇌새김영어" onclick="pdSetTeam('뇌새김영어')">영어</button>
           <button data-team="제2외국어" onclick="pdSetTeam('제2외국어')">제2외국어</button>
@@ -2339,7 +2339,7 @@ tr.vc-left:hover{opacity:.75}
         </div>
         <div id="pdDayInfo" class="pd-meta"></div>
         <div class="pd-day-box pd-insight" id="pdDayInsights"></div>
-        <div class="pd-sub-h">팀별 — 기준일 vs 비교 평균</div>
+        <div class="pd-sub-h">사업부별 — 기준일 vs 비교 평균</div>
         <div class="pd-scroll" id="pdDaySummary"></div>
         <div class="pd-sub-h" style="margin-top:18px">일자별 추이</div>
         <div class="sp-chart-wrap"><canvas id="pdDayChart"></canvas></div>
@@ -2347,7 +2347,7 @@ tr.vc-left:hover{opacity:.75}
         <div class="pd-sub-h" style="margin-top:18px">어디서 늘었나 / 줄었나 <span class="pd-meta">증감 = 기준일 계약수 − 비교 평균 · 오른쪽은 비교일별 계약수 추이</span></div>
         <div class="sp-seg" id="pdDayDimSeg" style="margin:6px 0 10px">
           <button class="active" data-ddim="ty" onclick="pdSetDayDim('ty')">계약 유형</button>
-          <button data-ddim="team" onclick="pdSetDayDim('team')">팀</button>
+          <button data-ddim="team" onclick="pdSetDayDim('team')">사업부</button>
           <button data-ddim="pk" onclick="pdSetDayDim('pk')">패키지</button>
           <button data-ddim="mg" onclick="pdSetDayDim('mg')">매체그룹</button>
           <button data-ddim="pkmg" onclick="pdSetDayDim('pkmg')">패키지×매체</button>
@@ -14672,7 +14672,7 @@ function pdTeamFromCls(q){
   if(/japer|jhp_in|cnper|chp_in|chn|esper|shp_in|frper|fhp_in/.test(c))return '제2외국어';
   return '뇌새김영어';
 }
-function pdTeamFileLabel(){return pdTeam==='all'?'3팀':pdTeam==='nsg'?'뇌새김':pdTeamShort(pdTeam);}
+function pdTeamFileLabel(){return pdTeam==='all'?'3사업부':pdTeam==='nsg'?'뇌새김':pdTeamShort(pdTeam);}
 function pdTeamShort(t){return t==='뇌새김영어'?'영어':t==='제2외국어'?'제2외국어':t;}
 const PD_DIMS={
   pkmg:{label:'패키지 × 매체',f:r=>r.pk+' / '+r.mg},
@@ -15036,7 +15036,7 @@ const PD_DAY_TYPES=['당일','이전','재콜','IN','DB미매칭'];
 let pdDayBase='', pdDayCmp='wd', pdDayDim='ty', pdDayChart=null, pdDayCtx=null;
 const PD_DAY_DIMS={
   ty:{label:'계약 유형',f:r=>r.ty},
-  team:{label:'팀',f:r=>pdTeamShort(r.team)},
+  team:{label:'사업부',f:r=>pdTeamShort(r.team)},
   pk:PD_DIMS.pk,mg:PD_DIMS.mg,pkmg:PD_DIMS.pkmg,se:PD_DIMS.se,ag:PD_DIMS.ag,ctr:PD_DIMS.ctr,name:PD_DIMS.name
 };
 function pdIsBiz(d){const o=spDateObj(d);return !!o&&!isHoliday(o);}
@@ -15085,11 +15085,11 @@ function pdRenderDay(){
   const gjT={};let gjN=0,gjIn=0;
   for(const c of M.dayConts)if(c.gj&&c.d===base){gjN++;if(c.in)gjIn++;gjT[c.team]=(gjT[c.team]||0)+1;}
   const gjTxt=gjN?` (군자 ${pdN(gjN)}건 포함 — 분류코드 기준 ${PD_TEAMS.filter(t=>gjT[t]).map(t=>pdTeamShort(t)+' '+gjT[t]).join(' · ')}${gjIn?`, 이 중 분류 빈값(IN) ${gjIn}건은 영어로 계산`:''})`:'';
-  const staleTxt=stale?`<br><span class="pd-neg">⚠ 군자 계약 ${pdN(stale)}건은 옛 형식으로 저장돼 팀을 정할 수 없어 빠졌습니다 → 상단 「공용폴더 새로고침」을 누르면 다시 읽습니다.</span>`:'';
+  const staleTxt=stale?`<br><span class="pd-neg">⚠ 군자 계약 ${pdN(stale)}건은 옛 형식으로 저장돼 사업부를 정할 수 없어 빠졌습니다 → 상단 「공용폴더 새로고침」을 누르면 다시 읽습니다.</span>`:'';
   const short=cmp.length<PD_DAY_N?` <span class="pd-up">(데이터가 있는 비교일이 ${cmp.length}일뿐입니다)</span>`:'';
   document.getElementById('pdDayInfo').innerHTML=
     `비교일 ${cmp.length}일: ${cmp.map(pdDayLabel).join(', ')||'없음'}${short}<br>`+
-    `${pdDayLabel(base)} 일마감 원본 ${pdN(raw)}건(고객키 중복 제거) − 명단 미매칭·대상 외 담당 ${pdN(nr)}건${stale?` − 군자 미판정 ${pdN(stale)}건`:''} = 3팀 <b>${pdN(raw-nr-stale)}건</b>${gjTxt}`+staleTxt+
+    `${pdDayLabel(base)} 일마감 원본 ${pdN(raw)}건(고객키 중복 제거) − 명단 미매칭·대상 외 담당 ${pdN(nr)}건${stale?` − 군자 미판정 ${pdN(stale)}건`:''} = 3사업부 <b>${pdN(raw-nr-stale)}건</b>${gjTxt}`+staleTxt+
     (pdTeam==='all'?'':` · 아래 표는 담당 필터(${pdEsc(pdTeamFileLabel())}) 적용`);
   pdRenderDaySummary(ctx);
   pdRenderDayTrend(ctx);
@@ -15115,7 +15115,7 @@ function pdRenderDaySummary(ctx){
   const body=teams.map(t=>{const o=T.get(t)||{c:{},n:{}};for(const k of ['c','n'])for(const d in o[k])tot[k][d]=(tot[k][d]||0)+o[k][d];return one(pdEsc(pdTeamShort(t)),o);}).join('');
   document.getElementById('pdDaySummary').innerHTML=`<table class="pd-tbl"><thead>
     <tr class="pd-grp"><th></th><th colspan="3">기준일 ${pdDayLabel(base)}</th><th colspan="3">비교 평균 (${N}일)</th><th colspan="3">증감</th><th colspan="2">비교일 계약수</th></tr>
-    <tr><th style="text-align:left">팀</th>${PD_TRI_H}${PD_TRI_H}<th>계약수</th><th>계약수 %</th><th>DB수 %</th><th>최고</th><th>최저</th></tr></thead>
+    <tr><th style="text-align:left">사업부</th>${PD_TRI_H}${PD_TRI_H}<th>계약수</th><th>계약수 %</th><th>DB수 %</th><th>최고</th><th>최저</th></tr></thead>
     <tbody>${body}${teams.length>1?one('합계',tot,'pd-diff'):''}</tbody></table>`;
 }
 
@@ -15139,7 +15139,7 @@ function pdRenderDayTrend(ctx){
     dRow=`<tr class="pd-diff"><td style="text-align:left">기준일 − 평균</td>`+b.map((x,i)=>{const v=x-avg[i];return (i===nT+2?`<td>${pdPp(pdRt(b[nT+1],b[nT])-pdRt(avg[nT+1],avg[nT]))}</td>`:'')+`<td class="${pdTone(v,.05)}">${pdSgn(v,1)}</td>`;}).join('')+'</tr>';
   }
   document.getElementById('pdDayTrend').innerHTML=`<table class="pd-tbl"><thead>
-    <tr class="pd-grp"><th></th><th colspan="${teams.length}">팀별 계약수</th><th colspan="3">합계</th><th colspan="${PD_DAY_TYPES.length}">계약 유형</th></tr>
+    <tr class="pd-grp"><th></th><th colspan="${teams.length}">사업부별 계약수</th><th colspan="3">합계</th><th colspan="${PD_DAY_TYPES.length}">계약 유형</th></tr>
     <tr><th style="text-align:left">신청일</th>${teams.map(t=>`<th>${pdEsc(pdTeamShort(t))}</th>`).join('')}${PD_TRI_H}${PD_DAY_TYPES.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
     <tbody>${rows}${avgRow}${dRow}</tbody></table>`;
   // 차트: 팀별 계약수 누적 막대 + DB수 선
@@ -15200,7 +15200,7 @@ function pdRenderDayInsights(ctx){
   out.push(`<b>DB 물량</b>: 그날 분배 DB ${pdN(nB)}건 vs 평균 ${pdF1(nA)}건 (${nA?pdSgn((nB/nA-1)*100,0):'-'}%) · 계약수/DB수 ${pdPct(pdRt(cB,nB))} vs ${pdPct(pdRt(cA,nA))}.`);
   const ppl=d=>new Set(ctx.cRows.filter(r=>r.d===d).map(r=>r.name)).size;
   const pB=ppl(base),pA=cmp.reduce((s,d)=>s+ppl(d),0)/N;
-  out.push(`<b>계약 낸 코디</b>: ${pdN(pB)}명 vs 평균 ${pdF1(pA)}명 · 1인당 ${pdF1(pB?cB/pB:null)}건 vs ${pdF1(pA?cA/pA:null)}건 — ${pB-pA>=pA*0.1?'계약 낸 사람 자체가 늘었음(팀 전체가 고르게 올라옴)':'같은 인원이 1인당 더 많이 팔았음 — 일부 코디에 몰렸는지 「코디」 보기로 확인'}.`);
+  out.push(`<b>계약 낸 코디</b>: ${pdN(pB)}명 vs 평균 ${pdF1(pA)}명 · 1인당 ${pdF1(pB?cB/pB:null)}건 vs ${pdF1(pA?cA/pA:null)}건 — ${pB-pA>=pA*0.1?'계약 낸 사람 자체가 늘었음(사업부 전체가 고르게 올라옴)':'같은 인원이 1인당 더 많이 팔았음 — 일부 코디에 몰렸는지 「코디」 보기로 확인'}.`);
   const tDl=cB-cA;
   // 성과 요인 분해 — 유지 방법이 다른 세 덩어리로 나눈다
   //  ① 물량: 당일 신규 DB가 늘어서 (평균 당일계약률 × DB 증가분)  → 매체·분배량을 유지하면 재현
@@ -15276,7 +15276,7 @@ document.addEventListener('click',e=>{
 async function pdDownloadExcel(){
   if(!pdModel){alert('데이터가 없습니다.');return;}
   const W=pdWindows();
-  const secs=[['pdDaySummary','일자비교_팀'],['pdDayTrend','일자비교_추이'],['pdDayDimTable','일자비교_'+PD_DAY_DIMS[pdDayDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdSummary','월별 요약'],['pdDecomp','하락 분해'],['pdDimTable','차원별_'+PD_DIMS[pdDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdTrend','주차별 추이']];
+  const secs=[['pdDaySummary','일자비교_사업부'],['pdDayTrend','일자비교_추이'],['pdDayDimTable','일자비교_'+PD_DAY_DIMS[pdDayDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdSummary','월별 요약'],['pdDecomp','하락 분해'],['pdDimTable','차원별_'+PD_DIMS[pdDim].label.replace(/[^가-힣A-Za-z]/g,'')],['pdTrend','주차별 추이']];
   const wb=XLSX.utils.book_new();
   for(const [id,label] of secs){
     const tbls=document.querySelectorAll('#'+id+' table');if(!tbls.length)continue;
