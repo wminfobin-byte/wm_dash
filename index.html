@@ -676,6 +676,7 @@ table.kp-tbl tbody tr:hover td{background:#f8fafc}
 table.kp-tbl tr.kp-total td{background:#f1f5f9;font-weight:700;border-bottom:2px solid #94a3b8}
 table.kp-tbl tr.kp-future td{color:#cbd5e1}
 table.kp-tbl td.kp-net{font-weight:700}
+table.kp-tbl td.kp-zero{color:#d5dbe3;font-weight:400}
 table.kp-tbl td.kp-sat{color:#2563eb}
 table.kp-tbl td.kp-sun{color:#dc2626}
 @media (max-width:760px){#page-pkg-perf .container{padding:16px}}
@@ -14935,19 +14936,22 @@ function kpCompute(){
   const cumKeys=new Set(),rtKeys=new Set();
   for(const f of latestByYm.values())for(const r of f.rows){if(!r.k)continue;cumKeys.add(r.k);if(r.rt)rtKeys.add(r.k);}
   // 계약 — 일마감 고객키 dedup → 분류(Q) 패키지 코드 → 군자 담당 제외
-  const conts=[];const seenC=new Set();let contMax='',noQ=0,gunja=0;
+  const conts=[];const seenC=new Set();let contMax='',noQ=0,gunja=0,preCancel=0;
   for(const f of daily)for(const r of f.rows){
     if(!r.k||seenC.has(r.k))continue;seenC.add(r.k);
     if(!r.d)continue;
     if(r.q===undefined){noQ++;continue;}
     const pk=kpPkgOf(r.q);if(!pk)continue;
     if(String(r.mgr).includes('군자')){gunja++;continue;}
-    conts.push({pk,d:r.d,m:r.d.slice(0,7),x:rtKeys.has(r.k)?1:0,inCum:cumKeys.has(r.k)?1:0});
+    // 일마감엔 있는데 그 달 월간누적에 아예 없음 = 다음날 배송전취소 → 계약·취소 어디에도 넣지 않는다(사용자 지정)
+    //  그 달 월간누적 파일이 없으면 판정 불가 → 계약으로 두고 화면에 경고
+    if(latestByYm.has(r.d.slice(0,4)+r.d.slice(5,7))&&!cumKeys.has(r.k)){preCancel++;continue;}
+    conts.push({pk,d:r.d,m:r.d.slice(0,7),x:rtKeys.has(r.k)?1:0});
     if(r.d>contMax)contMax=r.d;
   }
   const months=Array.from(new Set(db.map(r=>r.m).concat(conts.map(c=>c.m)))).sort();
   const cumList=Array.from(latestByYm.entries()).sort((a,b)=>a[0]>b[0]?1:-1).map(([ym,f])=>({ym,fileName:f.fileName}));
-  kpModel={db,conts,months,dbMax,contMax,noQ,gunja,cumList};
+  kpModel={db,conts,months,dbMax,contMax,noQ,gunja,preCancel,cumList};
   return kpModel;
 }
 function kpStats(db,cs){
@@ -14996,7 +15000,7 @@ function kpRender(){
   const groups=[{label:'합계',f:()=>true}].concat(KP_PKGS.map(p=>({label:p.label,f:r=>r.pk===p.key})));
   const MET=['DB수','계약수','계약률','취소수','취소율','실계약수','실계약률'];
   const cells=(s,dash)=>{if(dash)return MET.map((_,i)=>`<td${i===0?' class="kp-gs"':''}>-</td>`).join('');
-    return [N(s.n),N(s.c),P(s.cr),N(s.x),P(s.xr),N(s.net),P(s.nr)].map((v,i)=>`<td class="${i===0?'kp-gs':''}${i===6?' kp-net':''}">${v}</td>`).join('');};
+    return [N(s.n),N(s.c),P(s.cr),N(s.x),P(s.xr),N(s.net),P(s.nr)].map((v,i)=>`<td class="${i===0?'kp-gs':''}${i===6?' kp-net':''}${(v==='0'||v==='0.00%'||v==='-')?' kp-zero':''}">${v}</td>`).join('');};
   // 일자별 버킷 (DB = 분배일, 계약 = 신청일)
   const byDay=new Map();const bk=d=>{let o=byDay.get(d);if(!o){o={db:[],cs:[]};byDay.set(d,o);}return o;};
   db.forEach(r=>bk(r.d).db.push(r));cs.forEach(r=>bk(r.d).cs.push(r));
@@ -15023,9 +15027,7 @@ function kpRender(){
   document.getElementById('kpInfo').innerHTML=
     `DB 마지막 분배일 <b>${M.dbMax||'-'}</b> · 일마감 마지막 신청일 <b>${M.contMax||'-'}</b> · 취소 판정 월간누적 <b>${cum?pdEsc(cum.fileName):'없음'}</b>`;
   const warns=[];
-  if(!cum)warns.push(`${+m.slice(5,7)}월 월간누적 파일이 없어 이 달 계약의 취소가 판정되지 않습니다(취소 0건으로 표시).`);
-  const notCum=cs.filter(c=>!c.inCum).length;
-  if(cum&&notCum)warns.push(`이 달 계약 ${N(notCum)}건이 월간누적 파일에 없어 유지(취소 아님)로 계산했습니다 — 월간누적이 일마감보다 이전 날짜까지일 수 있습니다.`);
+  if(!cum)warns.push(`${+m.slice(5,7)}월 월간누적 파일이 없어 취소·배송전취소를 판정하지 못했습니다(일마감 계약 전부 유지로 표시).`);
   if(M.noQ)warns.push(`분류(Q열) 없이 파싱된 옛 일마감 행 ${N(M.noQ)}건이 판정에서 빠졌습니다. 계열별성과 탭에서 공용폴더 새로고침하면 다시 읽습니다.`);
   const w=document.getElementById('kpWarn');w.innerHTML=warns.map(t=>'⚠️ '+t).join('<br>');w.classList.toggle('hidden',!warns.length);
 }
