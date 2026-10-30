@@ -663,6 +663,21 @@ tr.row-h td{background:var(--gh-light)}
 /* ── 성과진단 (pd*) ── */
 #page-perf-diag .container{max-width:100%;padding:24px 36px}
 #page-pkg-perf .container{max-width:100%;padding:24px 36px}
+table.kp-tbl{border-collapse:collapse;table-layout:fixed;font-size:12.5px}
+table.kp-tbl col.kp-c-day{width:100px}
+table.kp-tbl col.kp-c-m{width:76px}
+table.kp-tbl{border:1px solid #cbd5e1;color:#1e293b;font-variant-numeric:tabular-nums}
+table.kp-tbl th,table.kp-tbl td{padding:7px 9px;text-align:right;white-space:nowrap;border:1px solid #e2e8f0;overflow:hidden;text-overflow:ellipsis}
+table.kp-tbl thead th{background:#f8fafc;color:#475569;font-size:11.5px;font-weight:600;text-align:center;border-bottom:1px solid #cbd5e1}
+table.kp-tbl thead tr.kp-grp th{background:#fff;color:#0f172a;font-size:13px;font-weight:700;padding:9px 8px;letter-spacing:-.2px}
+table.kp-tbl td:first-child,table.kp-tbl th:first-child{text-align:center;font-weight:600}
+table.kp-tbl .kp-gs{border-left:2px solid #94a3b8}
+table.kp-tbl tbody tr:hover td{background:#f8fafc}
+table.kp-tbl tr.kp-total td{background:#f1f5f9;font-weight:700;border-bottom:2px solid #94a3b8}
+table.kp-tbl tr.kp-future td{color:#cbd5e1}
+table.kp-tbl td.kp-net{font-weight:700}
+table.kp-tbl td.kp-sat{color:#2563eb}
+table.kp-tbl td.kp-sun{color:#dc2626}
 @media (max-width:760px){#page-pkg-perf .container{padding:16px}}
 .pd-sel{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer}
 .pd-meta{font-size:12px;color:var(--gray);font-weight:500}
@@ -2418,8 +2433,11 @@ tr.vc-left:hover{opacity:.75}
       </div>
       <div id="kpInfo" class="pd-meta" style="margin:10px 4px 0;line-height:1.7"></div>
       <div id="kpWarn" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:12px;font-size:13px;line-height:1.7"></div>
-      <div class="sp-kpi-grid" id="kpKpi"></div>
-      <div class="sp-section"><h3>패키지별 성과 <span class="sub" id="kpSub"></span></h3><div class="pd-scroll" id="kpTable"></div></div>
+      <div class="sp-section" id="kpCapSec">
+        <h3><span id="kpTitle">토익·JLPT 일자별 성과</span> <span class="sub" id="kpSub"></span>
+          <button class="sp-btn kp-nocap" style="margin-left:auto" onclick="kpCapture(this)">📷 캡쳐</button></h3>
+        <div class="pd-scroll" id="kpTable"></div>
+      </div>
       <div class="sp-section"><h3>집계 기준</h3><div class="pd-insight"><ul>
         <li><b>패키지</b>: 매체코드에 <code>TOEIC</code> 포함 → 토익완성, <code>japerPT</code> 포함 → JLPT (대소문자 무시)</li>
         <li><b>DB수</b>: 고객관리 매체코드(T열) 기준 · 분배일(I열)이 기준월 · 고객키 중복 제거 · 재콜(DB정보 P열) 제외 · OB 군자/관리자/빈값 제외 · 담당 사업부 무관</li>
@@ -14898,7 +14916,7 @@ function kpCompute(){
     if(!r.d||r.rc)continue;
     if(!r.ob||tbIsAdmin(r.ob))continue;
     if(/callback|tv_b/i.test(r.mc))continue;
-    db.push({pk,m:r.d.slice(0,7)});if(r.d>dbMax)dbMax=r.d;
+    db.push({pk,d:r.d,m:r.d.slice(0,7)});if(r.d>dbMax)dbMax=r.d;
   }
   // 취소 — 월간누적 월(ym)별 최신본에서 반품일 있는 고객키 (계열별성과와 같은 파일 선택)
   const daily=spFilesByType('contDaily').slice().sort(byName);
@@ -14915,7 +14933,7 @@ function kpCompute(){
     if(r.q===undefined){noQ++;continue;}
     const pk=kpPkgOf(r.q);if(!pk)continue;
     if(String(r.mgr).includes('군자')){gunja++;continue;}
-    conts.push({pk,m:r.d.slice(0,7),x:rtKeys.has(r.k)?1:0,inCum:cumKeys.has(r.k)?1:0});
+    conts.push({pk,d:r.d,m:r.d.slice(0,7),x:rtKeys.has(r.k)?1:0,inCum:cumKeys.has(r.k)?1:0});
     if(r.d>contMax)contMax=r.d;
   }
   const months=Array.from(new Set(db.map(r=>r.m).concat(conts.map(c=>c.m)))).sort();
@@ -14964,18 +14982,33 @@ function kpRender(){
   if(!kpModel||!kpMonth)return;
   const m=kpMonth,M=kpModel;
   const db=M.db.filter(r=>r.m===m),cs=M.conts.filter(r=>r.m===m);
-  const rows=[{label:'합계 (토익완성+JLPT)',plain:'합계 (토익완성+JLPT)',st:kpStats(db,cs),bold:1}]
-    .concat(KP_PKGS.map(p=>({label:`${p.label} <span class="pd-meta">(${p.code})</span>`,plain:p.label,st:kpStats(db.filter(r=>r.pk===p.key),cs.filter(r=>r.pk===p.key))})));
   const N=pdN,P=r=>pdPct(r,2);
-  const cols=['#4361EE','#2EC4B6','#F0920E'];
-  document.getElementById('kpKpi').innerHTML=rows.map((r,i)=>{const s=r.st;
-    return `<div class="sp-kpi" style="border-left-color:${cols[i]}"><div class="l">${r.plain}</div>
-      <div class="v">${P(s.nr)}</div><div class="s">실계약률 · 실계약 ${N(s.net)} / DB ${N(s.n)}</div>
-      <div class="s">계약 ${N(s.c)} (${P(s.cr)}) · 취소 ${N(s.x)} (${P(s.xr)})</div></div>`;}).join('');
-  const hd=['구분','DB수','계약수','계약률','취소수','취소율','실계약수','실계약률'];
-  document.getElementById('kpTable').innerHTML=`<table class="pd-tbl"><thead><tr>${hd.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${
-    rows.map(r=>{const s=r.st;return `<tr${r.bold?' class="pd-tgt-row"':''}><td style="text-align:left">${r.label}</td><td>${N(s.n)}</td><td>${N(s.c)}</td><td>${P(s.cr)}</td><td>${N(s.x)}</td><td>${P(s.xr)}</td><td>${N(s.net)}</td><td><b>${P(s.nr)}</b></td></tr>`;}).join('')}</tbody></table>`;
-  document.getElementById('kpSub').textContent=`${m.slice(0,4)}년 ${+m.slice(5,7)}월`;
+  // 그룹: 합계 | 토익완성 | JLPT — 각 그룹 7칸(DB수·계약수·계약률·취소수·취소율·실계약수·실계약률), 칸 너비 동일
+  const groups=[{label:'합계',f:()=>true}].concat(KP_PKGS.map(p=>({label:p.label,f:r=>r.pk===p.key})));
+  const MET=['DB수','계약수','계약률','취소수','취소율','실계약수','실계약률'];
+  const cells=(s,dash)=>{if(dash)return MET.map((_,i)=>`<td${i===0?' class="kp-gs"':''}>-</td>`).join('');
+    return [N(s.n),N(s.c),P(s.cr),N(s.x),P(s.xr),N(s.net),P(s.nr)].map((v,i)=>`<td class="${i===0?'kp-gs':''}${i===6?' kp-net':''}">${v}</td>`).join('');};
+  // 일자별 버킷 (DB = 분배일, 계약 = 신청일)
+  const byDay=new Map();const bk=d=>{let o=byDay.get(d);if(!o){o={db:[],cs:[]};byDay.set(d,o);}return o;};
+  db.forEach(r=>bk(r.d).db.push(r));cs.forEach(r=>bk(r.d).cs.push(r));
+  const y=+m.slice(0,4),mo=+m.slice(5,7),last=new Date(y,mo,0).getDate();
+  const dataMax=[M.dbMax,M.contMax].sort().pop()||'';
+  const WD=['일','월','화','수','목','금','토'];
+  let body=`<tr class="kp-total"><td>합계</td>${groups.map(g=>cells(kpStats(db.filter(g.f),cs.filter(g.f)))).join('')}</tr>`;
+  for(let d=1;d<=last;d++){
+    const key=`${m}-${String(d).padStart(2,'0')}`,dt=new Date(y,mo-1,d);
+    const o=byDay.get(key)||{db:[],cs:[]};
+    const future=key>dataMax,dow=dt.getDay();
+    const hol=HOLIDAYS.has(key)&&!WORKDAYS.has(key);   // 일요일·공휴일 = 빨강, 토요일 = 파랑
+    const dcls=(dow===0||hol)?'kp-sun':dow===6?'kp-sat':'';
+    body+=`<tr class="${future?'kp-future':''}"><td class="${dcls}">${mo}/${d}(${WD[dow]})</td>${groups.map(g=>cells(kpStats(o.db.filter(g.f),o.cs.filter(g.f)),future)).join('')}</tr>`;
+  }
+  const colg=`<colgroup><col class="kp-c-day">${groups.map(()=>MET.map(()=>'<col class="kp-c-m">').join('')).join('')}</colgroup>`;
+  const head=`<tr class="kp-grp"><th rowspan="2">일자</th>${groups.map(g=>`<th colspan="7" class="kp-gs">${g.label}</th>`).join('')}</tr>`+
+    `<tr>${groups.map(()=>MET.map((h,i)=>`<th${i===0?' class="kp-gs"':''}>${h}</th>`).join('')).join('')}</tr>`;
+  document.getElementById('kpTable').innerHTML=`<table class="kp-tbl">${colg}<thead>${head}</thead><tbody>${body}</tbody></table>`;
+  document.getElementById('kpTitle').textContent=`토익·JLPT 일자별 성과 — ${y}년 ${mo}월`;
+  document.getElementById('kpSub').textContent='';
   // 데이터 범위·주의사항
   const cum=M.cumList.find(c=>c.ym===m.replace('-',''));
   document.getElementById('kpInfo').innerHTML=
@@ -14986,6 +15019,24 @@ function kpRender(){
   if(cum&&notCum)warns.push(`이 달 계약 ${N(notCum)}건이 월간누적 파일에 없어 유지(취소 아님)로 계산했습니다 — 월간누적이 일마감보다 이전 날짜까지일 수 있습니다.`);
   if(M.noQ)warns.push(`분류(Q열) 없이 파싱된 옛 일마감 행 ${N(M.noQ)}건이 판정에서 빠졌습니다. 계열별성과 탭에서 공용폴더 새로고침하면 다시 읽습니다.`);
   const w=document.getElementById('kpWarn');w.innerHTML=warns.map(t=>'⚠️ '+t).join('<br>');w.classList.toggle('hidden',!warns.length);
+}
+// 표 캡쳐(PNG) — 가로 스크롤을 펼쳐 표 전체를 한 장으로. 파일명 = 토익JLPT_일자별_YYYYMM_다운로드일(YYMMDD)
+async function kpCapture(btn){
+  const sec=document.getElementById('kpCapSec');if(!sec)return;
+  if(typeof html2canvas==='undefined'){alert('html2canvas가 로드되지 않았습니다.');return;}
+  const wrap=document.getElementById('kpTable');
+  const saved={ov:wrap.style.overflowX,w:sec.style.width};
+  wrap.style.overflowX='visible';sec.style.width='max-content';
+  const old=btn.textContent;btn.textContent='캡쳐 중…';btn.disabled=true;
+  await new Promise(r=>setTimeout(r,60));
+  try{
+    const fullW=Math.max(sec.scrollWidth,sec.offsetWidth);
+    const canvas=await html2canvas(sec,{scale:2,backgroundColor:'#ffffff',width:fullW,windowWidth:Math.max(fullW,document.documentElement.clientWidth),ignoreElements:el=>el.classList&&el.classList.contains('kp-nocap')});
+    const d=new Date(),p=n=>String(n).padStart(2,'0');
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');
+    a.download=`토익JLPT_일자별_${kpMonth.replace('-','')}_${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}.png`;a.click();
+  }catch(err){console.error(err);alert('캡쳐 실패: '+(err.message||err));}
+  finally{wrap.style.overflowX=saved.ov;sec.style.width=saved.w;btn.textContent=old;btn.disabled=false;}
 }
 function pdGenerate(){
   const t0=performance.now();
