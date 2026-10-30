@@ -15019,7 +15019,7 @@ function kpRender(){
   const colg=`<colgroup><col class="kp-c-day">${groups.map(()=>MET.map(()=>'<col class="kp-c-m">').join('')).join('')}</colgroup>`;
   const head=`<tr class="kp-grp"><th rowspan="2">일자</th>${groups.map(g=>`<th colspan="7" class="kp-gs">${g.label}</th>`).join('')}</tr>`+
     `<tr>${groups.map(()=>MET.map((h,i)=>`<th${i===0?' class="kp-gs"':''}>${h}</th>`).join('')).join('')}</tr>`;
-  document.getElementById('kpTable').innerHTML=`<table class="kp-tbl">${colg}<thead>${head}</thead><tbody>${body}</tbody></table>`;
+  document.getElementById('kpTable').innerHTML=`<table class="kp-tbl" style="width:${100+groups.length*MET.length*76}px">${colg}<thead>${head}</thead><tbody>${body}</tbody></table>`;
   document.getElementById('kpTitle').textContent=`토익·JLPT 일자별 성과 — ${y}년 ${mo}월`;
   document.getElementById('kpSub').textContent='';
   // 데이터 범위·주의사항
@@ -15035,19 +15035,27 @@ function kpRender(){
 async function kpCapture(btn){
   const sec=document.getElementById('kpCapSec');if(!sec)return;
   if(typeof html2canvas==='undefined'){alert('html2canvas가 로드되지 않았습니다.');return;}
-  const wrap=document.getElementById('kpTable');
-  const saved={ov:wrap.style.overflowX,w:sec.style.width};
-  wrap.style.overflowX='visible';sec.style.width='max-content';
+  const wrap=document.getElementById('kpTable'),tbl=wrap.querySelector('table');if(!tbl)return;
+  const saved={ov:wrap.style.overflowX,w:sec.style.width,bs:sec.style.boxSizing};
+  // 너비는 표 실제 폭으로 직접 지정 — 'max-content'로 두면 Chrome이 약 100만px로 계산해
+  //  캔버스 한도 초과 → toDataURL이 'data:,'(빈 값)을 돌려 손상된 PNG가 저장됐다.
+  const cs=getComputedStyle(sec),px=v=>parseFloat(v)||0;
+  const fullW=Math.ceil(tbl.offsetWidth+px(cs.paddingLeft)+px(cs.paddingRight)+px(cs.borderLeftWidth)+px(cs.borderRightWidth));
+  wrap.style.overflowX='visible';sec.style.boxSizing='border-box';sec.style.width=fullW+'px';
   const old=btn.textContent;btn.textContent='캡쳐 중…';btn.disabled=true;
   await new Promise(r=>setTimeout(r,60));
   try{
-    const fullW=Math.max(sec.scrollWidth,sec.offsetWidth);
     const canvas=await html2canvas(sec,{scale:2,backgroundColor:'#ffffff',width:fullW,windowWidth:Math.max(fullW,document.documentElement.clientWidth),ignoreElements:el=>el.classList&&el.classList.contains('kp-nocap')});
+    const blob=(canvas.width&&canvas.height)?await new Promise(r=>canvas.toBlob(r,'image/png')):null;
+    if(!blob||!blob.size)throw new Error(`이미지를 만들지 못했습니다 (캔버스 ${canvas.width}×${canvas.height})`);
     const d=new Date(),p=n=>String(n).padStart(2,'0');
-    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');
-    a.download=`토익JLPT_일자별_${kpMonth.replace('-','')}_${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}.png`;a.click();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=`토익JLPT_일자별_${kpMonth.replace('-','')}_${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}.png`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
   }catch(err){console.error(err);alert('캡쳐 실패: '+(err.message||err));}
-  finally{wrap.style.overflowX=saved.ov;sec.style.width=saved.w;btn.textContent=old;btn.disabled=false;}
+  finally{wrap.style.overflowX=saved.ov;sec.style.width=saved.w;sec.style.boxSizing=saved.bs;btn.textContent=old;btn.disabled=false;}
 }
 function pdGenerate(){
   const t0=performance.now();
