@@ -13842,6 +13842,15 @@ function spParseAttend(wb){
   return rows;
 }
 function spParseYm(fileName){const m=String(fileName||'').match(/(20\d{2})[._-]?(\d{2})(\d{2})?/);return m?m[1]+m[2]:'';}
+// 월간누적 파일의 월 = 행 신청일(P열)의 최빈 월. 공용폴더 파일명이 '신청자관리_2610'(연도 2자리)이라 spParseYm(4자리 연도만)이 못 잡아
+//  예전엔 파일마다 따로('?id') 묶여 같은 달 여러 버전이 함께 쓰였다. 행이 없으면 파일명(YYYYMM → YYMM) 순으로 보조 판별.
+function spCumYm(f){
+  const cnt=new Map();for(const r of f.rows||[])if(r.d){const ym=r.d.slice(0,4)+r.d.slice(5,7);cnt.set(ym,(cnt.get(ym)||0)+1);}
+  let best='',bn=0;for(const [ym,n] of cnt)if(n>bn){best=ym;bn=n;}
+  if(best)return best;
+  const m=String(f.fileName||'').match(/(?:^|[^\d])(\d{2})(\d{2})(?:[^\d]|$)/);
+  return f.ym||spParseYm(f.fileName)||(m?'20'+m[1]+m[2]:'?'+f.id);
+}
 
 // ── 업로드 / 모달 / 상태 ──
 function spFilesByType(type){return spFiles.filter(f=>f.type===type);}
@@ -14209,7 +14218,7 @@ function spCompute(){
   const dailyHashes=new Set(dailyFiles.map(f=>f.fileHash));
   const cumFiles=spFilesByType('contCum').filter(f=>!dailyHashes.has(f.fileHash));
   const latestByYm=new Map();
-  for(const f of cumFiles){const ym=f.ym||spParseYm(f.fileName)||('?'+f.id);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
+  for(const f of cumFiles){const ym=spCumYm(f);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
   const netRecs=[]; let returnCnt=0; const seenN=new Set();
   for(const f of latestByYm.values())for(const r of f.rows){
     if(r.rt){returnCnt++;continue;}            // 반품일 있음 = 취소 → net 제외
@@ -14922,7 +14931,7 @@ function kpCompute(){
   const daily=spFilesByType('contDaily').slice().sort(byName);
   const dailyHashes=new Set(daily.map(f=>f.fileHash));
   const latestByYm=new Map();
-  for(const f of spFilesByType('contCum')){if(dailyHashes.has(f.fileHash))continue;const ym=f.ym||spParseYm(f.fileName)||('?'+f.id);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
+  for(const f of spFilesByType('contCum')){if(dailyHashes.has(f.fileHash))continue;const ym=spCumYm(f);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
   const cumKeys=new Set(),rtKeys=new Set();
   for(const f of latestByYm.values())for(const r of f.rows){if(!r.k)continue;cumKeys.add(r.k);if(r.rt)rtKeys.add(r.k);}
   // 계약 — 일마감 고객키 dedup → 분류(Q) 패키지 코드 → 군자 담당 제외
