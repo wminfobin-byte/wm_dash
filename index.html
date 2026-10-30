@@ -680,6 +680,71 @@ table.kp-tbl td.kp-zero{color:#d5dbe3;font-weight:400}
 table.kp-tbl td.kp-sat{color:#2563eb}
 table.kp-tbl td.kp-sun{color:#dc2626}
 @media (max-width:760px){#page-pkg-perf .container{padding:16px}}
+/* ── 피벗 분석 (pv*) ── */
+/* 공용폴더 배너: 인라인 display:flex가 전역 .hidden을 이겨 빈 배너가 늘 보이던 문제 → 클래스로 */
+.wm-fbanner{display:flex}.wm-fbanner.hidden{display:none}
+#page-pivot .container{max-width:100%;padding:24px 36px}
+@media (max-width:760px){#page-pivot .container{padding:16px}}
+.pv-presets{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}
+.pv-lbl{font-size:12px;font-weight:700;color:var(--gray);margin-right:4px}
+.pv-views{display:inline-flex;gap:6px;align-items:center;margin-left:auto}
+.pv-builder{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;margin-top:14px}
+@media (max-width:900px){.pv-builder{grid-template-columns:1fr}}
+.pv-fields{background:var(--card);border:1px solid #e2e8f0;border-radius:12px;padding:12px}
+.pv-fl-g{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.pv-fl-g:last-child{margin-bottom:0}
+.pv-fl-h{width:100%;font-size:11.5px;font-weight:700;color:var(--gray)}
+.pv-zones{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pv-zone{background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:12px;padding:8px 10px;min-height:64px;transition:.12s}
+.pv-zone.pv-over{border-color:#2563eb;background:#eff6ff}
+.pv-zone-h{font-size:12px;font-weight:800;color:#334155;margin-bottom:6px}
+.pv-zone-b{display:flex;flex-wrap:wrap;gap:6px}
+.pv-zone-ph{font-size:12px;color:#94a3b8}
+.pv-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:12.5px;font-weight:600;cursor:grab;user-select:none;border:1px solid #cbd5e1;background:#fff;color:#1e293b}
+.pv-chip:hover{border-color:#64748b}
+.pv-chip-val{background:#f1f5f9}
+.pv-chip.pv-filtered{border-color:#2563eb;color:#1d4ed8}
+.pv-chip-open{cursor:pointer}
+.pv-q{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#e2e8f0;color:#475569;font-size:9.5px;font-weight:800;cursor:help;margin-left:2px}
+.pv-x{cursor:pointer;color:#94a3b8;font-weight:700;padding:0 2px}
+.pv-x:hover{color:#0f172a}
+.pv-tbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.pv-cond{font-size:12.5px;font-weight:600;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-bottom:10px;word-break:keep-all}
+.pv-scroll{overflow-x:auto}
+table.pv-tbl{border-collapse:collapse;font-size:12.5px;color:#1e293b;font-variant-numeric:tabular-nums;border:1px solid #cbd5e1}
+table.pv-tbl th,table.pv-tbl td{padding:6px 10px;border:1px solid #e2e8f0;white-space:nowrap;text-align:right}
+table.pv-tbl thead th{background:#f8fafc;color:#475569;font-size:11.5px;font-weight:600;text-align:center}
+table.pv-tbl thead th.pv-gh{background:#fff;color:#0f172a;font-size:12.5px;font-weight:700}
+table.pv-tbl th[data-sort]{cursor:pointer}
+table.pv-tbl th[data-sort]:hover{background:#eef2f7}
+table.pv-tbl th.pv-sort-asc::after{content:' ▲';font-size:9px}
+table.pv-tbl th.pv-sort-desc::after{content:' ▼';font-size:9px}
+table.pv-tbl th.pv-rh,table.pv-tbl td.pv-lab{position:sticky;left:0;z-index:1;background:#fff;text-align:left;min-width:120px}
+table.pv-tbl thead th.pv-rh{background:#f8fafc;z-index:2}
+table.pv-tbl td.pv-lab{font-weight:600}
+table.pv-tbl .pv-gs{border-left:2px solid #94a3b8}
+table.pv-tbl tr.pv-total td{background:#f1f5f9;font-weight:800;border-bottom:2px solid #94a3b8}
+table.pv-tbl tr.pv-sub td{background:#fafbfc;font-weight:700}
+table.pv-tbl tr.pv-total td.pv-lab{background:#f1f5f9}
+table.pv-tbl tr.pv-sub td.pv-lab{background:#fafbfc}
+table.pv-tbl tbody tr:hover td{filter:brightness(.98)}
+table.pv-tbl td.pv-zero{color:#d5dbe3;font-weight:400}
+table.pv-tbl .pv-sat{color:#2563eb}
+table.pv-tbl .pv-sun{color:#dc2626}
+table.pv-tbl td.pv-up{color:#16a34a;font-weight:700}
+table.pv-tbl td.pv-down{color:#dc2626;font-weight:700}
+.pv-tog{display:inline-block;width:16px;cursor:pointer;color:#64748b;font-size:10px}
+.pv-tog-sp{display:inline-block;width:16px}
+.pv-big,.pv-empty-msg{padding:18px;border:1px dashed #cbd5e1;border-radius:10px;color:#475569;font-size:13px;line-height:1.8;background:#f8fafc}
+.pv-ba-ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.pv-ba-ctl label{font-size:12px;font-weight:700;color:var(--gray)}
+.pv-pop{position:fixed;z-index:9999;width:290px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.18);padding:10px}
+.pv-pop-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px}
+.pv-pop-btns{display:flex;gap:4px;margin:8px 0}
+.pv-pop-btns .sp-btn{padding:4px 8px;font-size:11.5px}
+.pv-pop-list{max-height:260px;overflow:auto;border-top:1px solid #eef1f6;padding-top:4px}
+.pv-pop-it{display:flex;gap:6px;align-items:center;font-size:12.5px;padding:3px 2px;cursor:pointer}
+.pv-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:10000}
 .pd-sel{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer}
 .pd-meta{font-size:12px;color:var(--gray);font-weight:500}
 .pd-meta-h{font-size:10px;font-weight:500;opacity:.75}
@@ -1104,7 +1169,13 @@ tr.vc-left:hover{opacity:.75}
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="header-right" id="headerRight-pkg-perf" style="display:none">
-    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">계열별성과·타임보드 데이터 사용</span>
+    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">계열별성과 데이터 사용</span>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
+  <div class="header-right" id="headerRight-pivot" style="display:none">
+    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">계열별성과 데이터 사용</span>
     <div class="header-sep"></div>
     <button class="btn-header btn-sync" onclick="syncData()">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
@@ -1171,6 +1242,7 @@ tr.vc-left:hover{opacity:.75}
   <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
   <div class="tab-item" data-page="perf-diag" onclick="switchPage('perf-diag')">성과진단</div>
   <div class="tab-item" data-page="pkg-perf" onclick="switchPage('pkg-perf')">토익·JLPT</div>
+  <div class="tab-item" data-page="pivot" onclick="switchPage('pivot')">피벗 분석</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
@@ -2320,7 +2392,7 @@ tr.vc-left:hover{opacity:.75}
 <!-- ═══ Page: 성과진단 (pd*) — 계열별성과 데이터를 읽는 분석 뷰 ═══ -->
 <div class="page" id="page-perf-diag">
   <div class="container">
-    <div id="pdDirBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+    <div id="pdDirBanner" class="hidden wm-fbanner" style="align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
       <span id="pdDirBannerMsg" style="font-size:13px;font-weight:600;color:#92400e"></span>
       <button class="btn btn-primary btn-sm" id="pdDirBannerBtn" onclick="pdRefreshFolder()">📁 공용폴더 새로고침</button>
     </div>
@@ -2417,13 +2489,13 @@ tr.vc-left:hover{opacity:.75}
 <!-- ═══ Page: 토익·JLPT (임시, kp*) ═══ -->
 <div class="page" id="page-pkg-perf">
   <div class="container">
-    <div id="kpBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+    <div id="kpBanner" class="hidden wm-fbanner" style="align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
       <span id="kpBannerMsg" style="font-size:13px;font-weight:600;color:#92400e"></span>
       <button class="btn btn-primary btn-sm" id="kpBannerBtn" onclick="kpRefreshFolder()">📁 공용폴더 새로고침</button>
     </div>
     <div id="kpEmpty" class="sp-empty">
       <div style="font-size:18px;font-weight:700;margin-bottom:8px">분석할 데이터가 없습니다</div>
-      <div style="font-size:14px">DB수는 <b>타임보드성과</b>, 계약·취소는 <b>계열별성과</b> 탭의 데이터를 씁니다. 두 탭에서 공용폴더를 연결하거나 파일을 업로드하세요.</div>
+      <div style="font-size:14px"><b>계열별성과</b> 탭의 데이터(DB수·일마감·월간누적)를 씁니다. 계열별성과 탭에서 공용폴더를 연결하거나 파일을 업로드하세요.</div>
     </div>
     <div class="hidden" id="kpDashboard">
       <div class="sp-control-bar">
@@ -2449,6 +2521,77 @@ tr.vc-left:hover{opacity:.75}
     </div>
   </div>
 </div><!-- /page-pkg-perf -->
+
+<!-- ═══ Page: 피벗 분석 (pv*) ═══ -->
+<div class="page" id="page-pivot">
+  <div class="container">
+    <div id="pvBanner" class="hidden wm-fbanner" style="align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="pvBannerMsg" style="font-size:13px;font-weight:600;color:#92400e"></span>
+      <button class="btn btn-primary btn-sm" id="pvBannerBtn" onclick="pvRefreshFolder()">📁 공용폴더 새로고침</button>
+    </div>
+    <div id="pvEmpty" class="sp-empty">
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">분석할 데이터가 없습니다</div>
+      <div style="font-size:14px"><b>계열별성과</b> 탭의 데이터(DB수·일마감·월간누적·명단)를 씁니다. 계열별성과 탭에서 공용폴더를 연결하거나 파일을 업로드하세요.</div>
+    </div>
+    <div class="hidden" id="pvDashboard">
+      <div class="pv-presets"><span class="pv-lbl">자주 쓰는 보기</span><span id="pvPresets"></span>
+        <span class="pv-views"><select id="pvViewSel" class="pd-sel" onchange="pvLoadView()"></select>
+        <button class="sp-btn" onclick="pvSaveView()">💾 현재 구성 저장</button><button class="sp-btn" onclick="pvDeleteView()">삭제</button></span></div>
+      <div class="sp-control-bar" style="position:static">
+        <label>기간</label>
+        <input type="date" id="pvStart" onchange="pvSetDates()"><span>~</span><input type="date" id="pvEnd" onchange="pvSetDates()">
+        <div class="sp-quick" id="pvQuick">
+          <button data-q="thisMonth" onclick="pvSetRange('thisMonth')">이번 달</button>
+          <button data-q="lastMonth" onclick="pvSetRange('lastMonth')">지난달</button>
+          <button data-q="3m" onclick="pvSetRange('3m')">최근 3개월</button>
+          <button data-q="7d" onclick="pvSetRange('7d')">최근 7일</button>
+        </div>
+        <div class="sp-divider"></div>
+        <label>날짜 기준 <span class="pv-q" title="발생 기준: DB는 분배일, 계약은 신청일에 센다 (일마감 보고 숫자와 맞음) / 코호트 기준: 그 분배일에 받은 DB가 H일 안에 몇 건 계약됐나">?</span></label>
+        <div class="sp-seg" id="pvBasis">
+          <button data-b="flow" onclick="pvSetBasis('flow')">발생 기준</button>
+          <button data-b="cohort" onclick="pvSetBasis('cohort')">코호트 기준</button>
+        </div>
+        <span id="pvHWrap" class="hidden"><select id="pvH" class="pd-sel" onchange="pvSetH(this.value)"><option value="0">당일</option><option value="3">3일 내</option><option value="7">7일 내</option><option value="14">14일 내</option><option value="30">30일 내</option></select></span>
+        <div style="flex:1"></div>
+        <button class="sp-btn" onclick="pvRebuild()">🔄 재분석</button>
+      </div>
+      <div class="pv-builder">
+        <div class="pv-fields" id="pvFieldList"></div>
+        <div class="pv-zones">
+          <div class="pv-zone" id="pvZone-filt" data-zone="filt"></div>
+          <div class="pv-zone" id="pvZone-cols" data-zone="cols"></div>
+          <div class="pv-zone" id="pvZone-rows" data-zone="rows"></div>
+          <div class="pv-zone" id="pvZone-vals" data-zone="vals"></div>
+        </div>
+      </div>
+      <div id="pvWarn" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:12px;font-size:13px;line-height:1.7"></div>
+      <div class="sp-section" id="pvCapSec">
+        <div class="pv-tbar">
+          <button class="sp-btn kp-nocap" onclick="pvExpandAll(true)">모두 펼치기</button>
+          <button class="sp-btn kp-nocap" onclick="pvExpandAll(false)">모두 접기</button>
+          <label class="pd-meta kp-nocap"><input type="checkbox" id="pvHeatCk" onchange="pvSetHeat(this.checked)"> 비율 색 농도</label>
+          <div style="flex:1"></div>
+          <button class="sp-btn green kp-nocap" onclick="pvDownloadExcel()">📥 엑셀</button>
+          <button class="sp-btn kp-nocap" onclick="pvCapture('pvCapSec',this)">📷 캡쳐</button>
+        </div>
+        <div class="pv-cond" id="pvCond"></div>
+        <div class="pv-scroll" id="pvTable"></div>
+      </div>
+      <div class="sp-section" id="pvBASec">
+        <h3>전후 비교</h3>
+        <div id="pvBA"></div>
+      </div>
+    </div>
+  </div>
+  <div id="pvPop" class="pv-pop hidden">
+    <div class="pv-pop-h"><b id="pvPopTitle"></b><span class="pv-x" onclick="document.getElementById('pvPop').classList.add('hidden')">✕</span></div>
+    <input type="text" id="pvPopSearch" class="pd-sel" placeholder="검색" oninput="pvRenderPopList()" style="width:100%;box-sizing:border-box">
+    <div class="pv-pop-btns"><button class="sp-btn" onclick="pvPopAll(true)">전체선택</button><button class="sp-btn" onclick="pvPopAll(false)">전체해제</button><button class="sp-btn" onclick="pvPopOnly()">검색 결과만</button></div>
+    <div id="pvPopList" class="pv-pop-list"></div>
+  </div>
+  <div id="pvToast" class="pv-toast hidden"></div>
+</div><!-- /page-pivot -->
 
 <div class="page" id="page-timeboard-perf">
   <!-- Modal -->
@@ -3133,8 +3276,8 @@ tr.vc-left:hover{opacity:.75}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
-  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','pivot','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','pivot','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -3819,7 +3962,7 @@ async function doSyncUpload(token){
     const gdData={files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules','pv_views'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // (일자별 성과 탭 삭제됨 — 싱크 제외)
@@ -4326,6 +4469,8 @@ function switchPage(pageId){
   if(hrSp) hrSp.style.display = pageId==='series-perf' ? 'flex' : 'none';
   const hrPd=document.getElementById('headerRight-perf-diag');
   if(hrPd) hrPd.style.display = pageId==='perf-diag' ? 'flex' : 'none';
+  const hrPv=document.getElementById('headerRight-pivot');
+  if(hrPv) hrPv.style.display = pageId==='pivot' ? 'flex' : 'none';
   const hrKp=document.getElementById('headerRight-pkg-perf');
   if(hrKp) hrKp.style.display = pageId==='pkg-perf' ? 'flex' : 'none';
   const hrTb=document.getElementById('headerRight-timeboard-perf');
@@ -4347,6 +4492,7 @@ function switchPage(pageId){
   if(pageId==='timeboard-perf' && typeof tbOnShow==='function') tbOnShow();
   if(pageId==='perf-diag' && typeof pdOnShow==='function') pdOnShow();
   if(pageId==='pkg-perf' && typeof kpOnShow==='function') kpOnShow();
+  if(pageId==='pivot' && typeof pvOnShow==='function') pvOnShow();
   if(pageId==='talkis-perf' && typeof tzOnShow==='function') tzOnShow();
   if(pageId==='grade-dash' && typeof gdAutoScanOnShow==='function') gdAutoScanOnShow();
 }
@@ -13793,7 +13939,8 @@ function spGapTitle(db,cont,s){
 function spReadAOA(wb){return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false});}
 // DB 파서 버전 — 파싱 필드를 바꾸면 올릴 것. 공용폴더 스캔 때 pv가 낮은 db 파일을 같은 파일로 재파싱한다.
 // v2 = 패키지(U)·매체그룹(S) 추가 (성과진단 탭)
-const SP_DB_PARSER_VER=2;
+// v4 = 매체코드(T) 원문 mc 추가 (토익·JLPT·피벗 탭). v3은 2026-10-21 잠깐 쓰였다 되돌린 번호라 건너뜀 — 그 파싱본도 재파싱되게
+const SP_DB_PARSER_VER=4;
 const SP_CONT_PARSER_VER=3;   // v2 = 분류(Q) 원문 q, v3 = 코드번호(R) IN·재콜 플래그 ci/cr + 분배일(AP) dd. 올리면 공용폴더 스캔 때 같은 계약 파일도 다시 파싱
 const _spIntern=new Map();
 function spIntern(s){let v=_spIntern.get(s);if(v===undefined){v=s;_spIntern.set(s,s);}return v;}
@@ -13815,7 +13962,8 @@ function spParseDb(wb){
       in:media===''?1:0,
       mx:(media.includes('callback')||media.includes('tv_b'))?1:0,
       pk:spIntern(String(r[20]==null?'':r[20]).trim()),
-      mg:spIntern(String(r[18]==null?'':r[18]).trim())
+      mg:spIntern(String(r[18]==null?'':r[18]).trim()),
+      mc:spIntern(media)                                   // v4: 매체코드 T(19) 원문
     });
   }
   return rows;
@@ -14912,21 +15060,23 @@ async function pdCheckFolder(request){
 async function pdRefreshFolder(){await pdCheckFolder(true);pdModel=null;pdOnShow();}
 
 // ═══════════ 토익·JLPT 임시 탭 (kp*) ═══════════
-//  DB = 타임보드(tb) db 파일(매체 T열 원문 보존) / 계약·반품일 = 계열별성과(sp) 일마감·월간누적
+//  DB·계약·반품일 모두 계열별성과(sp) 데이터 — DB 매체코드 T열 원문은 sp DB 파서 v4의 mc
 const KP_PKGS=[{key:'toeic',label:'토익완성',code:'TOEIC',re:/toeic/i},{key:'jlpt',label:'JLPT',code:'japerPT',re:/japerpt/i}];
 let kpModel=null,kpMonth='';
 function kpPkgOf(s){s=String(s||'');for(const p of KP_PKGS)if(p.re.test(s))return p.key;return null;}
 function kpCompute(){
   const byName=(a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:(a.uploadTime||0)-(b.uploadTime||0));
   // DB — 고객키 dedup → 패키지 코드 → 재콜·분배일 없음·OB 군자/관리자/빈값·callback/tv_b 제외
-  const db=[];const seen=new Set();let dbMax='';
-  for(const f of tbFilesByType('db').slice().sort(byName))for(const r of f.rows){
+  const db=[];const seen=new Set();let dbMax='',staleDb=0;
+  for(const f of spFilesByType('db').slice().sort(byName)){
+   if((f.pv||1)<SP_DB_PARSER_VER)staleDb++;
+   for(const r of f.rows){
     if(!r.k||seen.has(r.k))continue;seen.add(r.k);
     const pk=kpPkgOf(r.mc);if(!pk)continue;
-    if(!r.d||r.rc)continue;
+    if(!r.d||r.rc||r.mx)continue;
     if(!r.ob||tbIsAdmin(r.ob))continue;
-    if(/callback|tv_b/i.test(r.mc))continue;
     db.push({pk,d:r.d,m:r.d.slice(0,7)});if(r.d>dbMax)dbMax=r.d;
+   }
   }
   // 취소 — 월간누적 월(ym)별 최신본에서 반품일 있는 고객키 (계열별성과와 같은 파일 선택)
   const daily=spFilesByType('contDaily').slice().sort(byName);
@@ -14951,7 +15101,7 @@ function kpCompute(){
   }
   const months=Array.from(new Set(db.map(r=>r.m).concat(conts.map(c=>c.m)))).sort();
   const cumList=Array.from(latestByYm.entries()).sort((a,b)=>a[0]>b[0]?1:-1).map(([ym,f])=>({ym,fileName:f.fileName}));
-  kpModel={db,conts,months,dbMax,contMax,noQ,gunja,preCancel,cumList};
+  kpModel={db,conts,months,dbMax,contMax,noQ,gunja,preCancel,cumList,staleDb};
   return kpModel;
 }
 function kpStats(db,cs){
@@ -14960,9 +15110,8 @@ function kpStats(db,cs){
 }
 async function kpOnShow(){
   if(!spLoaded)await spLoadFiles();
-  if(!tbLoaded)await tbLoadFiles();
   await kpCheckFolder();
-  const ok=tbFilesByType('db').length>0&&spFilesByType('contDaily').length>0;
+  const ok=spFilesByType('db').length>0&&spFilesByType('contDaily').length>0;
   document.getElementById('kpDashboard').classList.toggle('hidden',!ok);
   document.getElementById('kpEmpty').classList.toggle('hidden',ok);
   if(!ok)return;
@@ -14984,8 +15133,7 @@ async function kpCheckFolder(){
     if(await spVerifyPerm(spDirHandle,true)){
       show('⏳ 공용폴더 확인 중…',true);
       const a=await spScanFolder({request:false,announce:false,fromShow:true,cross:true});
-      const c=await tbScanFolder({request:false,announce:false,fromShow:true,cross:true});
-      if((a&&a.okCnt)||(c&&c.okCnt))kpModel=null;
+      if(a&&a.okCnt)kpModel=null;
       b.classList.add('hidden');
     }else show('📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요',false);
   }catch(e){console.error('토익·JLPT 폴더 확인',e);b.classList.add('hidden');}
@@ -15028,6 +15176,7 @@ function kpRender(){
     `DB 마지막 분배일 <b>${M.dbMax||'-'}</b> · 일마감 마지막 신청일 <b>${M.contMax||'-'}</b> · 취소 판정 월간누적 <b>${cum?pdEsc(cum.fileName):'없음'}</b>`;
   const warns=[];
   if(!cum)warns.push(`${+m.slice(5,7)}월 월간누적 파일이 없어 취소·배송전취소를 판정하지 못했습니다(일마감 계약 전부 유지로 표시).`);
+  if(M.staleDb)warns.push(`매체코드 없이 저장된 옛 DB 파일 ${N(M.staleDb)}개가 있어 그 기간 DB수가 빠집니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다(처음 한 번, 수 분).`);
   if(M.noQ)warns.push(`분류(Q열) 없이 파싱된 옛 일마감 행 ${N(M.noQ)}건이 판정에서 빠졌습니다. 계열별성과 탭에서 공용폴더 새로고침하면 다시 읽습니다.`);
   const w=document.getElementById('kpWarn');w.innerHTML=warns.map(t=>'⚠️ '+t).join('<br>');w.classList.toggle('hidden',!warns.length);
 }
@@ -15057,6 +15206,756 @@ async function kpCapture(btn){
   }catch(err){console.error(err);alert('캡쳐 실패: '+(err.message||err));}
   finally{wrap.style.overflowX=saved.ov;sec.style.width=saved.w;sec.style.boxSizing=saved.bs;btn.textContent=old;btn.disabled=false;}
 }
+
+// ═══════════════════════════════════════════
+//  피벗 분석 (pv*) — 계열별성과(sp) 데이터로 사실 테이블을 한 번 만들고, 행·열·값·필터 구성대로 집계만 한다
+// ═══════════════════════════════════════════
+// 차원. ap: b=DB·계약 공통 / c=계약에만 있음(DB 행은 '—') / d=DB에만 있음(계약 행은 '—')
+//  계약에만/DB에만 있는 차원의 필터는 그 차원을 가진 쪽에만 걸린다 (예: 계약 유형 필터는 DB수를 건드리지 않음)
+const PV_DIMS=[
+  {k:'day',l:'일자',ap:'b',tip:'발생 기준: DB=분배일, 계약=신청일 / 코호트 기준: 둘 다 분배일'},
+  {k:'week',l:'주차',ap:'b',tip:'일~토 한 주. 목요일이 속한 달의 주차 (WM 취소율과 같음)'},
+  {k:'month',l:'월',ap:'b',tip:'일자의 월'},
+  {k:'wd',l:'요일',ap:'b',tip:'일자의 요일'},
+  {k:'team',l:'사업부',ap:'b',tip:'최신 명단의 담당. 명단에 없으면 (명단 외), 군자 계약은 분류(Q)로 판정'},
+  {k:'ctr',l:'센터',ap:'b',tip:'최신 명단의 센터. 명단 외는 이름의 (R_센터) 표기, 군자 계약은 군자'},
+  {k:'codi',l:'코디',ap:'b',tip:'DB=OB명(H열), 계약=담당자(N열). 코호트 기준이면 계약도 DB 받은 코디'},
+  {k:'emp',l:'재직/퇴사',ap:'b',tip:'최신 명단에 있으면 재직, 없으면 퇴사·명단 외'},
+  {k:'pk',l:'패키지',ap:'b',tip:'DB 패키지(U열). 계약은 고객키로 DB에 붙여서 가져옴'},
+  {k:'mg',l:'매체그룹',ap:'b',tip:'DB 매체그룹(S열). 계약은 고객키로 DB에 붙여서 가져옴'},
+  {k:'mc',l:'매체코드',ap:'b',tip:'DB=매체코드(T열), 계약=분류(Q열) 원문'},
+  {k:'se',l:'계열',ap:'b',tip:'DB 계열(C열, 0=최상위). 계약은 고객키로 DB에 붙여서 가져옴'},
+  {k:'ag',l:'연령대',ap:'b',tip:'DB 연령대(L열). 계약은 고객키로 DB에 붙여서 가져옴'},
+  {k:'ty',l:'계약 유형',ap:'c',tip:'성과진단 일자 비교 판정: 군자 → IN(코드번호) → 재콜(코드번호) → 분배일=신청일이면 당일, 아니면 이전'},
+  {k:'lagb',l:'경과일 구간',ap:'c',tip:'DB 분배일부터 계약 신청일까지 걸린 날'},
+  {k:'dbk',l:'신규/재콜 DB',ap:'d',tip:'DB정보(P열)에 재콜이 있으면 재콜 DB'}
+];
+const PV_DIM=Object.fromEntries(PV_DIMS.map(d=>[d.k,d]));
+const PV_DATE_DIMS=new Set(['day','week','month','wd']);
+const PV_VALS=[
+  {k:'db',l:'DB수',fmt:'n',tip:'고객키 중복 제거. IN·콜백·OB 군자/관리자 제외 (재콜은 신규/재콜 DB 필터로)'},
+  {k:'ct',l:'계약수',fmt:'n',tip:'일마감 신청일 기준, 고객키 중복 제거. 배송전취소 제외'},
+  {k:'cr',l:'계약률',fmt:'p',tip:'계약수 ÷ DB수'},
+  {k:'x',l:'취소수',fmt:'n',tip:'월간누적 월별 최신본에 반품일이 있는 계약'},
+  {k:'xr',l:'취소율',fmt:'p',tip:'취소수 ÷ 계약수'},
+  {k:'net',l:'실계약수',fmt:'n',tip:'계약수 − 취소수'},
+  {k:'nr',l:'실계약률',fmt:'p',tip:'실계약수 ÷ DB수'},
+  {k:'pc',l:'배송전취소수',fmt:'n',tip:'일마감엔 있는데 그 달 월간누적에 없는 계약 (계약수에서 빠진 건수)'},
+  {k:'ncodi',l:'코디 수',fmt:'n',tip:'그 칸에서 신규 DB를 1건 이상 받은 코디 수'},
+  {k:'pdb',l:'1인당 DB',fmt:'d1',tip:'DB수 ÷ 코디 수'},
+  {k:'pct',l:'1인당 계약',fmt:'d2',tip:'계약수 ÷ 코디 수'},
+  {k:'ppd',l:'1인 1일당 DB',fmt:'d1',tip:'DB수 ÷ (코디×분배일) 조합 수'}
+];
+const PV_VAL=Object.fromEntries(PV_VALS.map(v=>[v.k,v]));
+function pvValOf(k,a){
+  if(!a)return k==='db'||k==='ct'||k==='x'||k==='net'||k==='pc'||k==='ncodi'?0:null;
+  const cn=a.codi?a.codi.size:0;
+  switch(k){
+    case 'db':return a.db;case 'ct':return a.ct;case 'x':return a.x;case 'pc':return a.pc;case 'net':return a.ct-a.x;
+    case 'cr':return a.db?a.ct/a.db:null;case 'xr':return a.ct?a.x/a.ct:null;case 'nr':return a.db?(a.ct-a.x)/a.db:null;
+    case 'ncodi':return cn;case 'pdb':return cn?a.db/cn:null;case 'pct':return cn?a.ct/cn:null;
+    case 'ppd':{const p=a.pair?a.pair.size:0;return p?a.db/p:null;}
+  }
+  return null;
+}
+const PV_TYPE_ORDER=['당일','이전','재콜','IN','군자','DB미매칭'];
+const PV_LAG_ORDER=['당일','1~3일','4~7일','8일 이상','(분배 전 신청)','(DB미매칭)'];
+const PV_WD=['일','월','화','수','목','금','토'];
+const PV_WD_ORDER=['월','화','수','목','금','토','일'];
+
+const PV_LS='pv_views';
+const PV_PRESETS=[
+  {n:'일자별 사업부 성과',c:{rows:['day'],cols:['team'],vals:['db','ct','cr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'thisMonth'}}},
+  {n:'코디별 성과',c:{rows:['team','codi'],cols:[],vals:['db','ct','cr','x','xr','net','nr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'thisMonth'}}},
+  {n:'최근 3개월 월별 추이',c:{rows:['pk'],cols:['month'],vals:['db','ct','cr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'3m'}}},
+  {n:'패키지별 성과',c:{rows:['pk'],cols:[],vals:['db','ct','cr','x','xr','net','nr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'thisMonth'}}},
+  {n:'매체별 성과',c:{rows:['mg','mc'],cols:[],vals:['db','ct','cr','x','xr','net','nr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'thisMonth'}}},
+  {n:'일자별 계약 유형',c:{rows:['day'],cols:['ty'],vals:['ct'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'thisMonth'}}},
+  {n:'코디×월 계약률 추이',c:{rows:['team','codi'],cols:['month'],vals:['cr'],filt:['dbk'],fsel:{dbk:['신규']},range:{q:'3m'}}}
+];
+
+let pvModel=null,pvSig='',pvCfg=null,pvCollapsed=new Set(),pvSort=null,pvHeat=true,pvForce=false;
+let pvBA={cut:'',mode:'split'},pvGridMain=null,pvGridBA=null;
+
+// ── 날짜 유틸 (UTC 일 단위 정수) ──
+function pvDayNum(iso){return Math.round(Date.UTC(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10))/864e5);}
+function pvIso(n){return new Date(n*864e5).toISOString().slice(0,10);}
+function pvMD(iso){return (+iso.slice(5,7))+'/'+(+iso.slice(8,10));}
+function pvRangeTxt(s,e){if(!s||!e)return '-';return s.slice(0,4)===e.slice(0,4)?`${s}~${e.slice(5)}`:`${s}~${e}`;}
+
+// ── 사전 (차원 값 ↔ 정수 코드, 0 = 해당없음) ──
+function pvDict(){return {labels:[null],idx:new Map()};}
+function pvCode(dc,label){let c=dc.idx.get(label);if(c===undefined){c=dc.labels.length;dc.labels.push(label);dc.idx.set(label,c);}return c;}
+
+function pvFilesSig(){let n=0,t=0;for(const f of spFiles){n+=f.rowsCount||(f.rows?f.rows.length:0);t=Math.max(t,f.uploadTime||0);}return spFiles.length+'|'+n+'|'+t;}
+
+// ═══ 사실 테이블 빌드 (원본 1회 순회) ═══
+function pvBuild(){
+  const t0=performance.now();
+  const roster=spBuildRoster();
+  const byName=(a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:(a.uploadTime||0)-(b.uploadTime||0));
+  const dbFiles=spFilesByType('db').slice().sort(byName);
+  const daily=spFilesByType('contDaily').slice().sort(byName);
+  const dailyHashes=new Set(daily.map(f=>f.fileHash));
+  const latestByYm=new Map();
+  for(const f of spFilesByType('contCum')){if(dailyHashes.has(f.fileHash))continue;const ym=spCumYm(f);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
+  const cumKeys=new Set(),rtKeys=new Set();
+  for(const f of latestByYm.values())for(const r of f.rows){if(!r.k)continue;cumKeys.add(r.k);if(r.rt)rtKeys.add(r.k);}
+  // 고객키별 최초 신청일 (성과진단 코호트와 같음: 일마감 우선 + 월간누적 보조)
+  const app=new Map();const put=(k,d)=>{if(!k||!d)return;const c=app.get(k);if(!c||d<c)app.set(k,d);};
+  for(const f of daily)for(const r of f.rows)put(r.k,r.d);
+  for(const f of spFilesByType('contCum'))if(!dailyHashes.has(f.fileHash))for(const r of f.rows)put(r.k,r.d);
+  const inDaily=new Set();for(const f of daily)for(const r of f.rows)if(r.k)inDaily.add(r.k);
+  const ymOf=d=>d.slice(0,4)+d.slice(5,7);
+  const pcOf=(k,d)=>inDaily.has(k)&&latestByYm.has(ymOf(d))&&!cumKeys.has(k)?1:0;
+
+  const D={};for(const d of PV_DIMS)if(!PV_DATE_DIMS.has(d.k))D[d.k]=pvDict();
+  const whoCache=new Map();
+  const who=raw=>{
+    let w=whoCache.get(raw);if(w)return w;
+    const ent=spCanon(roster,raw);
+    if(ent)w={team:ent.team||'(미상)',ctr:ent.ctr||'(미상)',codi:ent.nm,emp:'재직'};
+    else{const t=String(raw||'').replace(/\(종료\)/g,'').trim();const m=t.match(/^\((?:R_)?([^)]*)\)/);
+      w={team:'(명단 외)',ctr:(m&&m[1])||'(미상)',codi:t||'(미상)',emp:'퇴사·명단 외'};}
+    whoCache.set(raw,w);return w;
+  };
+  const pkL=r=>r.pk==null?'(미수집)':(r.pk||'(없음)'),mgL=r=>r.mg==null?'(미수집)':(r.mg||'(없음)');
+  const seL=se=>se>=0&&se<=5?se+'계열':'미상',agL=ag=>!ag||ag==='00'?'미상(00)':ag+'대';
+  const lagL=l=>l==null?'(DB미매칭)':l<0?'(분배 전 신청)':l===0?'당일':l<=3?'1~3일':l<=7?'4~7일':'8일 이상';
+
+  // 열 지향 저장 (일반 배열로 쌓고 마지막에 typed array로)
+  const A={kind:[],day:[],rc:[],pc:[],x:[],clag:[],cty:[],clagb:[],cpc:[],cx:[]};
+  const C={};for(const k in D)C[k]=[];
+  const push=(kind,dayIso,codes,ext)=>{
+    A.kind.push(kind);A.day.push(pvDayNum(dayIso));
+    for(const k in D)C[k].push(codes[k]||0);
+    A.rc.push(ext.rc||0);A.pc.push(ext.pc||0);A.x.push(ext.x||0);
+    A.clag.push(ext.clag==null?-1:ext.clag);A.cty.push(ext.cty||0);A.clagb.push(ext.clagb||0);A.cpc.push(ext.cpc||0);A.cx.push(ext.cx||0);
+  };
+  // DB
+  const keyMeta=new Map();const seen=new Set();let staleDb=0,exAdmin=0;
+  for(const f of dbFiles){
+    if((f.pv||1)<SP_DB_PARSER_VER)staleDb++;
+    for(const r of f.rows){
+      if(!r.k||seen.has(r.k))continue;seen.add(r.k);
+      keyMeta.set(r.k,r);
+      if(r.in||r.mx||!r.d)continue;                    // IN(매체 빈값)·callback/tv_b·분배일 없음 — 성과진단과 같음
+      if(!r.ob||/군자|관리자/.test(r.ob)){exAdmin++;continue;}   // DB관리(군자)·미배정(관리자)은 코디 DB가 아님
+      const w=who(r.ob);
+      const a=app.get(r.k);const lag=a?pvDayNum(a)-pvDayNum(r.d):null;
+      const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
+        pk:pvCode(D.pk,pkL(r)),mg:pvCode(D.mg,mgL(r)),mc:pvCode(D.mc,r.mc==null?'(미수집)':(r.mc||'(빈값)')),
+        se:pvCode(D.se,seL(r.se)),ag:pvCode(D.ag,agL(r.ag)),dbk:pvCode(D.dbk,r.rc?'재콜':'신규')};
+      const ext={rc:r.rc?1:0};
+      if(lag!=null&&lag>=0){ext.clag=lag;ext.cty=pvCode(D.ty,r.rc?'재콜':lag===0?'당일':'이전');ext.clagb=pvCode(D.lagb,lagL(lag));ext.cpc=pcOf(r.k,a);ext.cx=rtKeys.has(r.k)?1:0;}
+      push(0,r.d,codes,ext);
+    }
+  }
+  // 계약 (일마감, 신청일 기준)
+  const seenC=new Set();let staleC=0,gunja=0,pcN=0;
+  for(const f of daily){
+    if((f.pv||1)<SP_CONT_PARSER_VER)staleC++;
+    for(const r of f.rows){
+      if(!r.k||seenC.has(r.k))continue;seenC.add(r.k);
+      if(!r.d)continue;
+      const gj=String(r.mgr).includes('군자');
+      const w=gj?{team:pdTeamFromCls(r.q),ctr:'군자',codi:'군자',emp:'군자'}:who(r.mgr);
+      const m=keyMeta.get(r.k);
+      let ty;
+      if(gj)ty='군자';
+      else if(r.dd!==undefined)ty=r.ci?'IN':r.cr?'재콜':(r.dd&&r.dd===r.d?'당일':'이전');
+      else ty=r.in?'IN':!m?'DB미매칭':m.rc?'재콜':(m.d===r.d?'당일':'이전');
+      if(gj)gunja++;
+      const lag=m&&m.d?pvDayNum(r.d)-pvDayNum(m.d):null;
+      const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
+        pk:pvCode(D.pk,m?pkL(m):'(DB미매칭)'),mg:pvCode(D.mg,m?mgL(m):'(DB미매칭)'),
+        mc:pvCode(D.mc,r.q===undefined?'(미수집)':(r.q||'(빈값·IN)')),
+        se:pvCode(D.se,m?seL(m.se):'미상'),ag:pvCode(D.ag,m?agL(m.ag):'미상(00)'),
+        ty:pvCode(D.ty,ty),lagb:pvCode(D.lagb,lagL(lag))};
+      const pc=pcOf(r.k,r.d);if(pc)pcN++;
+      push(1,r.d,codes,{pc,x:rtKeys.has(r.k)?1:0});
+    }
+  }
+  const n=A.kind.length;
+  const F={n,kind:Uint8Array.from(A.kind),day:Int32Array.from(A.day),rc:Uint8Array.from(A.rc),pc:Uint8Array.from(A.pc),x:Uint8Array.from(A.x),
+    clag:Int32Array.from(A.clag),cty:Uint32Array.from(A.cty),clagb:Uint32Array.from(A.clagb),cpc:Uint8Array.from(A.cpc),cx:Uint8Array.from(A.cx),codes:{}};
+  for(const k in D)F.codes[k]=Uint32Array.from(C[k]);
+  // 날짜 차원 사전: 데이터 전 기간
+  let minD=Infinity,maxD=-Infinity;for(let i=0;i<n;i++){const d=F.day[i];if(d<minD)minD=d;if(d>maxD)maxD=d;}
+  const dd={day:pvDict(),week:pvDict(),month:pvDict(),wd:pvDict()};
+  for(const w of PV_WD_ORDER)pvCode(dd.wd,w);
+  const dayLook={day:[],week:[],month:[],wd:[]};
+  if(n)for(let d=minD;d<=maxD;d++){
+    const iso=pvIso(d),dt=new Date(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10));
+    dayLook.day.push(pvCode(dd.day,iso));dayLook.month.push(pvCode(dd.month,iso.slice(0,7)));
+    dayLook.week.push(pvCode(dd.week,cdWeekKey(dt)));dayLook.wd.push(pvCode(dd.wd,PV_WD[dt.getDay()]));
+  }
+  Object.assign(D,dd);
+  const months=[...latestByYm.keys()].sort();
+  pvModel={F,D,dayLook,minD,maxD,minIso:n?pvIso(minD):'',maxIso:n?pvIso(maxD):'',cumMonths:new Set(months),staleDb,staleC,exAdmin,gunja,pcN};
+  pvSig=pvFilesSig();
+  console.log(`[피벗] 사실 테이블 ${n.toLocaleString()}행 (${(performance.now()-t0).toFixed(0)}ms)`);
+  return pvModel;
+}
+
+// 사실 i의 차원 코드. part: 0 = DB 기여, 1 = 계약 기여 / cohort = 코호트 기준의 계약 기여(DB 행에서 파생)
+function pvCodeAt(k,i,part,cohort){
+  const M=pvModel,F=M.F;
+  const ap=PV_DIM[k].ap;
+  if(ap==='c'&&part===0)return 0;
+  if(PV_DATE_DIMS.has(k))return M.dayLook[k][F.day[i]-M.minD];
+  if(cohort&&part===1){if(k==='ty')return F.cty[i];if(k==='lagb')return F.clagb[i];return F.codes[k][i];}   // 코호트 계약 = 그 DB의 계약 → DB 차원(신규/재콜 포함) 그대로
+  if(ap==='d'&&part===1)return 0;
+  return F.codes[k][i];
+}
+function pvLabel(k,c){const L=pvModel.D[k].labels[c];return c===0?'—':k==='week'?cdWeekLabel(L):L;}
+function pvOrderKey(k,c){
+  const L=pvModel.D[k].labels[c];
+  if(c===0)return [9,''];
+  if(k==='wd')return [0,PV_WD_ORDER.indexOf(L)];
+  if(k==='team'){const i=PD_TEAMS.indexOf(L);return i>=0?[0,i]:L==='(명단 외)'?[2,0]:[1,L];}
+  if(k==='ty')return [0,PV_TYPE_ORDER.indexOf(L)];
+  if(k==='lagb')return [0,PV_LAG_ORDER.indexOf(L)];
+  if(k==='dbk')return [0,L==='신규'?0:1];
+  if(k==='emp')return [0,['재직','퇴사·명단 외','군자'].indexOf(L)];
+  return [String(L).startsWith('(')||L==='미상'||L==='미상(00)'?1:0,L];
+}
+function pvCmpCodes(k,a,b){const x=pvOrderKey(k,a),y=pvOrderKey(k,b);if(x[0]!==y[0])return x[0]-y[0];if(typeof x[1]==='number')return x[1]-y[1];return String(x[1]).localeCompare(String(y[1]),'ko');}
+
+// ═══ 집계 ═══
+// cfg: {rows,cols,vals,fsel(코드 Set), basis, H, s, e}. colFn(i)이 있으면 열 키를 그걸로 (전후 비교)
+function pvAggregate(cfg,opt){
+  opt=opt||{};
+  const M=pvModel,F=M.F;
+  const s=pvDayNum(opt.s||cfg.s),e=pvDayNum(opt.e||cfg.e);
+  const rows=cfg.rows,cols=opt.colFn?[]:cfg.cols;
+  const needCodi=cfg.vals.some(v=>v==='ncodi'||v==='pdb'||v==='pct'),needPair=cfg.vals.includes('ppd');
+  const cohort=cfg.basis==='cohort',H=cfg.H;
+  const filt=Object.entries(cfg.fsel).filter(([k,set])=>set);
+  const root={code:0,kids:new Map(),acc:new Map()};
+  const colKeys=new Map();
+  const newAcc=()=>({db:0,ct:0,x:0,pc:0,codi:needCodi?new Set():null,pair:needPair?new Set():null});
+  const add=(node,ck,part,i,codiCode)=>{
+    for(const key of [ck,'__T']){
+      let a=node.acc.get(key);if(!a){a=newAcc();node.acc.set(key,a);}
+      if(part===0){a.db++;if(F.rc[i]===0&&codiCode){if(a.codi)a.codi.add(codiCode);if(a.pair)a.pair.add(codiCode*100000+(F.day[i]-M.minD));}}
+      else{const pc=cohort?F.cpc[i]:F.pc[i],x=cohort?F.cx[i]:F.x[i];if(pc)a.pc++;else{a.ct++;if(x)a.x++;}}
+      if(opt.colFn)break;   // 전후 비교는 총계 열 없음
+    }
+  };
+  const handle=(i,part)=>{
+    for(let f=0;f<filt.length;f++){const [k,set]=filt[f];const c=pvCodeAt(k,i,part,cohort);if(c!==0&&!set.has(c))return;}
+    let ck;
+    if(opt.colFn){ck=opt.colFn(F.day[i]);if(ck==null)return;}
+    else{const cc=cols.map(k=>pvCodeAt(k,i,part,cohort));ck=cc.join('|');if(!colKeys.has(ck))colKeys.set(ck,cc);}
+    const codiCode=part===0?F.codes.codi[i]:0;
+    let node=root;add(node,ck,part,i,codiCode);
+    for(const k of rows){
+      const c=pvCodeAt(k,i,part,cohort);
+      let kid=node.kids.get(c);if(!kid){kid={code:c,dim:k,kids:new Map(),acc:new Map()};node.kids.set(c,kid);}
+      node=kid;add(node,ck,part,i,codiCode);
+    }
+  };
+  const n=F.n;
+  for(let i=0;i<n;i++){
+    const d=F.day[i];if(d<s||d>e)continue;
+    if(F.kind[i]===0){
+      handle(i,0);
+      if(cohort&&F.clag[i]>=0&&F.clag[i]<=H)handle(i,1);
+    }else if(!cohort)handle(i,1);
+  }
+  // 열 정렬 (차원별 자연 순서)
+  const colList=[...colKeys.entries()].sort((a,b)=>{for(let j=0;j<cols.length;j++){const r=pvCmpCodes(cols[j],a[1][j],b[1][j]);if(r)return r;}return 0;});
+  return {root,colList,cols};
+}
+
+// ═══ 구성 상태 ═══
+function pvDefaultCfg(){return pvCfgFromSaved(PV_PRESETS[0].c);}
+// 저장형(라벨) → 실행형(코드 Set)
+function pvCfgFromSaved(c){
+  const cfg={rows:(c.rows||[]).slice(),cols:(c.cols||[]).slice(),vals:(c.vals||[]).slice(),filt:(c.filt||[]).slice(),fsel:{},basis:c.basis||'flow',H:c.H==null?7:c.H,s:'',e:'',q:null};
+  for(const [k,labels] of Object.entries(c.fsel||{})){
+    if(!pvModel||!pvModel.D[k])continue;const set=new Set();for(const L of labels){const code=pvModel.D[k].idx.get(L);if(code!==undefined)set.add(code);}cfg.fsel[k]=set;
+  }
+  pvApplyRange(cfg,c.range||{q:'thisMonth'});
+  return cfg;
+}
+function pvCfgToSaved(cfg){
+  const fsel={};for(const [k,set] of Object.entries(cfg.fsel))if(set)fsel[k]=[...set].map(c=>pvModel.D[k].labels[c]);
+  return {rows:cfg.rows,cols:cfg.cols,vals:cfg.vals,filt:cfg.filt,fsel,basis:cfg.basis,H:cfg.H,range:cfg.q?{q:cfg.q}:{s:cfg.s,e:cfg.e}};
+}
+function pvApplyRange(cfg,r){
+  const max=pvModel&&pvModel.maxIso?pvModel.maxIso:new Date().toISOString().slice(0,10);
+  const y=+max.slice(0,4),m=+max.slice(5,7);
+  const ms=(yy,mm)=>{while(mm<1){mm+=12;yy--;}return `${yy}-${String(mm).padStart(2,'0')}-01`;};
+  const lastOf=(yy,mm)=>{while(mm<1){mm+=12;yy--;}return `${yy}-${String(mm).padStart(2,'0')}-${String(new Date(yy,mm,0).getDate()).padStart(2,'0')}`;};
+  cfg.q=r.q||null;
+  if(r.q==='thisMonth'){cfg.s=ms(y,m);cfg.e=max;}
+  else if(r.q==='lastMonth'){cfg.s=ms(y,m-1);cfg.e=lastOf(y,m-1);}
+  else if(r.q==='3m'){cfg.s=ms(y,m-2);cfg.e=max;}
+  else if(r.q==='7d'){cfg.s=pvIso(pvDayNum(max)-6);cfg.e=max;}
+  else{cfg.s=r.s||ms(y,m);cfg.e=r.e||max;}
+}
+function pvInZone(k){return pvCfg.rows.includes(k)?'rows':pvCfg.cols.includes(k)?'cols':pvCfg.filt.includes(k)?'filt':pvCfg.vals.includes(k)?'vals':null;}
+function pvRemove(k){for(const z of ['rows','cols','filt','vals'])pvCfg[z]=pvCfg[z].filter(x=>x!==k);if(PV_DIM[k])delete pvCfg.fsel[k];}
+function pvPlace(k,zone,at){
+  const isVal=!!PV_VAL[k];
+  if(isVal!==(zone==='vals'))return;
+  const keepF=pvCfg.fsel[k];
+  pvRemove(k);if(keepF)pvCfg.fsel[k]=keepF;
+  const arr=pvCfg[zone];if(at==null||at>arr.length)arr.push(k);else arr.splice(at,0,k);
+  pvAfterChange();
+}
+function pvAfterChange(){pvSort=null;pvForce=false;pvRenderZones();pvRender();}
+
+// ═══ 화면 ═══
+async function pvOnShow(){
+  if(!spLoaded)await spLoadFiles();
+  await pvCheckFolder();
+  const ok=spFilesByType('db').length>0&&spFilesByType('contDaily').length>0;
+  document.getElementById('pvDashboard').classList.toggle('hidden',!ok);
+  document.getElementById('pvEmpty').classList.toggle('hidden',ok);
+  if(!ok)return;
+  if(!pvModel||pvSig!==pvFilesSig()){
+    const saved=pvCfg?pvCfgToSaved(pvCfg):null;
+    pvBuild();
+    pvCfg=saved?pvCfgFromSaved(saved):pvDefaultCfg();
+  }
+  pvEnsureUi();pvRenderZones();pvRender();
+}
+async function pvCheckFolder(){
+  const b=document.getElementById('pvBanner'),msg=document.getElementById('pvBannerMsg'),btn=document.getElementById('pvBannerBtn');
+  const show=(text,busy)=>{b.classList.remove('hidden');msg.innerHTML=text;btn.style.display=busy?'none':'';};
+  try{
+    if(!window.showDirectoryPicker){b.classList.add('hidden');return;}
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=spDirHandle||await spIdbGetHandle();
+    if(!spDirHandle){b.classList.add('hidden');return;}
+    if(await spVerifyPerm(spDirHandle,true)){
+      const stale=spFilesByType('db').filter(f=>(f.pv||1)<SP_DB_PARSER_VER).length;
+      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 매체코드 포함으로 다시 읽습니다 (처음 한 번, 수 분 소요)`:'⏳ 공용폴더 확인 중…',true);
+      await spScanFolder({request:false,announce:false,fromShow:true,cross:true});
+      b.classList.add('hidden');
+    }else show('📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요',false);
+  }catch(e){console.error('피벗 폴더 확인',e);b.classList.add('hidden');}
+}
+async function pvRefreshFolder(){await pvOnShow();}
+function pvRebuild(){const saved=pvCfg?pvCfgToSaved(pvCfg):null;pvBuild();pvCfg=saved?pvCfgFromSaved(saved):pvDefaultCfg();pvRenderZones();pvRender();}
+
+let pvUiReady=false;
+function pvEnsureUi(){
+  if(pvUiReady)return;pvUiReady=true;
+  const fl=document.getElementById('pvFieldList');
+  const chip=(k,l,tip,kind)=>`<span class="pv-chip pv-chip-${kind}" draggable="true" data-k="${k}" data-src="list" onclick="pvListClick('${k}')">${l}<span class="pv-q" title="${pdEsc(tip)}">?</span></span>`;
+  fl.innerHTML=`<div class="pv-fl-g"><span class="pv-fl-h">차원</span>${PV_DIMS.map(d=>chip(d.k,d.l,d.tip,'dim')).join('')}</div>`+
+    `<div class="pv-fl-g"><span class="pv-fl-h">값</span>${PV_VALS.map(v=>chip(v.k,v.l,v.tip,'val')).join('')}</div>`;
+  document.getElementById('pvPresets').innerHTML=PV_PRESETS.map((p,i)=>`<button class="sp-btn" onclick="pvUsePreset(${i})">${p.n}</button>`).join('');
+  // 끌어놓기
+  const root=document.getElementById('pvDashboard');
+  root.addEventListener('dragstart',e=>{const c=e.target.closest&&e.target.closest('.pv-chip');if(!c)return;e.dataTransfer.setData('text/plain',JSON.stringify({k:c.dataset.k,src:c.dataset.src}));e.dataTransfer.effectAllowed='move';});
+  root.addEventListener('dragover',e=>{const z=e.target.closest&&e.target.closest('.pv-zone');if(!z)return;e.preventDefault();z.classList.add('pv-over');});
+  root.addEventListener('dragleave',e=>{const z=e.target.closest&&e.target.closest('.pv-zone');if(z&&!z.contains(e.relatedTarget))z.classList.remove('pv-over');});
+  root.addEventListener('drop',e=>{
+    const z=e.target.closest&&e.target.closest('.pv-zone');if(!z)return;e.preventDefault();z.classList.remove('pv-over');
+    let d;try{d=JSON.parse(e.dataTransfer.getData('text/plain'));}catch(_){return;}
+    const zone=z.dataset.zone;const over=e.target.closest('.pv-chip[data-src="zone"]');
+    let at=null;if(over&&over.dataset.zone===zone){at=+over.dataset.i;if(d.src==='zone'&&pvInZone(d.k)===zone&&pvCfg[zone].indexOf(d.k)<at)at--;}
+    if(!!PV_VAL[d.k]!==(zone==='vals')){pvToast(PV_VAL[d.k]?'값은 「값」 칸에만 넣을 수 있습니다':'차원은 「행」「열」「필터」 칸에 넣을 수 있습니다');return;}
+    pvPlace(d.k,zone,at);
+  });
+  document.addEventListener('click',e=>{const pop=document.getElementById('pvPop');if(pop&&!pop.classList.contains('hidden')&&!pop.contains(e.target)&&!(e.target.closest&&e.target.closest('.pv-chip-open')))pop.classList.add('hidden');});
+  pvRenderViews();
+}
+function pvToast(t){const el=document.getElementById('pvToast');el.textContent=t;el.classList.remove('hidden');clearTimeout(pvToast._t);pvToast._t=setTimeout(()=>el.classList.add('hidden'),2200);}
+function pvListClick(k){
+  if(pvInZone(k)){pvToast(`「${(PV_DIM[k]||PV_VAL[k]).l}」은 이미 들어가 있습니다`);return;}
+  pvPlace(k,PV_VAL[k]?'vals':'rows');
+}
+function pvMove(k,dir){const z=pvInZone(k);const a=pvCfg[z];const i=a.indexOf(k),j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];pvAfterChange();}
+function pvDrop(k){pvRemove(k);pvAfterChange();}
+function pvRenderZones(){
+  const zl={rows:'행',cols:'열',vals:'값',filt:'필터'};
+  for(const z of ['rows','cols','vals','filt']){
+    const el=document.getElementById('pvZone-'+z);
+    const items=pvCfg[z].map((k,i)=>{
+      const def=PV_DIM[k]||PV_VAL[k];const isDim=!!PV_DIM[k];
+      const f=isDim&&pvCfg.fsel[k]?' pv-filtered':'';
+      return `<span class="pv-chip pv-chip-${isDim?'dim':'val'}${f}" draggable="true" data-k="${k}" data-src="zone" data-zone="${z}" data-i="${i}">`+
+        (isDim?`<span class="pv-chip-open" onclick="pvOpenFilter('${k}',this)" title="필터">${def.l}${f?' ●':''} ▾</span>`:`<span>${def.l}</span>`)+
+        `<span class="pv-x" onclick="pvMove('${k}',-1)" title="앞으로">‹</span><span class="pv-x" onclick="pvMove('${k}',1)" title="뒤로">›</span><span class="pv-x" onclick="pvDrop('${k}')" title="빼기">✕</span></span>`;
+    }).join('');
+    el.innerHTML=`<div class="pv-zone-h">${zl[z]}</div><div class="pv-zone-b">${items||`<span class="pv-zone-ph">여기로 끌어놓기</span>`}</div>`;
+  }
+  // 상단 컨트롤 동기화
+  document.getElementById('pvStart').value=pvCfg.s;document.getElementById('pvEnd').value=pvCfg.e;
+  document.querySelectorAll('#pvQuick button').forEach(b=>b.classList.toggle('active',b.dataset.q===pvCfg.q));
+  document.querySelectorAll('#pvBasis button').forEach(b=>b.classList.toggle('active',b.dataset.b===pvCfg.basis));
+  document.getElementById('pvH').value=String(pvCfg.H);document.getElementById('pvHWrap').classList.toggle('hidden',pvCfg.basis!=='cohort');
+  document.getElementById('pvHeatCk').checked=pvHeat;
+}
+function pvSetRange(q){pvApplyRange(pvCfg,{q});pvAfterChange();}
+function pvSetDates(){const s=document.getElementById('pvStart').value,e=document.getElementById('pvEnd').value;if(!s||!e)return;pvCfg.q=null;pvCfg.s=s<=e?s:e;pvCfg.e=s<=e?e:s;pvAfterChange();}
+function pvSetHeat(on){pvHeat=on;pvRender(true);}
+function pvSetBasis(b){pvCfg.basis=b;pvAfterChange();}
+function pvSetH(h){pvCfg.H=+h;pvAfterChange();}
+function pvUsePreset(i){pvCfg=pvCfgFromSaved(PV_PRESETS[i].c);pvCollapsed.clear();pvAfterChange();}
+
+// ── 필터 팝업 ──
+let pvPopDim=null;
+function pvOpenFilter(k,el){
+  pvPopDim=k;const pop=document.getElementById('pvPop');
+  const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-300))+'px';pop.style.top=Math.min(r.bottom+4,window.innerHeight-340)+'px';
+  pop.classList.remove('hidden');pop.querySelector('#pvPopTitle').textContent=PV_DIM[k].l+' 필터';
+  pop.querySelector('#pvPopSearch').value='';pvRenderPopList();
+}
+function pvPopCodes(){
+  const k=pvPopDim,D=pvModel.D[k];
+  let codes=[];for(let c=1;c<D.labels.length;c++)codes.push(c);
+  if(PV_DATE_DIMS.has(k)&&k!=='wd'){   // 날짜 차원은 조회기간 안의 값만
+    const s=pvDayNum(pvCfg.s)-pvModel.minD,e=pvDayNum(pvCfg.e)-pvModel.minD,set=new Set();
+    for(let d=Math.max(0,s);d<=Math.min(e,pvModel.dayLook[k].length-1);d++)set.add(pvModel.dayLook[k][d]);
+    codes=codes.filter(c=>set.has(c));
+  }
+  return codes.sort((a,b)=>pvCmpCodes(k,a,b));
+}
+function pvRenderPopList(){
+  const k=pvPopDim,q=document.getElementById('pvPopSearch').value.trim().toLowerCase();
+  const set=pvCfg.fsel[k];
+  const codes=pvPopCodes().filter(c=>!q||String(pvLabel(k,c)).toLowerCase().includes(q));
+  document.getElementById('pvPopList').innerHTML=codes.map(c=>`<label class="pv-pop-it"><input type="checkbox" ${!set||set.has(c)?'checked':''} onchange="pvToggleCode(${c},this.checked)"> ${pdEsc(pvLabel(k,c))}</label>`).join('')||'<div class="pd-meta" style="padding:8px">값 없음</div>';
+}
+function pvToggleCode(c,on){
+  const k=pvPopDim;let set=pvCfg.fsel[k];
+  if(!set){set=new Set(pvPopCodesAll(k));}
+  if(on)set.add(c);else set.delete(c);
+  pvCfg.fsel[k]=set.size>=pvPopCodesAll(k).length?null:set;
+  if(!pvCfg.fsel[k])delete pvCfg.fsel[k];
+  pvFilterChanged();
+}
+function pvPopCodesAll(k){const n=pvModel.D[k].labels.length;const a=[];for(let c=1;c<n;c++)a.push(c);return a;}
+function pvPopAll(on){   // 검색어가 있으면 검색 결과에만 적용
+  const k=pvPopDim,q=document.getElementById('pvPopSearch').value.trim().toLowerCase();
+  const vis=pvPopCodes().filter(c=>!q||String(pvLabel(k,c)).toLowerCase().includes(q));
+  let set=pvCfg.fsel[k]?new Set(pvCfg.fsel[k]):new Set(pvPopCodesAll(k));
+  if(!q&&on){delete pvCfg.fsel[k];pvRenderPopList();pvFilterChanged();return;}
+  if(!q&&!on){set=new Set();}
+  else for(const c of vis){if(on)set.add(c);else set.delete(c);}
+  pvCfg.fsel[k]=set.size>=pvPopCodesAll(k).length?null:set;if(!pvCfg.fsel[k])delete pvCfg.fsel[k];
+  pvRenderPopList();pvFilterChanged();
+}
+function pvPopOnly(){   // 검색 결과만 선택
+  const k=pvPopDim,q=document.getElementById('pvPopSearch').value.trim().toLowerCase();
+  const vis=pvPopCodes().filter(c=>!q||String(pvLabel(k,c)).toLowerCase().includes(q));
+  pvCfg.fsel[k]=new Set(vis);pvRenderPopList();pvFilterChanged();
+}
+let pvFT=null;
+function pvFilterChanged(){pvForce=false;clearTimeout(pvFT);pvFT=setTimeout(()=>{pvRenderZones();pvRender();},150);}
+
+// ── 조건 문장 ──
+function pvFilterTxt(k){
+  const set=pvCfg.fsel[k];if(!set)return null;
+  const all=pvPopCodesAll(k).length,L=c=>pvLabel(k,c);
+  if(!set.size)return `${PV_DIM[k].l}=없음`;
+  if(set.size<=3)return `${PV_DIM[k].l}=${[...set].sort((a,b)=>pvCmpCodes(k,a,b)).map(L).join('·')}`;
+  if(all-set.size<=3){const ex=pvPopCodesAll(k).filter(c=>!set.has(c)).map(L);return `${PV_DIM[k].l}≠${ex.join('·')}`;}
+  return `${PV_DIM[k].l} ${set.size}개 선택`;
+}
+function pvCondTxt(){
+  const c=pvCfg,nm=a=>a.map(k=>(PV_DIM[k]||PV_VAL[k]).l);
+  const parts=[pvRangeTxt(c.s,c.e),c.basis==='cohort'?`코호트 기준(분배 후 ${c.H===0?'당일':c.H+'일 내'} 계약)`:'발생 기준(DB=분배일·계약=신청일)'];
+  if(c.rows.length)parts.push('행: '+nm(c.rows).join('>'));
+  if(c.cols.length)parts.push('열: '+nm(c.cols).join('>'));
+  parts.push('값: '+(nm(c.vals).join(', ')||'-'));
+  const fs=Object.keys(c.fsel).map(pvFilterTxt).filter(Boolean);
+  if(fs.length)parts.push('필터: '+fs.join(', '));
+  return parts.join(' · ');
+}
+
+// ═══ 표 그리드 (HTML·엑셀 공용) ═══
+function pvFmt(v,fmt){
+  if(v==null||!isFinite(v))return '-';
+  if(fmt==='p')return (v*100).toFixed(2)+'%';
+  if(fmt==='d1')return v.toFixed(1);if(fmt==='d2')return v.toFixed(2);
+  return Math.round(v).toLocaleString();
+}
+function pvDayCls(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '';
+  const dt=new Date(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10)),w=dt.getDay();
+  return (w===0||(HOLIDAYS.has(iso)&&!WORKDAYS.has(iso)))?'pv-sun':w===6?'pv-sat':'';
+}
+function pvDimLabelHtml(k,c){
+  const L=pvLabel(k,c);
+  if(k==='day'&&c){const iso=pvModel.D.day.labels[c];return {t:`${pvMD(iso)}(${PV_WD[new Date(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10)).getDay()]})`,cls:pvDayCls(iso),x:iso};}
+  if(k==='month'&&c){return {t:`${L.slice(0,4)}년 ${+L.slice(5,7)}월`,cls:'',x:L};}
+  return {t:L,cls:'',x:L};
+}
+// 열 정의: leaves = [{key, codes, label path}] + 총계
+function pvBuildGrid(agg,cfg){
+  const vals=cfg.vals.map(k=>PV_VAL[k]);
+  const leaves=agg.colList.map(([key,codes])=>({key,codes}));
+  const hasCols=cfg.cols.length>0;
+  const colDefs=[];   // 각 데이터 열 = (leaf | 총계) × 값
+  if(hasCols)for(const lf of leaves)for(const v of vals)colDefs.push({ck:lf.key,v});
+  for(const v of vals)colDefs.push({ck:'__T',v,tot:1});   // 열 차원이 없으면 총계 열만
+  // 머리 행
+  const head=[];const nH=(hasCols?cfg.cols.length:0)+1;
+  const rowHdr=cfg.rows.length?cfg.rows.map(k=>PV_DIM[k].l).join(' > '):'구분';
+  if(hasCols){
+    for(let lv=0;lv<cfg.cols.length;lv++){
+      const row=[];if(lv===0)row.push({t:rowHdr,rs:nH,cls:'pv-rh'});
+      let i=0;
+      while(i<leaves.length){
+        let j=i+1;const pre=leaves[i].codes.slice(0,lv+1).join('|');
+        while(j<leaves.length&&leaves[j].codes.slice(0,lv+1).join('|')===pre)j++;
+        const lab=pvDimLabelHtml(cfg.cols[lv],leaves[i].codes[lv]);
+        row.push({t:lab.t,cs:(j-i)*vals.length,cls:'pv-gh '+lab.cls});
+        i=j;
+      }
+      if(lv===0)row.push({t:'총계',cs:vals.length,rs:cfg.cols.length,cls:'pv-gh pv-totc'});
+      head.push(row);
+    }
+    head.push(colDefs.map((c,i)=>({t:c.v.l,cls:'pv-vh'+(i%vals.length===0?' pv-gs':''),sort:i})));
+  }else head.push([{t:rowHdr,cls:'pv-rh'}].concat(colDefs.map((c,i)=>({t:c.v.l,cls:'pv-vh'+(i===0?' pv-gs':''),sort:i}))));
+  // 본문: 트리 → 행 목록 (접힘·정렬 반영)
+  const body=[];
+  const cellsOf=node=>colDefs.map(cd=>{const a=node.acc.get(cd.ck);const v=pvValOf(cd.v.k,a);return {v,fmt:cd.v.fmt};});
+  body.push({lab:'총계',level:-1,kind:'total',cells:cellsOf(agg.root)});
+  const sortVal=node=>{if(!pvSort)return null;const cd=colDefs[pvSort.col];if(!cd)return null;return pvValOf(cd.v.k,node.acc.get(cd.ck));};
+  const walk=(node,level,path)=>{
+    let kids=[...node.kids.values()];
+    if(pvSort&&colDefs[pvSort.col]){kids.sort((a,b)=>{const x=sortVal(a),y=sortVal(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return pvSort.dir==='asc'?x-y:y-x;});}
+    else kids.sort((a,b)=>pvCmpCodes(a.dim,a.code,b.code));
+    for(const kid of kids){
+      const p=path+'/'+kid.code;const hasKids=kid.kids.size>0;const col=pvCollapsed.has(p);
+      const lab=pvDimLabelHtml(kid.dim,kid.code);
+      body.push({lab:lab.t,labCls:lab.cls,level,kind:hasKids?'sub':'leaf',path:p,hasKids,collapsed:col,cells:cellsOf(kid)});
+      if(hasKids&&!col)walk(kid,level+1,p);
+    }
+  };
+  walk(agg.root,0,'');
+  return {head,body,colDefs,vals,nLeafCols:colDefs.length};
+}
+function pvGridHtml(G,opt){
+  opt=opt||{};
+  const heat=pvHeat&&!opt.noHeat;
+  // 비율 열 색 농도: 열마다 leaf 행 기준 min~max
+  const rng=G.colDefs.map((cd,ci)=>{if(cd.v.fmt!=='p'||!heat)return null;let lo=Infinity,hi=-Infinity;for(const r of G.body){if(r.kind==='total')continue;const v=r.cells[ci].v;if(v==null||!isFinite(v))continue;if(v<lo)lo=v;if(v>hi)hi=v;}return hi>lo?[lo,hi]:null;});
+  let h='<thead>';
+  G.head.forEach((row,ri)=>{
+    h+='<tr>'+row.map(c=>{
+      const srt=c.sort!=null&&!opt.noSort;const sc=srt&&pvSort&&pvSort.col===c.sort?(pvSort.dir==='asc'?' pv-sort-asc':' pv-sort-desc'):'';
+      return `<th${c.cs>1?` colspan="${c.cs}"`:''}${c.rs>1?` rowspan="${c.rs}"`:''} class="${c.cls||''}${sc}"${srt?` data-sort="${c.sort}"`:''}>${pdEsc(c.t)}</th>`;
+    }).join('')+'</tr>';
+  });
+  h+='</thead><tbody>';
+  for(const r of G.body){
+    const ind=r.level>0?`padding-left:${10+r.level*16}px`:'';
+    const tog=r.hasKids?`<span class="pv-tog" onclick="pvToggle('${r.path}')">${r.collapsed?'▶':'▼'}</span>`:(r.kind==='leaf'&&r.level>0?'<span class="pv-tog-sp"></span>':'');
+    h+=`<tr class="pv-${r.kind}"><td class="pv-lab ${r.labCls||''}" style="${ind}">${tog}${pdEsc(r.lab)}</td>`;
+    r.cells.forEach((c,ci)=>{
+      const t=pvFmt(c.v,c.fmt);
+      let cls=(ci%G.vals.length===0?'pv-gs':'');
+      if(t==='0'||t==='0.00%'||t==='-'||t==='0.0'||t==='0.00')cls+=' pv-zero';
+      let st='';
+      const R=rng[ci];if(R&&c.v!=null&&isFinite(c.v)&&r.kind!=='total'){const a=(c.v-R[0])/(R[1]-R[0]);st=` style="background:rgba(37,99,235,${(0.04+a*0.30).toFixed(3)})"`;}
+      h+=`<td class="${cls}"${st}>${t}</td>`;
+    });
+    h+='</tr>';
+  }
+  return `<table class="pv-tbl">${h}</tbody></table>`;
+}
+function pvToggle(p){if(pvCollapsed.has(p))pvCollapsed.delete(p);else pvCollapsed.add(p);pvRender(true);}
+function pvExpandAll(open){
+  if(open){pvCollapsed.clear();pvRender(true);return;}
+  const agg=pvLastAgg;if(!agg)return;
+  const walk=(node,path)=>{for(const kid of node.kids.values()){const p=path+'/'+kid.code;if(kid.kids.size){pvCollapsed.add(p);walk(kid,p);}}};walk(agg.root,'');pvRender(true);
+}
+let pvLastAgg=null;
+function pvRender(keepAgg){
+  if(!pvModel||!pvCfg)return;
+  const t0=performance.now();
+  document.getElementById('pvCond').textContent=pvCondTxt();
+  // 경고
+  const warns=[];
+  const M=pvModel;
+  if(M.staleDb)warns.push(`매체코드 없이 저장된 옛 DB 파일 ${M.staleDb}개 — 그 기간 매체코드는 「(미수집)」. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
+  if(M.staleC)warns.push(`옛 형식 일마감 파일 ${M.staleC}개 — 그 기간 계약 유형은 DB 조인으로 판정됩니다(DB미매칭 발생).`);
+  const noCum=[];for(let y=+pvCfg.s.slice(0,4),m=+pvCfg.s.slice(5,7);`${y}-${String(m).padStart(2,'0')}`<=pvCfg.e.slice(0,7);m===12?(y++,m=1):m++){const ym=`${y}${String(m).padStart(2,'0')}`;if(!M.cumMonths.has(ym))noCum.push(`${y%100}.${m}`);}
+  if(noCum.length)warns.push(`월간누적 파일이 없는 달(${noCum.join(', ')})은 취소·배송전취소를 판정하지 못해 모두 유지로 셉니다.`);
+  if(pvCfg.basis==='cohort'){const mature=pvIso(M.maxD-pvCfg.H);if(pvCfg.e>mature)warns.push(`${pvMD(mature)} 이후 분배분은 계약 인정기간(${pvCfg.H}일)이 아직 안 지나 계약률이 낮게 나옵니다.`);}
+  if(pvCfg.e>M.maxIso)warns.push(`데이터는 ${M.maxIso}까지 있습니다.`);
+  const wb=document.getElementById('pvWarn');wb.innerHTML=warns.map(w=>'⚠ '+pdEsc(w)).join('<br>');wb.classList.toggle('hidden',!warns.length);
+  const box=document.getElementById('pvTable');
+  if(!pvCfg.vals.length){box.innerHTML='<div class="pv-empty-msg">「값」 칸에 보고 싶은 지표를 넣으세요 (예: DB수, 계약수, 계약률)</div>';pvGridMain=null;pvRenderBA();return;}
+  const agg=keepAgg&&pvLastAgg?pvLastAgg:pvAggregate(pvCfg);pvLastAgg=agg;
+  const G=pvBuildGrid(agg,pvCfg);
+  const cells=G.body.length*G.nLeafCols;
+  if(cells>20000&&!pvForce){
+    box.innerHTML=`<div class="pv-big">표가 너무 큽니다 — 행 ${G.body.length.toLocaleString()}줄 × 열 ${G.nLeafCols.toLocaleString()}칸 = ${cells.toLocaleString()}칸. 그리면 느려질 수 있습니다.<br>기간을 줄이거나 필터로 범위를 좁히는 것을 권합니다. <button class="sp-btn" onclick="pvForce=true;pvRender(true)">그래도 그리기</button></div>`;
+    pvGridMain=null;pvRenderBA();return;
+  }
+  box.innerHTML=pvGridHtml(G);pvGridMain=G;
+  pvRenderBA();
+  console.log(`[피벗] 집계·그리기 ${(performance.now()-t0).toFixed(0)}ms · ${cells.toLocaleString()}칸`);
+}
+// 정렬: 값 머리 클릭 → 같은 그룹 안에서만 정렬 (소계는 그룹과 함께 이동)
+document.addEventListener('click',e=>{
+  const th=e.target.closest&&e.target.closest('#pvTable th[data-sort]');if(!th)return;
+  const col=+th.dataset.sort;
+  pvSort=pvSort&&pvSort.col===col?(pvSort.dir==='desc'?{col,dir:'asc'}:null):{col,dir:'desc'};
+  pvRender(true);
+});
+
+// ═══ 전후 비교 ═══
+function pvSetBA(k,v){pvBA[k]=v;pvRenderBA();}
+function pvRenderBA(){
+  const box=document.getElementById('pvBA');if(!box||!pvCfg)return;
+  const ctl=`<div class="pv-ba-ctl"><label>기준일</label><input type="date" class="pd-sel" value="${pvBA.cut}" onchange="pvSetBA('cut',this.value)">
+    <div class="sp-seg"><button class="${pvBA.mode==='split'?'active':''}" onclick="pvSetBA('mode','split')">조회기간을 기준일로 나눔</button><button class="${pvBA.mode==='same'?'active':''}" onclick="pvSetBA('mode','same')">같은 일수로 비교</button></div>
+    <span class="pd-meta" id="pvBAInfo"></span><button class="sp-btn kp-nocap" style="margin-left:auto" onclick="pvCapture('pvBASec',this)">📷 캡쳐</button></div>`;
+  if(!pvBA.cut){box.innerHTML=ctl+'<div class="pv-empty-msg">기준일을 고르면 지금 구성(기간·필터·행·값) 그대로 기준일 전과 후를 나란히 비교합니다. 열 구성은 쓰지 않습니다.</div>';pvGridBA=null;return;}
+  if(!pvCfg.vals.length){box.innerHTML=ctl;pvGridBA=null;return;}
+  const cut=pvBA.cut;let bs,be,as=cut,ae=pvCfg.e;
+  if(pvBA.mode==='split'){bs=pvCfg.s;be=pvIso(pvDayNum(cut)-1);}
+  else{const n=pvDayNum(ae)-pvDayNum(cut)+1;bs=pvIso(pvDayNum(cut)-n);be=pvIso(pvDayNum(cut)-1);}
+  if(as>ae||bs>be){box.innerHTML=ctl+'<div class="pv-empty-msg">기준일이 조회기간 밖입니다. 조회기간 안의 날짜를 고르세요.</div>';pvGridBA=null;return;}
+  const bN=pvDayNum(be),aN=pvDayNum(as);
+  const baRows=pvCfg.rows.filter(k=>!['day','week','month'].includes(k));   // 날짜 행은 전·후가 겹치지 않아 비교가 안 됨
+  const agg=pvAggregate(Object.assign({},pvCfg,{rows:baRows}),{s:bs,e:ae,colFn:d=>d<=bN?'B':d>=aN?'A':null});
+  const vals=pvCfg.vals.map(k=>PV_VAL[k]);
+  const days=(s,e)=>pvDayNum(e)-pvDayNum(s)+1;
+  const rowHdr=baRows.length?baRows.map(k=>PV_DIM[k].l).join(' > '):'구분';
+  const head=[[{t:rowHdr,rs:2,cls:'pv-rh'},{t:`전 · ${pvMD(bs)}~${pvMD(be)} (${days(bs,be)}일)`,cs:vals.length,cls:'pv-gh pv-ba-b'},{t:`후 · ${pvMD(as)}~${pvMD(ae)} (${days(as,ae)}일)`,cs:vals.length,cls:'pv-gh pv-ba-a'},{t:'증감',cs:vals.length,cls:'pv-gh'}],
+    [].concat(vals.map((v,i)=>({t:v.l,cls:'pv-vh'+(i===0?' pv-gs':'')})),vals.map((v,i)=>({t:v.l,cls:'pv-vh'+(i===0?' pv-gs':'')})),vals.map((v,i)=>({t:v.l,cls:'pv-vh'+(i===0?' pv-gs':'')})))];
+  const colDefs=[].concat(vals.map(v=>({ck:'B',v})),vals.map(v=>({ck:'A',v})),vals.map(v=>({ck:'D',v})));
+  const cellsOf=node=>colDefs.map(cd=>{
+    if(cd.ck!=='D'){return {v:pvValOf(cd.v.k,node.acc.get(cd.ck)),fmt:cd.v.fmt};}
+    const b=pvValOf(cd.v.k,node.acc.get('B')),a=pvValOf(cd.v.k,node.acc.get('A'));
+    return {v:a==null||b==null?null:a-b,fmt:cd.v.fmt,delta:1};
+  });
+  const body=[{lab:'총계',level:-1,kind:'total',cells:cellsOf(agg.root)}];
+  const walk=(node,level,path)=>{const kids=[...node.kids.values()].sort((a,b)=>pvCmpCodes(a.dim,a.code,b.code));
+    for(const kid of kids){const p=path+'/'+kid.code;const lab=pvDimLabelHtml(kid.dim,kid.code);const col=pvCollapsed.has(p);
+      body.push({lab:lab.t,labCls:lab.cls,level,kind:kid.kids.size?'sub':'leaf',path:p,hasKids:kid.kids.size>0,collapsed:col,cells:cellsOf(kid)});
+      if(kid.kids.size&&!col)walk(kid,level+1,p);}};
+  walk(agg.root,0,'');
+  const G={head,body,colDefs,vals,nLeafCols:colDefs.length,ba:{bs,be,as,ae}};pvGridBA=G;
+  if(body.length*colDefs.length>20000&&!pvForce){box.innerHTML=ctl+'<div class="pv-big">표가 너무 큽니다 — 필터로 범위를 좁혀 주세요.</div>';return;}
+  // 증감 칸은 부호 색 + 비율은 %p
+  let html=pvGridHtml(G,{noHeat:true,noSort:true});
+  html=html.replace(/<tbody>[\s\S]*$/,'')+'<tbody>'+body.map(r=>{
+    const ind=r.level>0?`padding-left:${10+r.level*16}px`:'';
+    const tog=r.hasKids?`<span class="pv-tog" onclick="pvToggle('${r.path}')">${r.collapsed?'▶':'▼'}</span>`:(r.kind==='leaf'&&r.level>0?'<span class="pv-tog-sp"></span>':'');
+    return `<tr class="pv-${r.kind}"><td class="pv-lab ${r.labCls||''}" style="${ind}">${tog}${pdEsc(r.lab)}</td>`+r.cells.map((c,ci)=>{
+      let cls=ci%vals.length===0?'pv-gs':'';let t;
+      if(c.delta){
+        if(c.v==null||!isFinite(c.v))t='-';
+        else if(c.fmt==='p')t=(c.v>0?'+':c.v<0?'−':'')+Math.abs(c.v*100).toFixed(2)+'%p';
+        else t=(c.v>0?'+':c.v<0?'−':'')+pvFmt(Math.abs(c.v),c.fmt);
+        if(c.v>0)cls+=' pv-up';else if(c.v<0)cls+=' pv-down';else cls+=' pv-zero';
+      }else{t=pvFmt(c.v,c.fmt);if(t==='0'||t==='0.00%'||t==='-'||t==='0.0'||t==='0.00')cls+=' pv-zero';}
+      return `<td class="${cls}">${t}</td>`;}).join('')+'</tr>';
+  }).join('')+'</tbody></table>';
+  box.innerHTML=ctl+`<div class="pv-cond">${pdEsc(pvCondTxt())} · 기준일 ${pvBA.cut} (${pvBA.mode==='split'?'조회기간 분할':'같은 일수'})</div><div class="pv-scroll">${html}</div>`;
+  const info=document.getElementById('pvBAInfo');
+  const notes=[];if(baRows.length<pvCfg.rows.length)notes.push('일자·주차·월 행은 전후 비교에서 뺐습니다');
+  if(pvBA.mode==='split'&&days(bs,be)!==days(as,ae))notes.push('전·후 일수가 달라 건수는 그대로 비교하기 어렵습니다 (비율로 보세요)');
+  if(info)info.textContent=notes.join(' · ');
+}
+
+// ═══ 내 보기 (저장·불러오기·삭제, 싱크 대상 localStorage pv_views) ═══
+function pvViews(){try{return JSON.parse(localStorage.getItem(PV_LS)||'[]');}catch(_){return [];}}
+function pvRenderViews(){
+  const sel=document.getElementById('pvViewSel');if(!sel)return;
+  const vs=pvViews();
+  sel.innerHTML='<option value="">내 보기 ('+vs.length+')</option>'+vs.map((v,i)=>`<option value="${i}">${pdEsc(v.n)}</option>`).join('');
+}
+function pvSaveView(){
+  const name=(prompt('이 구성을 어떤 이름으로 저장할까요?')||'').trim();if(!name)return;
+  const vs=pvViews();const i=vs.findIndex(v=>v.n===name);
+  const rec={n:name,c:pvCfgToSaved(pvCfg),t:Date.now()};
+  if(i>=0){if(!confirm(`「${name}」이 이미 있습니다. 덮어쓸까요?`))return;vs[i]=rec;}else vs.push(rec);
+  localStorage.setItem(PV_LS,JSON.stringify(vs));wmSyncMarkDirty();pvRenderViews();pvToast(`「${name}」 저장됨 — 동기화하면 다른 PC에서도 보입니다`);
+}
+function pvLoadView(){const i=document.getElementById('pvViewSel').value;if(i==='')return;const v=pvViews()[+i];if(!v)return;pvCfg=pvCfgFromSaved(v.c);pvCollapsed.clear();pvAfterChange();}
+function pvDeleteView(){
+  const i=document.getElementById('pvViewSel').value;if(i===''){pvToast('삭제할 보기를 먼저 고르세요');return;}
+  const vs=pvViews();const v=vs[+i];if(!v||!confirm(`「${v.n}」 보기를 삭제할까요?`))return;
+  vs.splice(+i,1);localStorage.setItem(PV_LS,JSON.stringify(vs));wmSyncMarkDirty();pvRenderViews();
+}
+
+// ═══ 내보내기 ═══
+async function pvCapture(secId,btn){
+  const sec=document.getElementById(secId);if(!sec)return;
+  if(typeof html2canvas==='undefined'){alert('html2canvas가 로드되지 않았습니다.');return;}
+  const tbl=sec.querySelector('table');if(!tbl){alert('캡쳐할 표가 없습니다.');return;}
+  const wraps=[...sec.querySelectorAll('.pv-scroll')];
+  const saved={w:sec.style.width,bs:sec.style.boxSizing,wr:wraps.map(w=>w.style.overflow)};
+  const cs=getComputedStyle(sec),px=v=>parseFloat(v)||0;
+  // 너비를 표 실제 폭으로 직접 지정 (max-content는 Chrome에서 거대한 값이 나와 빈 PNG가 됨 — 토익·JLPT 탭에서 확인)
+  const fullW=Math.ceil(Math.max(tbl.scrollWidth,tbl.offsetWidth)+px(cs.paddingLeft)+px(cs.paddingRight)+px(cs.borderLeftWidth)+px(cs.borderRightWidth));
+  wraps.forEach(w=>w.style.overflow='visible');sec.style.boxSizing='border-box';sec.style.width=fullW+'px';
+  const old=btn.textContent;btn.textContent='캡쳐 중…';btn.disabled=true;
+  await new Promise(r=>setTimeout(r,60));
+  try{
+    const H=sec.scrollHeight;const scale=Math.max(0.5,Math.min(2,16000/Math.max(fullW,H)));   // 캔버스 한 변 16,000px 이하
+    const canvas=await html2canvas(sec,{scale,backgroundColor:'#ffffff',width:fullW,windowWidth:Math.max(fullW,document.documentElement.clientWidth),ignoreElements:el=>el.classList&&el.classList.contains('kp-nocap')});
+    const blob=(canvas.width&&canvas.height)?await new Promise(r=>canvas.toBlob(r,'image/png')):null;
+    if(!blob||!blob.size)throw new Error(`이미지를 만들지 못했습니다 (캔버스 ${canvas.width}×${canvas.height})`);
+    const d=new Date(),p=n=>String(n).padStart(2,'0');const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`피벗${secId==='pvBASec'?'_전후비교':''}_${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}.png`;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }catch(err){console.error(err);alert('캡쳐 실패: '+(err.message||err));}
+  finally{sec.style.width=saved.w;sec.style.boxSizing=saved.bs;wraps.forEach((w,i)=>w.style.overflow=saved.wr[i]);btn.textContent=old;btn.disabled=false;}
+}
+function pvGridToSheet(G,title,cond){
+  const aoa=[[title],[cond],[]];const merges=[];const R0=3;
+  // 머리: rowspan/colspan 펼치기
+  const occ={};
+  G.head.forEach((row,ri)=>{let c=0;const line=[];
+    for(const cell of row){while(occ[ri+'|'+c])c++;
+      line[c]=cell.t;const cs=cell.cs||1,rs=cell.rs||1;
+      if(cs>1||rs>1)merges.push({s:{r:R0+ri,c},e:{r:R0+ri+rs-1,c:c+cs-1}});
+      for(let a=0;a<rs;a++)for(let b=0;b<cs;b++)occ[(ri+a)+'|'+(c+b)]=1;
+      c+=cs;}
+    aoa.push(line);});
+  const nHead=G.head.length;
+  for(const r of G.body){
+    const line=[(r.level>0?'    '.repeat(r.level):'')+r.lab];
+    for(const c of r.cells)line.push(c.v==null||!isFinite(c.v)?'-':c.v);
+    aoa.push(line);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;
+  const nCol=1+G.colDefs.length;
+  ws['!cols']=[{wch:28}].concat(G.colDefs.map(()=>({wch:12})));
+  const bd={style:'thin',color:{rgb:'CBD5E1'}};const border={top:bd,bottom:bd,left:bd,right:bd};
+  ws['A1'].s={font:{bold:true,sz:14}};ws['A2'].s={font:{sz:10,color:{rgb:'475569'}}};
+  for(let r=R0;r<R0+nHead;r++)for(let c=0;c<nCol;c++){const ref=XLSX.utils.encode_cell({r,c});if(!ws[ref])ws[ref]={t:'s',v:''};ws[ref].s={font:{bold:true,sz:10,color:{rgb:'334155'}},fill:{fgColor:{rgb:'F1F5F9'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border};}
+  G.body.forEach((row,bi)=>{const r=R0+nHead+bi;
+    const bold=row.kind!=='leaf',fill=row.kind==='total'?'E2E8F0':row.kind==='sub'?'F8FAFC':null;
+    for(let c=0;c<nCol;c++){const ref=XLSX.utils.encode_cell({r,c});if(!ws[ref])ws[ref]={t:'s',v:''};
+      const s={font:{bold,sz:10},border,alignment:{horizontal:c===0?'left':'right'}};if(fill)s.fill={fgColor:{rgb:fill}};
+      if(c>0){const cd=G.colDefs[c-1];const isD=row.cells[c-1].delta;
+        if(typeof ws[ref].v==='number'){if(cd.v.fmt==='p')ws[ref].z=isD?'+0.00%;-0.00%;0.00%':'0.00%';else if(cd.v.fmt==='d1')ws[ref].z='0.0';else if(cd.v.fmt==='d2')ws[ref].z='0.00';else ws[ref].z=isD?'+#,##0;-#,##0;0':'#,##0';}}
+      ws[ref].s=s;}});
+  return ws;
+}
+async function pvDownloadExcel(){
+  if(!pvGridMain){alert('먼저 표를 만드세요.');return;}
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,pvGridToSheet(pvGridMain,'피벗 분석',pvCondTxt()),'피벗');
+  if(pvGridBA){
+    XLSX.utils.book_append_sheet(wb,pvGridToSheet(pvGridBA,'전후 비교',pvCondTxt()+` · 기준일 ${pvBA.cut} (${pvBA.mode==='split'?'조회기간 분할':'같은 일수'})`),'전후비교');
+  }
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true});
+  const zip=await JSZip.loadAsync(buf);
+  for(const path of Object.keys(zip.files)){if(path.startsWith('xl/worksheets/sheet')&&path.endsWith('.xml')){const xml=await zip.file(path).async('string');zip.file(path,xml.replace(/<sheetView /g,'<sheetView showGridLines="0" '));}}
+  const blob=await zip.generateAsync({type:'blob'});
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`피벗분석_${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}.xlsx`;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
 function pdGenerate(){
   const t0=performance.now();
   pdCompute();
