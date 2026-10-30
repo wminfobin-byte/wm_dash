@@ -662,6 +662,8 @@ tr.row-h td{background:var(--gh-light)}
 #page-series-perf .container{max-width:100%;padding:24px 36px}
 /* ── 성과진단 (pd*) ── */
 #page-perf-diag .container{max-width:100%;padding:24px 36px}
+#page-pkg-perf .container{max-width:100%;padding:24px 36px}
+@media (max-width:760px){#page-pkg-perf .container{padding:16px}}
 .pd-sel{padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;cursor:pointer}
 .pd-meta{font-size:12px;color:var(--gray);font-weight:500}
 .pd-meta-h{font-size:10px;font-weight:500;opacity:.75}
@@ -1085,6 +1087,12 @@ tr.vc-left:hover{opacity:.75}
     <button class="btn-header btn-sync" onclick="syncData()" id="syncBtn13">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-pkg-perf" style="display:none">
+    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">계열별성과·타임보드 데이터 사용</span>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
   <div class="header-right" id="headerRight-timeboard-perf" style="display:none">
     <div class="status-dots" id="tbStatusDots" title="파일 상태: DB수 / 계약(일마감) / 명단">
       <div class="status-dot" id="tb-dot-db"></div>
@@ -1146,6 +1154,7 @@ tr.vc-left:hover{opacity:.75}
   <div class="tab-item" data-page="via-cancel" onclick="switchPage('via-cancel')">Via 취소율</div>
   <div class="tab-item" data-page="series-perf" onclick="switchPage('series-perf')">계열별성과</div>
   <div class="tab-item" data-page="perf-diag" onclick="switchPage('perf-diag')">성과진단</div>
+  <div class="tab-item" data-page="pkg-perf" onclick="switchPage('pkg-perf')">토익·JLPT</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
@@ -2389,6 +2398,39 @@ tr.vc-left:hover{opacity:.75}
   </div>
 </div><!-- /page-perf-diag -->
 
+<!-- ═══ Page: 토익·JLPT (임시, kp*) ═══ -->
+<div class="page" id="page-pkg-perf">
+  <div class="container">
+    <div id="kpBanner" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb">
+      <span id="kpBannerMsg" style="font-size:13px;font-weight:600;color:#92400e"></span>
+      <button class="btn btn-primary btn-sm" id="kpBannerBtn" onclick="kpRefreshFolder()">📁 공용폴더 새로고침</button>
+    </div>
+    <div id="kpEmpty" class="sp-empty">
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">분석할 데이터가 없습니다</div>
+      <div style="font-size:14px">DB수는 <b>타임보드성과</b>, 계약·취소는 <b>계열별성과</b> 탭의 데이터를 씁니다. 두 탭에서 공용폴더를 연결하거나 파일을 업로드하세요.</div>
+    </div>
+    <div class="hidden" id="kpDashboard">
+      <div class="sp-control-bar">
+        <label>기준월</label>
+        <select id="kpMonthSel" onchange="kpMonth=this.value;kpRender()" class="pd-sel"></select>
+        <div style="flex:1"></div>
+        <button class="sp-btn" onclick="kpModel=null;kpOnShow()">🔄 재분석</button>
+      </div>
+      <div id="kpInfo" class="pd-meta" style="margin:10px 4px 0;line-height:1.7"></div>
+      <div id="kpWarn" class="hidden" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:10px 16px;margin-top:12px;font-size:13px;line-height:1.7"></div>
+      <div class="sp-kpi-grid" id="kpKpi"></div>
+      <div class="sp-section"><h3>패키지별 성과 <span class="sub" id="kpSub"></span></h3><div class="pd-scroll" id="kpTable"></div></div>
+      <div class="sp-section"><h3>집계 기준</h3><div class="pd-insight"><ul>
+        <li><b>패키지</b>: 매체코드에 <code>TOEIC</code> 포함 → 토익완성, <code>japerPT</code> 포함 → JLPT (대소문자 무시)</li>
+        <li><b>DB수</b>: 고객관리 매체코드(T열) 기준 · 분배일(I열)이 기준월 · 고객키 중복 제거 · 재콜(DB정보 P열) 제외 · OB 군자/관리자/빈값 제외 · 담당 사업부 무관</li>
+        <li><b>계약수</b>: 신청자관리 일마감 · 신청일(P열)이 기준월 · 분류(Q열) 기준 · 고객키 중복 제거 · 재콜 DB 계약 포함 · 군자 담당 제외 · 담당 사업부 무관</li>
+        <li><b>취소수</b>: 그 계약이 월간누적(신청자관리) 월별 최신본에서 반품일(AQ열)이 있으면 취소</li>
+        <li>계약률 = 계약수 ÷ DB수 · 취소율 = 취소수 ÷ 계약수 · 실계약수 = 계약수 − 취소수 · 실계약률 = 실계약수 ÷ DB수</li>
+      </ul></div></div>
+    </div>
+  </div>
+</div><!-- /page-pkg-perf -->
+
 <div class="page" id="page-timeboard-perf">
   <!-- Modal -->
   <div class="modal-overlay" id="tbModalOverlay" onclick="if(event.target===this)tbCloseModal()">
@@ -3072,8 +3114,8 @@ tr.vc-left:hover{opacity:.75}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
-  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',pw:'wjdqhqls92!',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'admin',pw:'weavers0258!',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pkg-perf','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -4265,6 +4307,8 @@ function switchPage(pageId){
   if(hrSp) hrSp.style.display = pageId==='series-perf' ? 'flex' : 'none';
   const hrPd=document.getElementById('headerRight-perf-diag');
   if(hrPd) hrPd.style.display = pageId==='perf-diag' ? 'flex' : 'none';
+  const hrKp=document.getElementById('headerRight-pkg-perf');
+  if(hrKp) hrKp.style.display = pageId==='pkg-perf' ? 'flex' : 'none';
   const hrTb=document.getElementById('headerRight-timeboard-perf');
   if(hrTb) hrTb.style.display = pageId==='timeboard-perf' ? 'flex' : 'none';
   const hrTz=document.getElementById('headerRight-talkis-perf');
@@ -4283,6 +4327,7 @@ function switchPage(pageId){
   if(pageId==='series-perf' && typeof spOnShow==='function') spOnShow();
   if(pageId==='timeboard-perf' && typeof tbOnShow==='function') tbOnShow();
   if(pageId==='perf-diag' && typeof pdOnShow==='function') pdOnShow();
+  if(pageId==='pkg-perf' && typeof kpOnShow==='function') kpOnShow();
   if(pageId==='talkis-perf' && typeof tzOnShow==='function') tzOnShow();
   if(pageId==='grade-dash' && typeof gdAutoScanOnShow==='function') gdAutoScanOnShow();
 }
@@ -14837,6 +14882,111 @@ async function pdCheckFolder(request){
   }catch(e){console.error('성과진단 폴더 확인',e);b.classList.add('hidden');}
 }
 async function pdRefreshFolder(){await pdCheckFolder(true);pdModel=null;pdOnShow();}
+
+// ═══════════ 토익·JLPT 임시 탭 (kp*) ═══════════
+//  DB = 타임보드(tb) db 파일(매체 T열 원문 보존) / 계약·반품일 = 계열별성과(sp) 일마감·월간누적
+const KP_PKGS=[{key:'toeic',label:'토익완성',code:'TOEIC',re:/toeic/i},{key:'jlpt',label:'JLPT',code:'japerPT',re:/japerpt/i}];
+let kpModel=null,kpMonth='';
+function kpPkgOf(s){s=String(s||'');for(const p of KP_PKGS)if(p.re.test(s))return p.key;return null;}
+function kpCompute(){
+  const byName=(a,b)=>(a.fileName>b.fileName?1:a.fileName<b.fileName?-1:(a.uploadTime||0)-(b.uploadTime||0));
+  // DB — 고객키 dedup → 패키지 코드 → 재콜·분배일 없음·OB 군자/관리자/빈값·callback/tv_b 제외
+  const db=[];const seen=new Set();let dbMax='';
+  for(const f of tbFilesByType('db').slice().sort(byName))for(const r of f.rows){
+    if(!r.k||seen.has(r.k))continue;seen.add(r.k);
+    const pk=kpPkgOf(r.mc);if(!pk)continue;
+    if(!r.d||r.rc)continue;
+    if(!r.ob||tbIsAdmin(r.ob))continue;
+    if(/callback|tv_b/i.test(r.mc))continue;
+    db.push({pk,m:r.d.slice(0,7)});if(r.d>dbMax)dbMax=r.d;
+  }
+  // 취소 — 월간누적 월(ym)별 최신본에서 반품일 있는 고객키 (계열별성과와 같은 파일 선택)
+  const daily=spFilesByType('contDaily').slice().sort(byName);
+  const dailyHashes=new Set(daily.map(f=>f.fileHash));
+  const latestByYm=new Map();
+  for(const f of spFilesByType('contCum')){if(dailyHashes.has(f.fileHash))continue;const ym=f.ym||spParseYm(f.fileName)||('?'+f.id);const cur=latestByYm.get(ym);if(!cur||(f.uploadTime||0)>(cur.uploadTime||0))latestByYm.set(ym,f);}
+  const cumKeys=new Set(),rtKeys=new Set();
+  for(const f of latestByYm.values())for(const r of f.rows){if(!r.k)continue;cumKeys.add(r.k);if(r.rt)rtKeys.add(r.k);}
+  // 계약 — 일마감 고객키 dedup → 분류(Q) 패키지 코드 → 군자 담당 제외
+  const conts=[];const seenC=new Set();let contMax='',noQ=0,gunja=0;
+  for(const f of daily)for(const r of f.rows){
+    if(!r.k||seenC.has(r.k))continue;seenC.add(r.k);
+    if(!r.d)continue;
+    if(r.q===undefined){noQ++;continue;}
+    const pk=kpPkgOf(r.q);if(!pk)continue;
+    if(String(r.mgr).includes('군자')){gunja++;continue;}
+    conts.push({pk,m:r.d.slice(0,7),x:rtKeys.has(r.k)?1:0,inCum:cumKeys.has(r.k)?1:0});
+    if(r.d>contMax)contMax=r.d;
+  }
+  const months=Array.from(new Set(db.map(r=>r.m).concat(conts.map(c=>c.m)))).sort();
+  const cumList=Array.from(latestByYm.entries()).sort((a,b)=>a[0]>b[0]?1:-1).map(([ym,f])=>({ym,fileName:f.fileName}));
+  kpModel={db,conts,months,dbMax,contMax,noQ,gunja,cumList};
+  return kpModel;
+}
+function kpStats(db,cs){
+  const n=db.length,c=cs.length,x=cs.filter(r=>r.x).length,net=c-x;
+  return {n,c,x,net,cr:n?c/n:null,xr:c?x/c:null,nr:n?net/n:null};
+}
+async function kpOnShow(){
+  if(!spLoaded)await spLoadFiles();
+  if(!tbLoaded)await tbLoadFiles();
+  await kpCheckFolder();
+  const ok=tbFilesByType('db').length>0&&spFilesByType('contDaily').length>0;
+  document.getElementById('kpDashboard').classList.toggle('hidden',!ok);
+  document.getElementById('kpEmpty').classList.toggle('hidden',ok);
+  if(!ok)return;
+  if(!kpModel)kpCompute();
+  const sel=document.getElementById('kpMonthSel'),ms=kpModel.months;
+  if(!kpMonth||!ms.includes(kpMonth))kpMonth=ms.includes('2026-10')?'2026-10':(ms[ms.length-1]||'');
+  sel.innerHTML=ms.slice().reverse().map(m=>`<option value="${m}"${m===kpMonth?' selected':''}>${m.slice(0,4)}년 ${+m.slice(5,7)}월</option>`).join('');
+  kpRender();
+}
+// 공용폴더(계열별성과·타임보드 공유) 최신화
+async function kpCheckFolder(){
+  const b=document.getElementById('kpBanner'),msg=document.getElementById('kpBannerMsg'),btn=document.getElementById('kpBannerBtn');
+  const show=(text,busy)=>{b.classList.remove('hidden');msg.innerHTML=text;btn.style.display=busy?'none':'';};
+  try{
+    if(!window.showDirectoryPicker){b.classList.add('hidden');return;}
+    if(!spIdb)await spOpenIDB();
+    spDirHandle=spDirHandle||await spIdbGetHandle();
+    if(!spDirHandle){b.classList.add('hidden');return;}
+    if(await spVerifyPerm(spDirHandle,true)){
+      show('⏳ 공용폴더 확인 중…',true);
+      const a=await spScanFolder({request:false,announce:false,fromShow:true,cross:true});
+      const c=await tbScanFolder({request:false,announce:false,fromShow:true,cross:true});
+      if((a&&a.okCnt)||(c&&c.okCnt))kpModel=null;
+      b.classList.add('hidden');
+    }else show('📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요',false);
+  }catch(e){console.error('토익·JLPT 폴더 확인',e);b.classList.add('hidden');}
+}
+async function kpRefreshFolder(){kpModel=null;await kpOnShow();}
+function kpRender(){
+  if(!kpModel||!kpMonth)return;
+  const m=kpMonth,M=kpModel;
+  const db=M.db.filter(r=>r.m===m),cs=M.conts.filter(r=>r.m===m);
+  const rows=[{label:'합계 (토익완성+JLPT)',plain:'합계 (토익완성+JLPT)',st:kpStats(db,cs),bold:1}]
+    .concat(KP_PKGS.map(p=>({label:`${p.label} <span class="pd-meta">(${p.code})</span>`,plain:p.label,st:kpStats(db.filter(r=>r.pk===p.key),cs.filter(r=>r.pk===p.key))})));
+  const N=pdN,P=r=>pdPct(r,2);
+  const cols=['#4361EE','#2EC4B6','#F0920E'];
+  document.getElementById('kpKpi').innerHTML=rows.map((r,i)=>{const s=r.st;
+    return `<div class="sp-kpi" style="border-left-color:${cols[i]}"><div class="l">${r.plain}</div>
+      <div class="v">${P(s.nr)}</div><div class="s">실계약률 · 실계약 ${N(s.net)} / DB ${N(s.n)}</div>
+      <div class="s">계약 ${N(s.c)} (${P(s.cr)}) · 취소 ${N(s.x)} (${P(s.xr)})</div></div>`;}).join('');
+  const hd=['구분','DB수','계약수','계약률','취소수','취소율','실계약수','실계약률'];
+  document.getElementById('kpTable').innerHTML=`<table class="pd-tbl"><thead><tr>${hd.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r=>{const s=r.st;return `<tr${r.bold?' class="pd-tgt-row"':''}><td style="text-align:left">${r.label}</td><td>${N(s.n)}</td><td>${N(s.c)}</td><td>${P(s.cr)}</td><td>${N(s.x)}</td><td>${P(s.xr)}</td><td>${N(s.net)}</td><td><b>${P(s.nr)}</b></td></tr>`;}).join('')}</tbody></table>`;
+  document.getElementById('kpSub').textContent=`${m.slice(0,4)}년 ${+m.slice(5,7)}월`;
+  // 데이터 범위·주의사항
+  const cum=M.cumList.find(c=>c.ym===m.replace('-',''));
+  document.getElementById('kpInfo').innerHTML=
+    `DB 마지막 분배일 <b>${M.dbMax||'-'}</b> · 일마감 마지막 신청일 <b>${M.contMax||'-'}</b> · 취소 판정 월간누적 <b>${cum?pdEsc(cum.fileName):'없음'}</b>`;
+  const warns=[];
+  if(!cum)warns.push(`${+m.slice(5,7)}월 월간누적 파일이 없어 이 달 계약의 취소가 판정되지 않습니다(취소 0건으로 표시).`);
+  const notCum=cs.filter(c=>!c.inCum).length;
+  if(cum&&notCum)warns.push(`이 달 계약 ${N(notCum)}건이 월간누적 파일에 없어 유지(취소 아님)로 계산했습니다 — 월간누적이 일마감보다 이전 날짜까지일 수 있습니다.`);
+  if(M.noQ)warns.push(`분류(Q열) 없이 파싱된 옛 일마감 행 ${N(M.noQ)}건이 판정에서 빠졌습니다. 계열별성과 탭에서 공용폴더 새로고침하면 다시 읽습니다.`);
+  const w=document.getElementById('kpWarn');w.innerHTML=warns.map(t=>'⚠️ '+t).join('<br>');w.classList.toggle('hidden',!warns.length);
+}
 function pdGenerate(){
   const t0=performance.now();
   pdCompute();
