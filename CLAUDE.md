@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 N그룹 성과 대시보드 — WM 뇌새김영어 A그룹 코디네이터의 성과를 분석하고 N_A/N_B/N_C/H 등급을 자동 배정하는 브라우저 전용 SPA. 빌드 없이 `index.html` 하나로 동작하며, 서버/백엔드 없음.
 
+## 로그인 계정
+
+`AUTH_ACCOUNTS`에는 비밀번호 원문이 없다 — **PBKDF2-SHA256(15만 회, 32바이트) 해시 `ph` + 계정별 솔트 `salt`**만 두고 `doLogin`이 `authHash()`(crypto.subtle)로 비교한다(2026-10-30, 공개 배포 소스에서 원문이 보이던 문제). 비밀번호를 바꾸려면 같은 방식으로 새 `ph`·`salt`를 만들어 교체. 원문은 git 이력(2026-10-30 이전 커밋)에 남아 있으므로 비밀번호 변경을 권장. 단, 정적 사이트라 로그인은 화면 진입 장치일 뿐이고 동기화 데이터 레포는 공개다.
+
 ## Running
 
 **배포**: GitHub Pages — `wminfobin-byte/wm_dash` 레포 main 루트 → https://wminfobin-byte.github.io/wm_dash/ (main push 시 자동 재배포). 클라우드 싱크도 같은 레포를 사용.
@@ -112,6 +116,25 @@ DB수 = 분배일 기준 카운트 (주말/공휴일, 삭제요청, 재콜, IN�
 제외: 결제보류, 상담취소, 상담요청, 상담대기, 결제요청 등
 ```
 
+## 공용 원본 저장소 (src* 네임스페이스, 2026-10-30) — 속도 개선
+
+**고객관리 DB·신청자관리(일마감·월간누적)·명단·CTI를 한 번만 읽어 IDB `wmSourceStore`(v1, `files`)에 둔다.** 계열별성과(sp)·성과진단(pd)·피벗(pv)·타임보드(tb)·톡이즈(tz)·뇌새김 콜(nc)이 모두 이 배열(`srcFiles`)을 본다. 예전엔 같은 파일을 sp/tb/tz/nc가 각자 파싱·IDB 저장·동기화해서 DB 행이 메모리에 4벌, CTI가 2벌(tz·nc 따로 업로드) 있었고, 로그인 때 전부 객체로 올려 재접속 23~29초·힙 1.9GB였다. **아래 sp/tb/tz/nc 절의 「별도 IndexedDB」「xx_PARSER_VER」「xxCollectSync/RestoreSync」 서술은 이전 구조**다 — 옛 IDB(`seriesPerfDashboard`의 files·`timeboardDashboard`·`talkisPerfDashboard`·`naesaegimCallDashboard`)는 이관 원본으로만 읽고 더 쓰지 않는다(sp IDB의 `handles` 스토어 = 공용폴더 핸들은 계속 사용).
+
+- **배열 공유**: `spFiles`/`tbFiles`/`tzFiles`/`ncFiles`는 `srcFiles` **같은 배열**을 가리킨다 → 절대 재할당하지 말고 제자리 수정(`srcFiles.length=0`/`splice`). `xxFilesByType(t)` = `srcFilesByType(t)`(파일명→업로드시각 정렬, 명단은 마지막=최신). `xxLoadFiles`·`xxIngestFile`·`xxDeleteFile`·`xxResetAll`은 src로 위임. **한 탭에서 파일을 지우면 모든 탭에서 지워진다**(확인창에 명시).
+- **저장 형식**: 큰 타입(db·cti)은 **열 지향** — `f.cols`(문자열 = `{dict, codes:Uint16/32Array}` → `srcS(col,i)`, 날짜 = Int32 일련번호(0=빈값) → `srcDay(n)`/`srcDayNum(iso)`, 플래그 = Uint8), `f.n` 행 수. 작은 타입(contDaily·contCum·attend)은 `f.rows` 객체. 모든 파일에 `dmax`(최종 일자 — 상태 라벨용)·`pv`·선택적으로 `miss`·`mlNone`·`diHist`·`ym`.
+- **db 열** (`srcParseDb`, 네 탭 열의 합집합): k(고객키 배열)·ob·d(분배일)·inf(유입일)·se(계열 -1~5, Int8)·ag(연령대, 빈값 '00')·st(체류)·rcl(재콜 **단계** 0~3 = nc 기준, 다른 탭의 재콜 여부 = rcl>0)·fl(1=IN 매체빈값, 2=callback/tv_b)·pk·mg·mc(매체 원문)·ml(ML계열, 머리글로 찾음 — 열 없는 파일은 `mlNone`)·p1/p2/p3(전화, tzNormPhone). nc 언어는 저장하지 않고 계산 때 `ncLang(mc)`를 **사전 단위로** 판정. **cti 열** (`srcCtiCols`): name·phone(사전)·day·dur(Int32)·fl(1=연결, 2=유효 ≥90초).
+- **계약 행** (`spParseCont` 그대로): k·mgr·d·in·rt·q·ci·cr·dd. 예전 필드명 대응: nc `cls`→`q`, nc·tz `rc`→`cr`, tb `cat`→`q`.
+- **파서 버전 `SRC_PARSER_VER`(현재 1)**: 파싱 필드를 바꾸면 올릴 것. `srcIngestFile`이 같은 fileHash라도 `srcStale(f)`(pv 낮음 또는 `miss` 있음)면 지우고 다시 파싱한다(폴더에 실제 있는 파일만). 예전 `SP_DB_PARSER_VER`/`SP_CONT_PARSER_VER`/`NC_PARSER_VER`/`tbFileStale`/`ncPurgeStale*`는 쓰이지 않는다(상수만 남음).
+- **변경 알림**: 인제스트·삭제·복원 시 `srcTouched()`가 spModel·pdModel·tbModel·tzModel·ncModel(+ncCache)을 버린다. 피벗은 `pvFilesSig`(srcFiles 기준)로 스스로 감지.
+- **이관 (`srcMigrateLocal` / `srcRestoreLegacy` → `srcBuildFromLegacy`/`srcMergeLegacy`)**: 공용 원본이 비어 있고 `localStorage.src_migrated`가 없으면 부팅 때 옛 4개 IDB를 읽어 **같은 파일(type+fileHash)끼리 합친다**. db는 모든 파서가 '고객키 빈 행만 건너뜀'이라 행 순서가 같으므로 행 수·고객키가 모두 일치하는 출처만 쓰고, 어느 출처에도 없는 열은 `miss`에 적어 pv=0(→ 공용폴더 스캔 때 재파싱). CTI는 tz 사본 우선(nc 사본은 동기화를 거치며 dur=0). 서버에 `src` 슬라이스가 아직 없으면 옛 sp/tb/tz/nc 슬라이스를 받아 같은 함수로 이관한다.
+- **동기화**: 슬라이스 `src` 하나가 sp·tb·tz·nc 슬라이스를 대체(`SLICE_ENCODE.src=srcEncFile` — 열은 base64, 행 타입은 wmEncFile / `srcDecodeSync`, 예상 크기 `srcSyncBytes`). 서버에 `src`가 있으면 옛 슬라이스는 받지 않는다. 서버에 `src`가 없는데 이 PC에 있으면(이관 직후) dirty를 남겨 다음 동기화 때 올라가게 한다. 압축 크기: 옛 4개 약 93MB → `src` 약 37MB.
+- **부팅**: `applyAuth` 로더가 탭 4개 대신 `srcLoad()` 1개(SRC_TABS 중 하나라도 권한 있으면).
+- **계산 함수는 열에서 직접 읽는다**: `spCompute`/`pdCompute`/`pvBuild`/`tbCompute`/`tzCompute`/`ncCompute`의 DB·CTI 순회 = `for(let i=0;i<f.n;i++)` + 문자열 사전은 **사전 단위로 한 번만** 변환(OB명→명단, 매체→언어·타임보드 여부, 상담원명→명단). 계약 조인용 `keyMeta`는 **계약에 나오는 고객키만** 담는다.
+- **nc 콜 = 열**: `ncModel.calls={n, day(Int32 일련번호), codi(codiList 인덱스), lang(NC_LANGS 인덱스), cat(NC_CATS 인덱스), ev(dbEvents 인덱스), fl(1연결|2유효), codiList}` — 콜 수백만 건을 객체로 만들지 않는다. 집계(`ncAgg`/`ncStageAgg`/`ncAggByDate`)는 `ncDayBounds`·`ncCodiMask`로 순회. dbEvents에 `ki`(고객키 번호 — distinct 시도DB 집합을 정수로)·`dn`(분배일 일련번호)·`ix`. 케어 판정은 전화 사전코드별로 '그 번호 계약 신청일 최솟값'을 캐시(`careD`), 타코디/미매칭 구분은 `phoneSet`. `ncStaleDbFiles`는 nc가 쓰는 열(rcl·p·mc)이 빠진 파일만.
+- **tz 콜**: CTI 중 톡이즈 상담원 콜만 객체로 만들고 나머지는 상담원별 건수만(`skipped`).
+- **CTI 공유 영향**: 톡이즈·뇌새김 콜이 CTI를 각자 올리던 것이 합쳐져, 한쪽에만 올렸던 파일도 양쪽에 반영된다(파일 간 같은 통화 중복은 327만 건 중 193건). 같은 CTI 파일 집합으로는 기존 결과와 완전히 일치함을 확인.
+- **실측 (이 PC·배포 사이트 대비, 2026-10-30)**: 재접속 로그인→화면 23~29초 → **5.3초**, 힙 1.9~2.0GB → **0.72GB**(전 탭 연 뒤 2.3GB → 1.1GB), 뇌새김 콜 탭 12~14초 → 6.7초. 처음 접속 PC 65초 → 55초(다운로드가 대부분). 계산 결과 sp·pd·pv·tb·tz·nc 요약값 일치, 공용 파서 = 옛 4개 파서 전 열·전 행 일치(실파일 3개), 동기화 인코딩 왕복 576개 파일 일치.
+
 ## 부재인입 탭 (mc* 네임스페이스)
 
 `index.html`에는 N그룹 외에도 여러 탭이 인라인돼 있다 (차등성과 `gd*`, 취소율 `cd*`, 유입분석 `ia*`, 일자별 성과 `dp*`, **부재인입 `mc*`**). 데이터는 별도 IndexedDB(`missedCallDashboard`)에 누적 저장하며, 클라우드 싱크(`sync_data.json.gz`)에도 `payload.mc`로 연동됨 (v7~). mc 파일은 용량이 크므로 `파일 관리`에서 불필요한 누적 파일 정리 권장.
@@ -150,6 +173,8 @@ DB수는 파일 집계값을 그대로 쓰지 않고 **① 전역 제외 규칙 
 - 저장·재산정 경로는 기존 조정 함수와 동일(`gdApplyDbAdj` → `gdGenerate(dbFileId)`), 즉 **수동 조정은 저장 트리거**다.
 
 ## 계열별성과 탭 (sp* 네임스페이스)
+
+> 2026-10-30부터 파일 저장·파싱·동기화는 **공용 원본(src\*)**. 이 절의 IDB·파서 버전·싱크 서술은 이전 구조(위 「공용 원본 저장소」 참조).
 
 취소율↔부재인입 사이에 배치. DB 계열(0~5, 0=최상위 품질)별로 분배 DB를 **기대계약률 대비 얼마나 잘 살리는지** 분석. 설계서 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`seriesPerfDashboard`), 클라우드 싱크 `payload.sp`(v8~).
 
@@ -206,6 +231,8 @@ DB 행에 **패키지 `pk`(U=20)·매체그룹 `mg`(S=18)**를 추가했다(성�
 
 ## 타임보드성과 탭 (tb* 네임스페이스)
 
+> 2026-10-30부터 파일 저장·파싱·동기화는 **공용 원본(src\*)** — 별도 IDB·`payload.tb`·`tbFileStale` 서술은 이전 구조.
+
 부재인입↔유입분석 사이(부재인입 옆)에 배치. **naver_tb 타임보드 DB**를 **집행 시간대(8am/1pm 등)별·영어/제2외국어별로** 계약 성과를 본다. 기준 = `../성과_데이터_추출_기준.md`. 별도 IndexedDB(`timeboardDashboard` v1, `files` 스토어). **공용폴더는 계열별성과(sp)와 같은 핸들 재사용**(`spDirHandle`/`spIdbGetHandle`/`spIdbPutHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tb` 독립 슬라이스, `tbCollectSync`/`tbRestoreSync`, 헤더 `syncBtn8`) — 폴더 없는 PC/사람도 봄. sp와 같은 파일을 읽으므로 싱크에 일부 중복되나 청크 분할로 감당.
 
 - **업로드 3종**: `db`(DB수·고객관리, 누적), `contDaily`(계약·신청자관리 일마감, 누적), `attend`(명단, 최신 1건). 취소반영(월간누적)은 안 씀. 파서는 sp와 달리 **매체 T(19)·분류 Q(16) 원문 문자열을 보존**(타임보드·시간대·언어 판정용).
@@ -220,6 +247,8 @@ DB 행에 **패키지 `pk`(U=20)·매체그룹 `mg`(S=18)**를 추가했다(성�
 - **핵심 함수**: `tbCompute`(dbRecs/contRecs/dbKey 빌드), `tbAggBy`(slot 또는 slot|day 키 집계), `tbSlotTable`/`tbSlotDateBlocks`/`tbLangSection`/`tbRenderKpi`/`tbRenderSlotChart`/`tbRender`, `tbScanFolder`/`tbAutoScanOnShow`/`tbConnectFolder`(sp 폴더 공유), `tbOnShow`/`tbGenerate`/`tbReady`(db 1개 이상). 탭 등록=`switchPage` 훅 + `AUTH_ACCOUNTS` master tabs + 헤더 `headerRight-timeboard-perf`.
 
 ## 뇌새김 콜 현황 탭 (nc* 네임스페이스) — DB 단계별 콜
+
+> 2026-10-30부터 파일 저장·파싱·동기화는 **공용 원본(src\*)**, 콜은 열 지향(`ncModel.calls`). `NC_PARSER_VER`·`ncPurgeStale*`·`ncEncFile`·`payload.nc` 서술은 이전 구조(디코더 `ncDecFile`은 옛 슬라이스 이관용으로 남김).
 
 톡이즈 성과 옆. **CTI 통화 × 고객관리 DB × 신청자관리 계약**을 매칭해 콜을 **DB 단계별 5분류**로 본다. 별도 IndexedDB(`naesaegimCallDashboard` v1), 공용폴더는 sp/tb/tz와 핸들 공유(`spDirHandle`), 클라우드 싱크 `payload.nc`.
 
@@ -269,6 +298,8 @@ nc 최대 단일 문자열 192.3MB → **11.8MB**(그룹 7개). 왕복 후 재�
 gd는 `{files,results}` 객체라 그룹 분할 대상이 아니므로 `files` 배열만 업로드 전에 미리 인코딩한다.
 
 ## 톡이즈 성과 탭 (tz* 네임스페이스)
+
+> 2026-10-30부터 파일 저장·파싱·동기화는 **공용 원본(src\*)** — CTI도 뇌새김 콜과 공유. 별도 IDB·`payload.tz` 서술은 이전 구조.
 
 타임보드성과 옆에 배치. **CTI(걸은전화상세) 통화 데이터 × 톡이즈 DB/계약**을 매칭해 **톡이즈 계약 하락 원인**(영업코디가 기존계약자 케어통화=학습케어에 시간을 뺏겨 신규 컨택이 떨어지는지)을 데이터로 검증. 별도 IndexedDB(`talkisPerfDashboard` v1, `files` 스토어). **공용폴더는 sp/tb와 같은 핸들 재사용**(`spDirHandle`, 피커 `id:'sp-shared'`). **클라우드 싱크 포함**(`payload.tz` 독립 슬라이스, v9~, 헤더 `syncBtn9`).
 
