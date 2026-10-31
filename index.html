@@ -3295,8 +3295,8 @@ tr.vc-left:hover{opacity:.75}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',salt:'adb78d5109b4695d98694c31b95e962b',ph:'ea45192ab102734e680d36dcbc12aabef8d72599d05252d9f338e166c5ffa1cb',role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pivot','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
-  {id:'admin',salt:'a36602e8385bcf8a8ba69e8a3f34a695',ph:'9c49975ff8a2da110fa21eb2f27035d2567fb29c61a9a30c7beff19325c06cc1',role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pivot','timeboard-perf','talkis-perf','naesaegim-call']},
+  {id:'info_bin',salt:'adb78d5109b4695d98694c31b95e962b',ph:'ea45192ab102734e680d36dcbc12aabef8d72599d05252d9f338e166c5ffa1cb',pk:{s:'a017cd13b7f9f35eae4b90459bab39b0',iv:'x3QSNM1W3KeWe5cS',ct:'PIyKxNlDc9x/Rccj30auX964Y/XFk6PkrLBA7PsGm8kgDFihu3lv6PUDaWppOvF/'},role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pivot','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'admin',salt:'a36602e8385bcf8a8ba69e8a3f34a695',ph:'9c49975ff8a2da110fa21eb2f27035d2567fb29c61a9a30c7beff19325c06cc1',pk:{s:'2078184a7901bd6de2e315d863da2e51',iv:'jdOx1nAchY7I5P3P',ct:'lXV0OADNLbS3bYmDbl+WvkWb52Y8mj9njlsqRat31NjgeaWKo7rSZEvXKMbPXGBA'},role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pivot','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
 
@@ -3309,6 +3309,101 @@ async function authHash(pw,saltHex){
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:AUTH_PBKDF2_ITER},key,256);
   return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+// ── 전화번호 대체값 (2026-10-31) ──
+//  공용 원본의 고객 전화번호(고객관리 M/N/O열, CTI 수신자번호)는 톡이즈·뇌새김 콜에서 '같은 번호인가'로만 쓰인다.
+//  원문 대신 비밀키 HMAC-SHA256 대체값('#'+16자)을 저장·동기화해 공개 싱크 레포에 번호가 올라가지 않게 한다.
+//  같은 번호 = 같은 대체값이라 매칭 결과는 원문과 같다. 키는 코드에 없다 — 계정별 비밀번호로 잠근 사본(AUTH_ACCOUNTS[].pk)을
+//  로그인할 때 풀어 이 PC의 localStorage(wm_phk)에만 둔다. 비밀번호를 바꿀 땐 콘솔에서 wmMakeAccountSecrets(새비밀번호)로 salt·ph·pk를 새로 만든다.
+const WM_PHK_LS='wm_phk';
+const _SHA_K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+const _SHA_IV=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+const _shaW=new Uint32Array(64);
+function _shaBlock(H,B,o){   // H: 상태 8워드(제자리 갱신), B: 바이트 배열, o: 블록 시작
+  const W=_shaW;
+  for(let i=0;i<16;i++)W[i]=(B[o+4*i]<<24)|(B[o+4*i+1]<<16)|(B[o+4*i+2]<<8)|B[o+4*i+3];
+  for(let i=16;i<64;i++){const a=W[i-15],b=W[i-2];
+    const s0=((a>>>7)|(a<<25))^((a>>>18)|(a<<14))^(a>>>3),s1=((b>>>17)|(b<<15))^((b>>>19)|(b<<13))^(b>>>10);
+    W[i]=(W[i-16]+s0+W[i-7]+s1)|0;}
+  let a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+  for(let i=0;i<64;i++){
+    const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7)),ch=(e&f)^(~e&g),t1=(h+S1+ch+_SHA_K[i]+W[i])|0;
+    const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10)),mj=(a&b)^(a&c)^(b&c),t2=(S0+mj)|0;
+    h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;}
+  H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+}
+// 앞 64바이트(prefix)를 이미 처리한 상태 S0에서 bytes를 이어 해시 → 32바이트
+function _shaFinish(S0,bytes){
+  const H=new Int32Array(S0),len=bytes.length,tot=Math.ceil((len+9)/64)*64,B=new Uint8Array(tot);
+  B.set(bytes);B[len]=0x80;const bits=(64+len)*8;
+  B[tot-4]=(bits>>>24)&255;B[tot-3]=(bits>>>16)&255;B[tot-2]=(bits>>>8)&255;B[tot-1]=bits&255;
+  for(let o=0;o<tot;o+=64)_shaBlock(H,B,o);
+  const out=new Uint8Array(32);for(let i=0;i<8;i++){out[4*i]=H[i]>>>24;out[4*i+1]=(H[i]>>>16)&255;out[4*i+2]=(H[i]>>>8)&255;out[4*i+3]=H[i]&255;}
+  return out;
+}
+let _wmPhCtx=null,_wmPhMemo=new Map();
+function _wmPhInit(){
+  if(_wmPhCtx)return _wmPhCtx;
+  let b=null;try{b=localStorage.getItem(WM_PHK_LS);}catch(e){}
+  if(!b)return null;
+  const s=atob(b),K=new Uint8Array(64);for(let i=0;i<s.length&&i<64;i++)K[i]=s.charCodeAt(i);
+  const ip=new Uint8Array(64),op=new Uint8Array(64);for(let i=0;i<64;i++){ip[i]=K[i]^0x36;op[i]=K[i]^0x5c;}
+  const I=new Int32Array(_SHA_IV),O=new Int32Array(_SHA_IV);_shaBlock(I,ip,0);_shaBlock(O,op,0);
+  _wmPhCtx={I,O};return _wmPhCtx;
+}
+function wmHmac(msgBytes){const c=_wmPhInit();if(!c)return null;return _shaFinish(c.O,_shaFinish(c.I,msgBytes));}
+function wmPhoneKeyReady(){return !!_wmPhInit();}
+// 짧은 메시지(≤55바이트, 전화번호는 항상) 전용 빠른 경로 — 버퍼 재사용, 블록 1개씩
+const _phB=new Uint8Array(64),_phH=new Int32Array(8);
+function _phFast(c,p){
+  const B=_phB,H=_phH,len=p.length;
+  B.fill(0);for(let i=0;i<len;i++)B[i]=p.charCodeAt(i)&255;B[len]=0x80;
+  let bits=(64+len)*8;B[62]=(bits>>>8)&255;B[63]=bits&255;
+  H.set(c.I);_shaBlock(H,B,0);
+  const d=[H[0],H[1],H[2],H[3],H[4],H[5],H[6],H[7]];
+  B.fill(0);for(let i=0;i<8;i++){B[4*i]=d[i]>>>24;B[4*i+1]=(d[i]>>>16)&255;B[4*i+2]=(d[i]>>>8)&255;B[4*i+3]=d[i]&255;}
+  B[32]=0x80;bits=(64+32)*8;B[62]=(bits>>>8)&255;B[63]=bits&255;
+  H.set(c.O);_shaBlock(H,B,0);
+  let s='';for(let i=0;i<3;i++)s+=String.fromCharCode(H[i]>>>24,(H[i]>>>16)&255,(H[i]>>>8)&255,H[i]&255);
+  return s;
+}
+// 정규화된 번호 → 대체값. 이미 대체값('#'로 시작)이면 그대로. 키가 없으면 예외 (원문을 저장하지 않기 위해)
+function phTok(p){
+  if(!p)return '';
+  if(p.charCodeAt(0)===35)return p;
+  let t=_wmPhMemo.get(p);if(t!==undefined)return t;
+  const c=_wmPhInit();if(!c)throw new Error('전화번호 변환 키가 없습니다 — 로그아웃 후 다시 로그인해 주세요.');
+  let s;
+  if(p.length<=55)s=_phFast(c,p);
+  else{const m=new Uint8Array(p.length);for(let i=0;i<p.length;i++)m[i]=p.charCodeAt(i)&255;const h=wmHmac(m);s='';for(let i=0;i<12;i++)s+=String.fromCharCode(h[i]);}
+  t='#'+btoa(s).replace(/\+/g,'-').replace(/\//g,'_');
+  if(_wmPhMemo.size>3000000)_wmPhMemo.clear();
+  _wmPhMemo.set(p,t);return t;
+}
+function wmPhoneKeyClear(){_wmPhCtx=null;_wmPhMemo=new Map();try{localStorage.removeItem(WM_PHK_LS);}catch(e){}}
+// 비밀번호로 잠근 키 사본(pk = {s:솔트hex, iv, ct}) 풀기 → 이 PC에 저장
+async function _wmPkAesKey(pw,saltHex,usage){
+  const salt=new Uint8Array(saltHex.match(/../g).map(h=>parseInt(h,16)));
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:AUTH_PBKDF2_ITER},base,{name:'AES-GCM',length:256},false,[usage]);
+}
+const _b64d=b=>{const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;};
+const _b64e=u=>{let s='';for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s);};
+async function wmUnwrapPhoneKey(account,pw){
+  if(!account||!account.pk)return false;
+  const k=await _wmPkAesKey(pw,account.pk.s,'decrypt');
+  const raw=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:_b64d(account.pk.iv)},k,_b64d(account.pk.ct)));
+  localStorage.setItem(WM_PHK_LS,_b64e(raw));_wmPhCtx=null;_wmPhMemo=new Map();
+  return true;
+}
+// 비밀번호 변경용 (콘솔): 이 PC에 풀린 키로 새 비밀번호의 salt·ph·pk를 만든다 → AUTH_ACCOUNTS에 붙여넣기
+async function wmMakeAccountSecrets(pw){
+  const b=localStorage.getItem(WM_PHK_LS);if(!b)throw new Error('이 PC에 키가 없습니다 — 먼저 기존 비밀번호로 로그인');
+  const hex=u=>Array.from(u).map(x=>x.toString(16).padStart(2,'0')).join('');
+  const salt=hex(crypto.getRandomValues(new Uint8Array(16))),s=hex(crypto.getRandomValues(new Uint8Array(16))),iv=crypto.getRandomValues(new Uint8Array(12));
+  const k=await _wmPkAesKey(pw,s,'encrypt');
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,_b64d(b)));
+  return {salt,ph:await authHash(pw,salt),pk:{s,iv:_b64e(iv),ct:_b64e(ct)}};
+}
 async function doLogin(){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPw').value;
@@ -3316,6 +3411,7 @@ async function doLogin(){
   let account=null;
   if(cand){try{if(await authHash(pw,cand.salt)===cand.ph)account=cand;}catch(e){console.error('로그인 확인 실패',e);}}
   if(!account){document.getElementById('loginError').textContent='아이디 또는 비밀번호가 올바르지 않습니다.';return;}
+  try{await wmUnwrapPhoneKey(account,pw);}catch(e){console.error('전화번호 변환 키 풀기 실패',e);}
   authUser=account;
   localStorage.setItem('auth',JSON.stringify({id:account.id,role:account.role,tabs:account.tabs}));
   applyAuth();
@@ -3706,7 +3802,7 @@ async function _autoSyncDownload(opts){
 }
 
 function doLogout(){
-  authUser=null;localStorage.removeItem('auth');window._wmBooted=false;   // 다시 로그인하면 부팅(로드·동기화)을 다시 한다
+  authUser=null;localStorage.removeItem('auth');wmPhoneKeyClear();window._wmBooted=false;   // 다시 로그인하면 부팅(로드·동기화)을 다시 한다
   document.getElementById('loginOverlay').style.display='flex';
   document.getElementById('loginId').value='';document.getElementById('loginPw').value='';
   document.getElementById('loginError').textContent='';
@@ -4038,12 +4134,15 @@ async function _doSyncUpload(token){
     });
 
     // 취소율 IDB 데이터 수집 (경량화)
-    const cdFiles=keepRemote.has('cd')?null:cdAllFiles.map(f=>{
+    //  예전 타입 'raw'(고객관리 원본, 지금 코드는 안 씀)는 올리지 않는다 — 신청자관리 열 위치로 자르면 N열=고객전화번호2가 실렸다
+    const cdFiles=keepRemote.has('cd')?null:cdAllFiles.filter(f=>f.type==='attend'||f.type==='app'||f.type==='app-daily'||f.type==='cust').map(f=>{
       if(f.type==='attend') return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data};
       // 신청자/고객관리: 필요 컬럼만 추출
       const cols=f.type==='cust'?[CD_CUST.customerKey,CD_CUST.bkPhone,CD_CUST.bkAccount]
         :[CD_APP.customerKey,CD_APP.manager,CD_APP.applicationDate,CD_APP.classification,CD_APP.gift,CD_APP.returnDate];
-      const slim=f.data.map((row,i)=>i===0?row:cols.map(c=>row[c]!=null?row[c]:''));
+      // 브레인키 전화번호·계정은 '있는지'만 쓰인다(제공/가입 판정) → 원문 대신 '1'/'' (공개 레포에 번호·계정이 안 올라가게)
+      const flagCol=f.type==='cust'?new Set([1,2]):null;
+      const slim=f.data.map((row,i)=>i===0?row:cols.map((c,ci)=>{const v=row[c]!=null?row[c]:'';return flagCol&&flagCol.has(ci)?(String(v).trim()?'1':''):v;}));
       return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols};
     });
 
@@ -4183,6 +4282,18 @@ async function _doSyncUpload(token){
     const mr=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(new TextEncoder().encode(JSON.stringify(manifest))),encoding:'base64'})});
     if(!mr.ok){const e=await mr.json();throw new Error(e.message||'매니페스트 생성 실패');}
     treeItems.push({path:SYNC_MANIFEST,mode:'100644',type:'blob',sha:(await mr.json()).sha});
+
+    // 3-1) 새 매니페스트가 가리키지 않는 옛 동기화 파일은 지운다 — base_tree에서 이어받으면 영원히 남는다
+    //  (예: 동기화를 끊은 부재인입 sync_mc, 4~6월 옛 형식 sync_data.json*, 줄어든 그룹의 남은 조각 — 전화번호 원문이 들어 있다)
+    try{
+      const used=new Set([SYNC_MANIFEST]);
+      for(const sl of sliceMeta)for(let p=0;p<(sl.parts||1);p++)used.add(`sync_${sl.key}.g${sl.seq||0}.part${p}`);
+      const tr=await fetch(`${apiBase}/git/trees/${latestCommitSha}`,{headers,cache:'no-store'});
+      if(tr.ok){
+        const root=(await tr.json()).tree||[];
+        for(const e of root)if(e.type==='blob'&&/^sync_/.test(e.path)&&!used.has(e.path))treeItems.push({path:e.path,mode:'100644',type:'blob',sha:null});
+      }
+    }catch(e){console.warn('옛 동기화 파일 정리 건너뜀',e);}
 
     // 4) 새 Tree 생성 (매니페스트 + 청크 파일들 교체)
     syncLog(`<span class="sync-spin">↻</span> 커밋 생성 중...`);
@@ -4447,6 +4558,8 @@ function checkAuth(){
     try{
       const s=JSON.parse(saved);
       const account=AUTH_ACCOUNTS.find(a=>a.id===s.id);
+      // 전화번호 변환 키가 이 PC에 없으면(이 버전 첫 접속) 자동 로그인하지 않고 비밀번호를 한 번 받는다
+      if(account&&account.pk&&!wmPhoneKeyReady()){document.getElementById('loginOverlay').style.display='flex';document.getElementById('loginId').value=account.id;document.getElementById('loginError').textContent='보안 업데이트로 비밀번호를 한 번 다시 입력해 주세요.';return;}
       if(account){authUser=account;applyAuth();return;}
     }catch{}
   }
@@ -13925,6 +14038,7 @@ function srcOpenIDB(){
 function srcStore(mode){return srcIdb.transaction('files',mode).objectStore('files');}
 function srcIdbAdd(rec){return new Promise((res,rej)=>{const r=srcStore('readwrite').add(rec);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function srcIdbGetAll(){return new Promise((res,rej)=>{const r=srcStore('readonly').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
+function srcIdbPut(rec){return new Promise((res,rej)=>{const r=srcStore('readwrite').put(rec);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function srcIdbDel(id){return new Promise((res,rej)=>{const tx=srcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
 function srcIdbClear(){return new Promise((res,rej)=>{const tx=srcIdb.transaction('files','readwrite');tx.objectStore('files').clear();tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
 
@@ -13959,12 +14073,12 @@ function srcParseDb(wb){
     if(diHist[di]!==undefined)diHist[di]++;else if(diN<NC_DI_MAX){diHist[di]=1;diN++;}
     K.push(k);OB.push(T(r[7]));AG.push(T(r[11])||'00');ST.push(T(r[24]));
     PK.push(T(r[20]));MG.push(T(r[18]));MC.push(media);ML.push(mlI<0?'':T(r[mlI]));
-    P1.push(tzNormPhone(r[12]));P2.push(tzNormPhone(r[13]));P3.push(tzNormPhone(r[14]));
+    P1.push(phTok(tzNormPhone(r[12])));P2.push(phTok(tzNormPhone(r[13])));P3.push(phTok(tzNormPhone(r[14])));   // 원문 대신 대체값 (공개 싱크 레포에 번호가 안 올라가게)
     D.push(srcDayNum(spNormDay(r[8])));INF.push(srcDayNum(spNormDay(r[9])));
     SE.push(ser>=0&&ser<=5?ser:-1);RCL.push(ncRecallLevel(di));
     FL.push((media===''?1:0)|((media.includes('callback')||media.includes('tv_b'))?2:0));   // 1=IN(매체 빈값) 2=callback/tv_b
   }
-  return {n:K.length,mlNone:mlI<0,diHist,cols:{
+  return {n:K.length,mlNone:mlI<0,diHist,phT:1,cols:{
     k:K,ob:srcStrCol(OB),ag:srcStrCol(AG),st:srcStrCol(ST),pk:srcStrCol(PK),mg:srcStrCol(MG),mc:srcStrCol(MC),ml:srcStrCol(ML),
     p1:P1,p2:P2,p3:P3,d:Int32Array.from(D),inf:Int32Array.from(INF),se:Int8Array.from(SE),rcl:Uint8Array.from(RCL),fl:Uint8Array.from(FL)}};
 }
@@ -13972,12 +14086,14 @@ function srcParseDb(wb){
 function srcCtiCols(rows){
   const n=rows.length,nm=new Array(n),ph=new Array(n),day=new Int32Array(n),dur=new Int32Array(n),fl=new Uint8Array(n);
   for(let i=0;i<n;i++){const c=rows[i];nm[i]=c.name||'';ph[i]=c.phone||'';day[i]=srcDayNum(c.day);dur[i]=c.dur|0;fl[i]=(c.conn?1:0)|(c.valid?2:0);}
-  return {n,cols:{name:srcStrCol(nm),phone:srcStrCol(ph),day,dur,fl}};
+  const pc=srcStrCol(ph);pc.dict=pc.dict.map(phTok);   // 사전 값만 바꾸면 된다 (같은 번호 = 같은 코드)
+  return {n,cols:{name:srcStrCol(nm),phone:pc,day,dur,fl},phT:1};
 }
 function srcMkRec(type,meta,parsed){
   const rec={type,fileName:meta.fileName,fileHash:meta.fileHash||`${meta.fileName}|0`,uploadTime:meta.uploadTime||Date.now(),pv:meta.pv==null?SRC_PARSER_VER:meta.pv};
   if(parsed.cols){rec.n=parsed.n;rec.cols=parsed.cols;}else{rec.rows=parsed.rows||[];rec.n=rec.rows.length;}
   if(parsed.mlNone)rec.mlNone=true;
+  if(parsed.phT)rec.phT=1;   // 파서가 전화번호를 대체값으로 바꿨을 때만 (이관 경로의 옛 행은 원문이라 표시하지 않음 → 로드 때 변환)
   if(parsed.diHist)rec.diHist=parsed.diHist;
   if(meta.miss&&meta.miss.length)rec.miss=meta.miss;
   if(type==='contCum')rec.ym=meta.ym||spParseYm(rec.fileName);
@@ -14025,6 +14141,9 @@ function srcLoad(){
     if(!srcFiles.length&&!localStorage.getItem('src_migrated')){
       try{await srcMigrateLocal();}catch(e){console.error('[원본] 이관 실패',e);}
     }
+    // 원문 전화번호가 남은 파일은 대체값으로 바꿔 다시 저장 (이 버전 첫 접속 때 한 번)
+    {let n=0;for(const f of srcFiles){if(srcTokenizePhones(f)){await srcIdbPut(f);n++;if(n%20===0)await new Promise(r=>setTimeout(r,0));}}
+     if(n)console.log(`[원본] 전화번호 대체값 변환 ${n}개 파일`);}
     srcLoaded=true;srcSetLoadedFlags();
   })().finally(()=>{_srcLoadP=null;});
   return _srcLoadP;
@@ -14091,8 +14210,22 @@ function srcDecCol(e){
   if(e.t==='A')return e.v;
   const C=SRC_TA[e.t];const u=srcUnB64(e.b);return new C(u.buffer,0,u.byteLength/C.BYTES_PER_ELEMENT);
 }
-const SRC_META_KEYS=['type','fileName','fileHash','uploadTime','pv','n','ym','mlNone','diHist','miss','dmax'];
+const SRC_META_KEYS=['type','fileName','fileHash','uploadTime','pv','n','ym','mlNone','diHist','miss','dmax','phT'];
+// 원문 전화번호가 남은 파일(옛 버전 저장분·옛 버전 PC가 올린 동기화본) → 대체값으로 바꾼다. 바꿨으면 true
+function srcTokenizePhones(f){
+  if(!f||f.phT||!f.cols||(f.type!=='db'&&f.type!=='cti'))return false;
+  if(!wmPhoneKeyReady())return false;
+  if(f.type==='db'){for(const c of ['p1','p2','p3']){const a=f.cols[c];if(Array.isArray(a))for(let i=0;i<a.length;i++)if(a[i])a[i]=phTok(a[i]);}}
+  else if(f.cols.phone&&Array.isArray(f.cols.phone.dict))f.cols.phone.dict=f.cols.phone.dict.map(phTok);
+  f.phT=1;return true;
+}
 function srcEncFile(f){
+  // 업로드에는 원문 전화번호를 절대 싣지 않는다 — 바꿀 수 없으면(키 없음) 전화 열을 빼고 올린다
+  if((f.type==='db'||f.type==='cti')&&f.cols&&!f.phT&&!srcTokenizePhones(f)){
+    const g=Object.assign({},f);g.cols=Object.assign({},f.cols);
+    if(f.type==='db'){delete g.cols.p1;delete g.cols.p2;delete g.cols.p3;}else delete g.cols.phone;
+    f=g;
+  }
   const o={};for(const k of SRC_META_KEYS)if(f[k]!==undefined)o[k]=f[k];
   if(f.cols){o.cols={};for(const k in f.cols)o.cols[k]=srcEncCol(f.cols[k]);return o;}
   o.rows=f.rows||[];return wmEncFile(o);
@@ -14117,6 +14250,7 @@ async function _srcReplaceAll(recs){
     const f=Object.assign({},f0);delete f.id;
     if(f.rows&&f.n==null)f.n=f.rows.length;
     if(f.dmax===undefined)f.dmax=srcMaxDayOf(f);
+    srcTokenizePhones(f);
     f.id=await srcIdbAdd(f);srcFiles.push(f);
     if(window.wmLoadRowTick)wmLoadRowTick(f.n||1);
   }
