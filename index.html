@@ -3397,9 +3397,17 @@ function applyAuth(){
     else{tab.style.display='none';}
   });
   switchPage(authUser.tabs[0]);
+  // 부팅(로컬 로드 + 자동 동기화)은 한 번만 — init의 checkAuth보다 로그인이 먼저 끝나면 applyAuth가 두 번 불려
+  //  동기화 복원이 두 번 겹치고(공용 원본에 같은 파일이 두 벌 들어감) 로딩도 두 배가 됐다 (2026-10-30 재현)
+  if(window._wmBooted)return;
+  window._wmBooted=true;
   // 유입분석/부재인입 IDB 먼저 로드 후 자동 동기화 (로컬 보유 판정을 위해)
   (async ()=>{
+    // 동기화보다 반드시 먼저 끝나야 한다 — 동기화가 '이 PC에 데이터가 있는지'를 이 결과로 판정한다
     const loaders=[
+      ['ngroup','N그룹', ()=>ngLoadLocal()],
+      ['cancel-dash','WM 취소율', ()=>cdLoadLocal()],
+      ['grade-dash','차등성과', ()=>gdLoadLocal()],
       ['inflow','유입분석', ()=>iaLoad()],
       ['missed-call','부재인입', ()=>(typeof mcLoadFiles==='function')&&mcLoadFiles()],
       // 공용 원본(DB·계약·명단·CTI) — 계열별성과·성과진단·피벗·타임보드·톡이즈·뇌새김 콜이 함께 쓴다
@@ -3414,7 +3422,7 @@ function applyAuth(){
       for(let i=0;i<loaders.length;i++){
         wmLoad.frac(i/loaders.length, `로컬 데이터 · ${loaders[i][1]}`, `${i}/${loaders.length} 탭`);
         await new Promise(r=>setTimeout(r,0));   // 진행률 페인트 후 무거운 IDB 읽기 시작
-        await loaders[i][2]();
+        try{ await loaders[i][2](); }catch(e){ console.error(`[부팅] ${loaders[i][1]} 로드 실패`,e); }   // 한 탭이 실패해도 나머지·동기화는 진행
       }
       wmLoad.frac(1, '로컬 데이터 완료', `${loaders.length}/${loaders.length} 탭`);
       await autoSyncDownload({prog:true});
@@ -3424,9 +3432,46 @@ function applyAuth(){
   })();
 }
 
-async function autoSyncDownload(opts){
+// 동기화 작업(자동 받기·수동 받기·업로드)은 한 번에 하나만 — 겹치면 복원끼리 섞이거나,
+//  업로드 도중 자동 반영이 끼어들어 올리는 데이터와 로컬 데이터가 어긋났다
+let _wmSyncChain=Promise.resolve();
+window._wmSyncBusy=0;
+function wmSyncExclusive(fn){
+  const run=async()=>{window._wmSyncBusy++;try{return await fn();}finally{window._wmSyncBusy--;}};
+  const p=_wmSyncChain.then(run,run);_wmSyncChain=p.catch(()=>{});return p;
+}
+let _wmAutoSyncP=null;
+function autoSyncDownload(opts){
+  if(_wmAutoSyncP)return _wmAutoSyncP;   // 동시에 두 번 돌면 복원이 겹친다 → 진행 중인 작업에 합류
+  _wmAutoSyncP=wmSyncExclusive(()=>_autoSyncDownload(opts)).finally(()=>{_wmAutoSyncP=null;});
+  return _wmAutoSyncP;
+}
+// 슬라이스 → 이 계정이 쓰는 탭인지 (없는 키 = 공통, 항상 받음)
+function wmSliceAccess(k){
+  const has=t=>!!(authUser&&authUser.tabs.includes(t));
+  const m={ng:'ngroup',ngResults:'ngroup',cd:'cancel-dash',gd:'grade-dash',ac:'ad-cost',vc:'via-cancel',vcProducts:'via-cancel',mc:'missed-call',ia:'inflow',dp:'daily-perf'};
+  if(k==='src'||k==='sp'||k==='tb'||k==='tz'||k==='nc')return !!(authUser&&SRC_TABS.some(has));
+  return m[k]?has(m[k]):true;
+}
+// 같은 파일(종류·이름·업로드 시각)이 여러 번 들어 있으면 하나만 (예전 '덧붙이기' 복원으로 서버에 남은 중복 정리)
+function wmDedupeFiles(arr){
+  if(!Array.isArray(arr))return [];
+  const seen=new Set(),out=[];
+  for(const f of arr){if(!f)continue;const k=f.type+'|'+f.fileName+'|'+f.uploadTime;if(seen.has(k))continue;seen.add(k);out.push(f);}
+  return out;
+}
+// 동기화용 슬림 행(필요 열만) → 원래 열 위치로 펼친 AOA
+function wmExpandCols(f){
+  const data=f.data;
+  if(!f.cols||!Array.isArray(data)||data.length<2)return data;
+  return data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});
+}
+async function _autoSyncDownload(opts){
   opts=opts||{};
-  const ngReady=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+  const ngAccess=wmSliceAccess('ng'), cdAccess=wmSliceAccess('cd'), gdAccess=wmSliceAccess('gd');
+  // '이 PC에 있는가'는 파일 1개 이상으로 본다 — 예전 ngReady(4종 모두)는 서버에 한 종류가 없으면 영원히 false라
+  //  부팅마다 다시 받고, 지우지 않고 덧붙여 IDB가 계속 불어났다
+  const ngReady=allFiles.length>0;
   const cdReady=cdAllFiles.length>0;
   const iaAccess=authUser&&authUser.tabs.includes('inflow');
   const dpAccess=authUser&&authUser.tabs.includes('daily-perf');
@@ -3474,7 +3519,7 @@ async function autoSyncDownload(opts){
     const iaLoaded=!iaAccess||iaHasLocal;
     const gdHasLocal=gdAllFiles&&gdAllFiles.length>0;
     const mcHasLocal=mcFiles&&mcFiles.length>0;
-    const mcOk=!mcAccess||mcHasLocal||!hasSlice('mc');
+    const mcOk=true;   // 부재인입은 동기화 대상이 아니다
     const spHasLocal=typeof spFiles!=='undefined'&&spFiles&&spFiles.length>0;
     const spOk=!spAccess||spHasLocal||!hasSlice('sp');
     const tbHasLocal=typeof tbFiles!=='undefined'&&tbFiles&&tbFiles.length>0;
@@ -3495,7 +3540,8 @@ async function autoSyncDownload(opts){
     const srcRemote=hasSlice('src')||hasSlice('sp')||hasSlice('tb')||hasSlice('tz')||hasSlice('nc');
     const srcOk=!srcAccess||srcHasLocal||!srcRemote;
     // ② 받을 게 없으면 다운로드 자체를 하지 않는다 (판정 조건은 기존과 동일, 근거만 매니페스트)
-    if(ctx.manifest&&!remoteNewer&&ngReady&&cdReady&&iaLoaded&&(gdHasLocal||!hasSlice('gd'))&&mcOk&&srcOk&&acOk&&vcOk){
+    const ngOk=!ngAccess||ngReady||!hasSlice('ng'), cdOk=!cdAccess||cdReady||!hasSlice('cd'), gdOk=!gdAccess||gdHasLocal||!hasSlice('gd');
+    if(ctx.manifest&&!remoteNewer&&ngOk&&cdOk&&iaLoaded&&gdOk&&mcOk&&srcOk&&acOk&&vcOk){
       wmLoad.range(wmLoad.pct,100); wmLoad.frac(1,'최신 상태입니다','');
       wmSyncSetDownloadStatus('ok');
       return;
@@ -3507,14 +3553,14 @@ async function autoSyncDownload(opts){
     let localSig={};
     try{ localSig=JSON.parse(localStorage.getItem(WM_SLICE_SIG_KEY)||'{}')||{}; }catch(e){ localSig={}; }
     const SLICE_LOCAL={src:srcHasLocal,ng:ngReady,ngResults:ngReady,cd:cdReady,gd:gdHasLocal,sp:spHasLocal,tb:tbHasLocal,tz:tzHasLocal,nc:ncHasLocal,ac:acHasLocal,vc:vcHasLocal,vcProducts:vcHasLocal};
-    const SLICE_ACCESS={src:srcAccess,sp:srcAccess,tb:srcAccess,tz:srcAccess,nc:srcAccess,ac:acAccess,vc:vcAccess,vcProducts:vcAccess};
     const ALWAYS_KEYS=new Set(['ls','ngResults','vcProducts','ac']);   // 합쳐서 수십 KB — 항상 받아 예외 케이스를 없앤다
     let wantKeys=null; const skippedKeys=[];
     if(ctx.manifest&&Object.keys(ctx.sig).length>0){
       wantKeys=new Set();
       for(const k of ctx.keys){
         if(ctx.keys.has('src')&&(k==='sp'||k==='tb'||k==='tz'||k==='nc')){skippedKeys.push(k);continue;}   // 공용 원본이 있으면 예전 탭별 슬라이스는 안 받는다
-        const access=(SLICE_ACCESS[k]===undefined)?true:!!SLICE_ACCESS[k];
+        const access=wmSliceAccess(k);
+        if(!access){ skippedKeys.push(k); continue; }   // 이 계정이 못 여는 탭 데이터는 받지도, 저장하지도 않는다
         const sameSig=!!localSig[k]&&localSig[k]===ctx.sig[k];
         const haveIt=!!SLICE_LOCAL[k]||!access;
         if(!ALWAYS_KEYS.has(k)&&sameSig&&haveIt){ skippedKeys.push(k); continue; }
@@ -3543,25 +3589,28 @@ async function autoSyncDownload(opts){
     };
 
     // N그룹 복원 (없거나 원격이 더 새로운 경우)
-    if((!ngReady||remoteNewer)&&payload.ng){
+    //  복원할 땐 항상 IDB를 먼저 비운다(메모리 배열이 아니라 IDB 기준) — 덧붙이기만 하면 같은 파일이 두 벌 쌓였다
+    if(ngAccess&&(!ngReady||remoteNewer)&&payload.ng){
       _restoreLabel='N그룹 저장 중';
-      if(remoteNewer){for(const f of allFiles)await idbDelete(f.id);allFiles=[];}
-      for(const f of payload.ng){
-        const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
-        allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
-        if(window.wmLoadRowTick)wmLoadRowTick((f.data&&f.data.length)||1);
+      for(const f of await idbGetAll())await idbDelete(f.id);allFiles=[];
+      for(const f of wmDedupeFiles(payload.ng)){
+        const data=wmExpandCols(f);
+        const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
+        allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
+        if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
       }
       updateStatusDots();updateUploadStatus();
-      if(payload.ngResults&&payload.ngResults.length>0){
-        for(const r of payload.ngResults) await saveResultToIDB(r);
-      }
+    }
+    // N그룹 결과(수동 그룹 수정 포함) — ng 파일 슬라이스가 안 바뀌어 건너뛰어도 결과는 저장한다
+    if(ngAccess&&(!ngReady||remoteNewer)&&payload.ngResults&&payload.ngResults.length>0){
+      for(const r of payload.ngResults) await saveResultToIDB(r);
     }
     // 취소율 복원 (없거나 원격이 더 새로운 경우)
-    if((!cdReady||remoteNewer)&&payload.cd){
+    if(cdAccess&&(!cdReady||remoteNewer)&&payload.cd){
       _restoreLabel='WM 취소율 저장 중';
-      if(remoteNewer){for(const f of cdAllFiles)await cdIdbDelete(f.id);cdAllFiles=[];}
-      for(const f of payload.cd){let data=f.data;
-        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+      cdResult=null;   // 옛 계산 결과가 옛 행을 붙잡고 있어 복원 중 메모리가 두 배가 되지 않게
+      for(const f of await cdIdbGetAll())await cdIdbDelete(f.id);cdAllFiles=[];
+      for(const f of wmDedupeFiles(payload.cd)){const data=wmExpandCols(f);
         const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
         cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
         if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
@@ -3595,16 +3644,16 @@ async function autoSyncDownload(opts){
       iaBindUploadBoxes();iaUpdateStatus();
       if(iaReady()){iaInitDateRange();iaGenerate();}
     }
-    // localStorage 이력 복원
-    if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
+    // localStorage 이력 복원 — 원격이 더 새것일 때만 덮는다(아니면 이 PC에 없는 키만 채움).
+    //  예전엔 다른 이유(로컬 파일 없음)로 받았을 때도 덮어써서 아직 안 올린 조정값·규칙·피벗 보기가 사라질 수 있었다
+    if(payload.ls){for(const[k,v]of Object.entries(payload.ls))if(remoteNewer||localStorage.getItem(k)==null)localStorage.setItem(k,v);}
     // 차등성과 복원 (없거나 원격이 더 새로운 경우)
-    if(payload.gd&&(!gdHasLocal||remoteNewer)){
+    if(gdAccess&&payload.gd&&(!gdHasLocal||remoteNewer)){
       _restoreLabel='차등성과 저장 중';
       if(!gdIdb) await gdOpenIDB();
-      if(remoteNewer){const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];}
-      for(const f of (payload.gd.files||[])){
-        let data=f.data;
-        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+      {const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];}
+      for(const f of wmDedupeFiles(payload.gd.files||[])){
+        const data=wmExpandCols(f);
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
         if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
@@ -3614,10 +3663,7 @@ async function autoSyncDownload(opts){
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
       if(gdReady){gdGenerate(undefined,{noSave:true});}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
     }
-    // 부재인입 복원 (없거나 원격이 더 새로운 경우)
-    if(payload.mc&&mcAccess&&(!mcHasLocal||remoteNewer)&&typeof mcRestoreSync==='function'){
-      await _restoreStep('mc',()=>mcRestoreSync(payload.mc));
-    }
+    // (부재인입은 동기화 대상이 아니다 — 복원하지 않는다)
     // 공용 원본 복원 (없거나 원격이 더 새로운 경우) — 계열별성과·성과진단·피벗·타임보드·톡이즈·뇌새김 콜
     if(srcAccess&&(!srcHasLocal||remoteNewer)){
       if(payload.src)await _restoreStep('src',()=>srcRestoreSync(payload.src));
@@ -3632,7 +3678,7 @@ async function autoSyncDownload(opts){
       await _restoreStep('vc',()=>vcRestoreSync(payload.vc,payload.vcProducts));
     }
     // N그룹 결과 표시
-    if(!ngReady||remoteNewer){
+    if(ngAccess&&(!ngReady||remoteNewer)){
       if(payload.ngResults&&payload.ngResults.length>0){
         restoreResultFromSync(payload.ngResults);
       } else {
@@ -3660,7 +3706,7 @@ async function autoSyncDownload(opts){
 }
 
 function doLogout(){
-  authUser=null;localStorage.removeItem('auth');
+  authUser=null;localStorage.removeItem('auth');window._wmBooted=false;   // 다시 로그인하면 부팅(로드·동기화)을 다시 한다
   document.getElementById('loginOverlay').style.display='flex';
   document.getElementById('loginId').value='';document.getElementById('loginPw').value='';
   document.getElementById('loginError').textContent='';
@@ -3842,8 +3888,8 @@ function showSyncActions(token){
   if(ck)ck.checked=localStorage.getItem(WM_AUTOPULL_KEY)!=='0';
 }
 
-function syncBtnText(msg){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>b.innerHTML=msg);}
-function syncBtnReset(){document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
+function syncBtnText(msg){document.querySelectorAll('.btn-sync').forEach(b=>b.innerHTML=msg);}
+function syncBtnReset(){document.querySelectorAll('.btn-sync').forEach(b=>{b.innerHTML='동기화';b.disabled=false;});wmSyncRenderBadge();}
 
 // ── 동기화 상태 가시화 (로컬 변경/다운로드 실패 감지) ──
 const WM_SYNC_DIRTY_KEY='wm_sync_dirty';
@@ -3915,12 +3961,16 @@ async function wmSyncPullNow(){
   if(dirty&&!confirm('이 PC에 아직 업로드하지 않은 변경사항이 있습니다.\n원격 데이터로 덮어쓸까요?'))return;
   const ts=parseInt(localStorage.getItem(WM_REMOTE_TS_KEY)||'0');
   wmSyncBanner('pulling',ts);
-  await doSyncDownloadManual();
-  wmSyncBanner('done',parseInt(localStorage.getItem('sync_last_ts')||'0'));
-  setTimeout(()=>wmSyncBanner('hide'),4000);
+  // 로컬 변경이 없으면 바뀐 탭만 받는다 (예전엔 항상 강제 전체 다운로드 ~100MB).
+  //  로컬 변경이 있는데 덮어쓰기를 고른 경우만 전체를 받아 로컬을 서버와 똑같이 맞춘다
+  if(dirty)await doSyncDownloadManual(); else await autoSyncDownload();
+  const ok=localStorage.getItem(WM_SYNC_DL_STATUS_KEY)!=='fail';
+  if(ok)wmSyncBanner('done',parseInt(localStorage.getItem('sync_last_ts')||'0'));
+  else wmSyncBanner('new',ts);
+  if(ok)setTimeout(()=>wmSyncBanner('hide'),4000);
 }
 async function wmSyncPoll(force){
-  if(!authUser||_wmPollBusy||window._wmSyncRestoring)return;
+  if(!authUser||_wmPollBusy||window._wmSyncRestoring||window._wmSyncBusy)return;
   if(document.hidden&&!force)return;                     // 백그라운드 탭은 건너뛰고, 돌아올 때 즉시 확인
   _wmPollBusy=true;
   try{
@@ -3933,8 +3983,8 @@ async function wmSyncPoll(force){
     if(auto&&!dirty){                                    // 로컬 변경분이 있으면 자동으로 덮어쓰지 않는다
       wmSyncBanner('pulling',ts);
       await autoSyncDownload();
-      wmSyncBanner('done',ts);
-      setTimeout(()=>wmSyncBanner('hide'),4000);
+      if(localStorage.getItem(WM_SYNC_DL_STATUS_KEY)==='fail'){wmSyncBanner('new',ts);}   // 실패면 '완료'라고 띄우지 않고 다시 받을 수 있게
+      else{wmSyncBanner('done',ts);setTimeout(()=>wmSyncBanner('hide'),4000);}
     }else{
       wmSyncBanner('new',ts);
     }
@@ -3950,16 +4000,45 @@ function wmSyncStartPoll(){
 }
 function wmSyncToggleAutoPull(on){localStorage.setItem(WM_AUTOPULL_KEY,on?'1':'0');if(on)wmSyncPoll(true);}
 
-async function doSyncUpload(token){
+// 업로드는 한 번에 하나 + 받기 작업과도 겹치지 않게
+function doSyncUpload(token){
+  if(window._wmUploading)return;
+  window._wmUploading=true;
+  document.querySelectorAll('.btn-sync').forEach(b=>b.disabled=true);
+  const mb=document.querySelector('#syncModal .btn-primary');if(mb)mb.disabled=true;
+  return wmSyncExclusive(()=>_doSyncUpload(token)).finally(()=>{window._wmUploading=false;const m=document.querySelector('#syncModal .btn-primary');if(m)m.disabled=false;});
+}
+// N그룹 동기화 열: OB명(H)/분배일(I)/DB정보(P)/매체코드(T)/최종통화(V)/오더일(X)/고객상태(AD) — 계산에 쓰는 열만.
+//  고객명(K)·전화번호(M)는 싱크 레포가 공개라 올리지 않는다 (2026-10-31 전까지 원본 전체 열이 올라가고 있었다)
+//  (COL 상수가 아래쪽에 선언돼 있어 여기서 바로 참조하면 스크립트 로드가 멈춘다 → 업로드 시점에 계산)
+function ngSyncCols(){return [COL.obName,COL.distributeDate,COL.dbInfo,COL.mediaCode,COL.lastCallTime,COL.orderDate,COL.customerStatus];}
+async function _doSyncUpload(token){
   try{
     syncBtnText('<span class="sync-spin">↻</span> 업로드 중');
-    document.querySelectorAll('#syncBtn1,#syncBtn2,#syncBtn3,#syncBtn4,#syncBtn5,#syncBtn6,#syncBtn7,#syncBtn8,#syncBtn9,#syncBtn10,#syncBtn11,#syncBtn12,#syncBtn13').forEach(b=>b.disabled=true);
+    document.querySelectorAll('.btn-sync').forEach(b=>b.disabled=true);
+    // ① 충돌 확인 — 내가 마지막으로 받은 뒤 다른 PC가 올렸으면, 지금 올리면 그 데이터를 덮어쓴다
+    const localSyncTs=parseInt(localStorage.getItem('sync_last_ts')||'0');
+    const startCtx=await fetchSyncCtx();
+    const startTs=startCtx.ts||0;
+    if(startTs>localSyncTs){
+      const t=new Date(startTs).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+      if(!confirm(`다른 PC가 ${t}에 더 최신 데이터를 올렸습니다.\n지금 올리면 그 데이터를 이 PC 데이터로 덮어씁니다.\n\n[취소] 후 새로고침해서 최신 데이터를 먼저 받는 것을 권장합니다.\n그래도 지금 업로드할까요?`)){syncBtnReset();return;}
+    }else if(localStorage.getItem(WM_SYNC_DL_STATUS_KEY)==='fail'){
+      if(!confirm('마지막 서버 데이터 받기가 실패한 상태입니다.\n이 PC 데이터가 일부만 있을 수 있어, 지금 올리면 서버 데이터가 줄어들 수 있습니다.\n그래도 업로드할까요?')){syncBtnReset();return;}
+    }
+    // 이 계정이 못 여는 탭은 이 PC에 데이터가 없다 → 올리지 않고 서버에 있던 것을 그대로 이어 붙인다 (빈 채로 덮어쓰지 않게)
+    const keepRemote=new Set(['ng','ngResults','cd','gd','src','ac','vc','vcProducts'].filter(k=>!wmSliceAccess(k)));
 
-    // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만)
-    const ngFiles=allFiles.map(f=>({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data}));
+    // N그룹 IDB 데이터 수집 (경량화: 필요 컬럼만 — 명단(attend)은 원본)
+    const ngFiles=keepRemote.has('ng')?null:allFiles.map(f=>{
+      if(f.type==='attend'||!Array.isArray(f.data))return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data};
+      const cols=ngSyncCols();
+      const slim=f.data.map((row,i)=>i===0?row:cols.map(c=>row[c]!=null?row[c]:''));
+      return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:slim,cols};
+    });
 
     // 취소율 IDB 데이터 수집 (경량화)
-    const cdFiles=cdAllFiles.map(f=>{
+    const cdFiles=keepRemote.has('cd')?null:cdAllFiles.map(f=>{
       if(f.type==='attend') return {type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data};
       // 신청자/고객관리: 필요 컬럼만 추출
       const cols=f.type==='cust'?[CD_CUST.customerKey,CD_CUST.bkPhone,CD_CUST.bkAccount]
@@ -3969,13 +4048,15 @@ async function doSyncUpload(token){
     });
 
     // IDB results 데이터 (수동 그룹 수정 포함)
-    const ngResults=await getAllResults();
+    const ngResults=keepRemote.has('ngResults')?null:await getAllResults();
 
     // (유입분석 탭 삭제됨 — 싱크 제외로 메모리·용량 절감)
 
     // 차등성과 IDB 데이터 수집 (db/cont/cancel은 필요 컬럼만, attend는 원본)
     const GD_DBCONT_COLS=[6,7,8,15,19,21,23,29];   // 고객키/OB명/분배일/DB정보/매체코드/최종통화/오더일/고객상태
-    const GD_CX_COLS=[3,13,16,17,41,42];           // 신청자관리: 고객키(D)/담당자(N)/분류(Q)/코드(R)/분배일(AP)/반품일(AQ)
+    // 신청자관리: 고객키(D)/담당자(N)/신청일(P)/분류(Q)/코드(R)/분배일(AP)/반품일(AQ)
+    //  신청일(P)이 빠져 있어서 동기화로 받은 PC는 사후 배송전 취소의 '이번 회차 계약' 제외가 안 먹어 더 많이 셌다 (2026-10-31 추가)
+    const GD_CX_COLS=[3,13,15,16,17,41,42];
     const gdSyncFiles=[];
     for(const f of (gdAllFiles||[])){
       if(f.type==='attend'){gdSyncFiles.push({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});continue;}
@@ -3985,7 +4066,7 @@ async function doSyncUpload(token){
     }
     let gdResultsSync=[];try{gdResultsSync=await gdGetAllResults();}catch(e){}
     // gd는 {files,results} 객체라 그룹 분할 대상이 아니다 → files 배열만 미리 압축 인코딩해 문자열 크기를 낮춘다
-    const gdData={files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
+    const gdData=keepRemote.has('gd')?null:{files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
 
     // localStorage 이력 데이터
     const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules','pv_views'];
@@ -3995,11 +4076,13 @@ async function doSyncUpload(token){
     // (부재인입 mc — 동기화 용량 1위라 클라우드 싱크 제외. 탭·로컬 데이터는 유지, 그 PC에서만 사용)
     // 공용 원본 (DB·계약·명단·CTI) — 예전 계열별성과·타임보드·톡이즈·뇌새김 콜 슬라이스를 대체
     let srcSync=[];
-    try{await srcLoad();srcSync=srcFiles.slice();}catch(e){console.warn('공용 원본 sync collect 실패',e);}
+    if(keepRemote.has('src'))srcSync=null;
+    else try{await srcLoad();srcSync=srcFiles.slice();}catch(e){console.warn('공용 원본 sync collect 실패',e);}
     // 광고비 데이터 (acReports 미로드 시 IDB에서 직접 읽어 누락 방지)
     let acSync=[];
     try{
-      if(typeof acCollectSync==='function'){
+      if(keepRemote.has('ac'))acSync=null;
+      else if(typeof acCollectSync==='function'){
         if((!acReports||!acReports.length)&&typeof acLoadFiles==='function'){ if(!acLoaded) await acLoadFiles(); }
         acSync=acCollectSync();
       }
@@ -4007,7 +4090,8 @@ async function doSyncUpload(token){
     // Via 취소율 (파일 배열 + 접수제품 사전은 별도 슬라이스 — 사전은 수백 바이트라 분할 대상이 아니다)
     let vcSync=[],vcProdSync=null;
     try{
-      if(typeof vcCollectSync==='function'){
+      if(keepRemote.has('vc'))vcSync=vcProdSync=null;
+      else if(typeof vcCollectSync==='function'){
         if((!vcFiles||!vcFiles.length)&&typeof vcLoadFiles==='function'){ if(!vcLoaded) await vcLoadFiles(); }
         vcSync=vcCollectSync();vcProdSync=vcCollectProducts();
       }
@@ -4047,7 +4131,7 @@ async function doSyncUpload(token){
       if(cur.length)out.push(cur);
       return out.length?out:[[]];
     };
-    const treeItems=[];const sliceMeta=[];const nowTs=Date.now();
+    const treeItems=[];const sliceMeta=[];
     for(const key of SLICE_ORDER){
       const val=payloadObj[key];
       if(val===undefined||val===null)continue;
@@ -4078,16 +4162,27 @@ async function doSyncUpload(token){
       }
     }
 
-    // 매니페스트 v3 (슬라이스×그룹 목록 + 내부 v/ts)
+    // 3) 현재 main 브랜치의 최신 커밋 SHA
+    const refRes=await fetch(`${apiBase}/git/ref/heads/main`,{headers,cache:'no-store'});
+    if(!refRes.ok) throw new Error('브랜치 정보 조회 실패');
+    const latestCommitSha=(await refRes.json()).object.sha;
+    // 그 커밋의 매니페스트 — 업로드하는 사이 다른 PC가 올렸으면 중단 (덮어쓰기 방지)
+    let headManifest=null;
+    try{const hr=await fetch(`https://raw.githubusercontent.com/${SYNC_REPO}/${latestCommitSha}/${SYNC_MANIFEST}`,{cache:'no-store'});if(hr.ok)headManifest=await hr.json();}catch(e){}
+    const headTs=headManifest?((headManifest.payloadMeta&&headManifest.payloadMeta.ts)||headManifest.ts||0):0;
+    if(headTs>startTs)throw new Error('업로드하는 사이 다른 PC가 데이터를 올려 중단했습니다. 새로고침으로 최신 데이터를 받은 뒤 다시 올려주세요.');
+    // 이 계정이 못 여는 탭: 서버에 있던 그룹을 그대로 매니페스트에 싣는다 (파일은 base_tree에 그대로 남아 있다)
+    if(keepRemote.size){
+      if(!headManifest)throw new Error('서버 매니페스트를 읽지 못해 중단했습니다 (이 계정이 못 여는 탭 데이터를 보존할 수 없음). 잠시 후 다시 시도하세요.');
+      if(Array.isArray(headManifest.slices))for(const sl of headManifest.slices)if(keepRemote.has(sl.key))sliceMeta.push(sl);
+    }
+
+    // 매니페스트 v3 (슬라이스×그룹 목록 + 내부 v/ts) — ts는 여기서 정하고 이 PC에도 같은 값을 기록한다
+    const nowTs=Math.max(Date.now(),headTs+1);
     const manifest={v:3,ts:nowTs,payloadMeta:{v:10,ts:nowTs},slices:sliceMeta};
     const mr=await fetch(`${apiBase}/git/blobs`,{method:'POST',headers,body:JSON.stringify({content:bytesToB64(new TextEncoder().encode(JSON.stringify(manifest))),encoding:'base64'})});
     if(!mr.ok){const e=await mr.json();throw new Error(e.message||'매니페스트 생성 실패');}
     treeItems.push({path:SYNC_MANIFEST,mode:'100644',type:'blob',sha:(await mr.json()).sha});
-
-    // 3) 현재 main 브랜치의 최신 커밋 SHA
-    const refRes=await fetch(`${apiBase}/git/ref/heads/main`,{headers});
-    if(!refRes.ok) throw new Error('브랜치 정보 조회 실패');
-    const latestCommitSha=(await refRes.json()).object.sha;
 
     // 4) 새 Tree 생성 (매니페스트 + 청크 파일들 교체)
     syncLog(`<span class="sync-spin">↻</span> 커밋 생성 중...`);
@@ -4101,8 +4196,9 @@ async function doSyncUpload(token){
     const newCommitSha=(await commitRes.json()).sha;
 
     // 6) main 브랜치 포인터 업데이트
-    const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:true})});
-    if(!updateRes.ok) throw new Error('브랜치 업데이트 실패');
+    const updateRes=await fetch(`${apiBase}/git/refs/heads/main`,{method:'PATCH',headers,body:JSON.stringify({sha:newCommitSha,force:false})});
+    // force:false — 그 사이 다른 커밋이 올라왔으면 거절된다 (예전 force:true는 다른 PC 업로드를 조용히 지웠다)
+    if(!updateRes.ok) throw new Error(updateRes.status===422?'다른 PC가 동시에 업로드해 중단했습니다. 새로고침 후 다시 올려주세요.':'브랜치 업데이트 실패');
     // 업로드 성공: 로컬 dirty 해제 + 원격 ts 동기화
     // 방금 올린 슬라이스 서명을 기록 — 올린 PC가 다음 접속에서 자기 데이터를 다시 받지 않게
     try{
@@ -4111,7 +4207,7 @@ async function doSyncUpload(token){
       const _sig={}; for(const k of Object.keys(_sigParts)) _sig[k]=_sigParts[k].join('|');
       localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(_sig));
     }catch(e){ localStorage.removeItem(WM_SLICE_SIG_KEY); }
-    localStorage.setItem('sync_last_ts',String(Date.now()));
+    localStorage.setItem('sync_last_ts',String(nowTs));   // 서버 매니페스트와 같은 값 (예전엔 업로드 끝난 시각이라 서버와 어긋났다)
     wmSyncClearDirty();
     wmSyncSetDownloadStatus('ok');
     syncBtnText('완료!');setTimeout(syncBtnReset,2000);
@@ -4233,27 +4329,34 @@ async function fetchSyncPayload(onProg, ctx, wantKeys){
   return JSON.parse(await zip.file('data.json').async('string'));
 }
 
-async function doSyncDownloadManual(){
+function doSyncDownloadManual(){return wmSyncExclusive(()=>_doSyncDownloadManual());}
+async function _doSyncDownloadManual(){
   window._wmSyncRestoring=true;
   try{
     syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
     const _ctx=await fetchSyncCtx();
-    const payload=await fetchSyncPayload(null,_ctx);   // 수동 다운로드는 항상 전량
+    // 수동 다운로드는 이 계정이 쓰는 탭 전량 (못 여는 탭 슬라이스는 받지 않는다)
+    const _want=_ctx.manifest?new Set([..._ctx.keys].filter(k=>wmSliceAccess(k))):null;
+    const payload=await fetchSyncPayload(null,_ctx,_want);
+    const ngAccess=wmSliceAccess('ng'), cdAccess=wmSliceAccess('cd'), gdAccess=wmSliceAccess('gd');
 
-    // 기존 데이터 삭제 후 복원
-    for(const f of allFiles)await idbDelete(f.id);allFiles=[];
-    for(const f of cdAllFiles)await cdIdbDelete(f.id);cdAllFiles=[];
-
-    if(payload.ng){for(const f of payload.ng){const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});allFiles.push({id,...f});}}
+    // 기존 데이터 삭제 후 복원 — 서버에 그 슬라이스가 있을 때만 지운다 (없는데 지우면 로컬만 날아간다)
+    if(ngAccess&&payload.ng){
+      for(const f of await idbGetAll())await idbDelete(f.id);allFiles=[];
+      for(const f of wmDedupeFiles(payload.ng)){const data=wmExpandCols(f);const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}
+    }
     // IDB results 복원 (수동 그룹 수정 포함)
-    if(payload.ngResults&&payload.ngResults.length>0){
+    if(ngAccess&&payload.ngResults&&payload.ngResults.length>0){
       for(const r of payload.ngResults) await saveResultToIDB(r);
     }
     updateStatusDots();updateUploadStatus();
 
-    if(payload.cd){for(const f of payload.cd){let data=f.data;
-      if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
-      const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}}
+    if(cdAccess&&payload.cd){
+      cdResult=null;
+      for(const f of await cdIdbGetAll())await cdIdbDelete(f.id);cdAllFiles=[];
+      for(const f of wmDedupeFiles(payload.cd)){const data=wmExpandCols(f);
+        const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});}
+    }
     cdUpdateStatusDots();cdUpdateUploadStatus();
 
     // 일자별 성과 prefs 복원 (info_bin 전용)
@@ -4281,17 +4384,16 @@ async function doSyncDownloadManual(){
       if(iaReady()){iaInitDateRange();iaGenerate();}
     }
     const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
-    if(ok)cdGenerate();
+    if(cdAccess&&ok)cdGenerate();
 
     // localStorage 이력 복원
     if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
     // 차등성과 복원 (강제 다운로드 — 항상 덮어쓰기)
-    if(payload.gd){
+    if(gdAccess&&payload.gd){
       if(!gdIdb) await gdOpenIDB();
       const _gex=await gdIdbGetAll();for(const r of _gex)await gdIdbDelete(r.id);gdAllFiles=[];
-      for(const f of (payload.gd.files||[])){
-        let data=f.data;
-        if(f.cols&&data.length>1){data=data.map((row,i)=>{if(i===0)return row;const full=[];f.cols.forEach((c,ci)=>{full[c]=row[ci];});return full;});}
+      for(const f of wmDedupeFiles(payload.gd.files||[])){
+        const data=wmExpandCols(f);
         const rec={type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data};
         const id=await gdIdbAdd(rec);rec.id=id;gdAllFiles.push(rec);
         if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
@@ -4301,10 +4403,7 @@ async function doSyncDownloadManual(){
       const gdReady=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
       if(gdReady){gdGenerate(undefined,{noSave:true});}else{const _gall=await gdGetAllResults();if(_gall.length>0)gdRenderHistory();}
     }
-    // 부재인입 복원 (강제 다운로드 — 항상 덮어쓰기)
-    if(payload.mc&&authUser&&authUser.tabs.includes('missed-call')&&typeof mcRestoreSync==='function'){
-      await mcRestoreSync(payload.mc);
-    }
+    // (부재인입은 동기화 대상이 아니다 — 옛 서버 데이터에 mc가 있어도 복원하지 않는다: 이 PC의 유일한 원본이 지워진다)
     // 공용 원본 복원 (강제 다운로드 — 항상 덮어쓰기). 서버에 src가 없으면 예전 탭별 슬라이스로 이관
     if(authUser&&SRC_TABS.some(t=>authUser.tabs.includes(t))){
       if(payload.src)await srcRestoreSync(payload.src);
@@ -4317,9 +4416,9 @@ async function doSyncDownloadManual(){
       await vcRestoreSync(payload.vc,payload.vcProducts);
     }
     // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
-    if(payload.ngResults&&payload.ngResults.length>0){
+    if(ngAccess&&payload.ngResults&&payload.ngResults.length>0){
       restoreResultFromSync(payload.ngResults);
-    } else {
+    } else if(ngAccess){
       const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
       if(ready)generate();
     }
@@ -4341,84 +4440,8 @@ async function doSyncDownloadManual(){
   }
 }
 
-async function doSyncDownload(token){
-  window._wmSyncRestoring=true;
-  try{
-    syncLog('<span class="sync-spin">↻</span> 다운로드 중...');
-    const _ctx=await fetchSyncCtx();
-    const payload=await fetchSyncPayload(null,_ctx);   // 수동 다운로드는 항상 전량
-
-    syncLog('<span class="sync-spin">↻</span> N그룹 데이터 복원 중...');
-    // N그룹 IDB 복원
-    if(payload.ng){
-      // 기존 데이터 삭제
-      for(const f of allFiles)await idbDelete(f.id);
-      allFiles=[];
-      for(const f of payload.ng){
-        const id=await idbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
-        allFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data:f.data});
-      }
-      updateStatusDots();updateUploadStatus();
-
-      // IDB results 복원 (수동 그룹 수정 포함)
-      if(payload.ngResults&&payload.ngResults.length>0){
-        for(const r of payload.ngResults) await saveResultToIDB(r);
-      }
-    }
-
-    syncLog('<span class="sync-spin">↻</span> 취소율 데이터 복원 중...');
-    // 취소율 IDB 복원
-    if(payload.cd){
-      for(const f of cdAllFiles)await cdIdbDelete(f.id);
-      cdAllFiles=[];
-      for(const f of payload.cd){
-        let data=f.data;
-        // 경량화된 데이터 복원 (cols 매핑)
-        if(f.cols&&data.length>1){
-          const header=data[0];
-          const restored=data.map((row,i)=>{
-            if(i===0)return header;
-            const full=[];
-            f.cols.forEach((c,ci)=>{full[c]=row[ci];});
-            return full;
-          });
-          data=restored;
-        }
-        const id=await cdIdbAdd({type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
-        cdAllFiles.push({id,type:f.type,fileName:f.fileName,uploadTime:f.uploadTime,data});
-      }
-      cdUpdateStatusDots();cdUpdateUploadStatus();
-      const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
-      if(ok)cdGenerate();
-    }
-
-    // localStorage 이력 복원
-    if(payload.ls){for(const[k,v]of Object.entries(payload.ls))localStorage.setItem(k,v);}
-    // ngResults가 있으면 재계산 없이 동기화 당시 결과 그대로 표시
-    if(payload.ngResults&&payload.ngResults.length>0){
-      restoreResultFromSync(payload.ngResults);
-    } else {
-      const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-      if(ready)generate();
-    }
-
-    syncLog('다운로드 완료! 대시보드가 갱신되었습니다.');
-    localStorage.setItem('sync_last_ts',String(payload.ts||Date.now()));
-    if(_ctx&&_ctx.manifest&&Object.keys(_ctx.sig).length>0) localStorage.setItem(WM_SLICE_SIG_KEY,JSON.stringify(_ctx.sig));
-    wmSyncClearDirty();
-    wmSyncSetDownloadStatus('ok');
-    setTimeout(()=>{const m=document.getElementById('syncModal');if(m)m.remove();},2000);
-  }catch(err){
-    syncLog(`<span style="color:var(--danger)">오류: ${err.message}</span>`);
-    wmSyncSetDownloadStatus('fail', err.message||'unknown');
-    console.error(err);
-  }finally{
-    window._wmSyncRestoring=false;
-    wmSyncRenderBadge();
-  }
-}
-
 function checkAuth(){
+  if(authUser)return;   // 초기화가 끝나기 전에 이미 로그인한 경우
   const saved=localStorage.getItem('auth');
   if(saved){
     try{
@@ -5782,22 +5805,42 @@ document.addEventListener('keydown',(e)=>{
   else last.classList.remove('open');
 });
 
+// N그룹 로컬 데이터 로드 — 로그인 후 applyAuth 로더가 권한(ngroup) 있을 때만 부른다
+//  (예전엔 페이지 로드 즉시 권한과 무관하게 읽고 계산해서, 동기화 복원과 겹치거나 권한 없는 계정도 메모리를 썼다)
+let ngLoaded=false;
+async function ngLoadLocal(){
+  if(ngLoaded)return;
+  ngLoaded=true;
+  if(!idb)await openIDB();
+  allFiles = await idbGetAll();
+  // 자가 치유: 옛 버전 화면이 새 슬림 N그룹 동기화본(7열)을 펼치지 않고 저장한 경우 → 원래 열 위치로 펼쳐 다시 저장
+  //  (머리행은 원본 그대로 넓고, 데이터 행만 7칸이면 슬림본이다)
+  const ngCols=ngSyncCols();
+  for(const f of allFiles){
+    if(f.type==='attend'||!Array.isArray(f.data)||f.data.length<2)continue;
+    const hdrLen=(f.data[0]||[]).length;
+    if(hdrLen<=ngCols.length)continue;
+    let slim=true;for(let i=1;i<Math.min(f.data.length,50);i++){if(Array.isArray(f.data[i])&&f.data[i].length>ngCols.length){slim=false;break;}}
+    if(!slim)continue;
+    f.data=wmExpandCols({cols:ngCols,data:f.data});
+    try{const rec={...f};await new Promise((res,rej)=>{const tx=idb.transaction('files','readwrite');tx.objectStore('files').put(rec);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}catch(e){console.warn('[N그룹] 슬림본 펼치기 저장 실패',e);}
+    console.log('[N그룹] 동기화 슬림본을 원래 열로 펼침:',f.fileName);
+  }
+  updateStatusDots();
+  updateUploadStatus();
+  // 파일 4종이 모두 있으면 항상 재계산 (수동 그룹 수정은 generate 내에서 IDB에서 복원됨)
+  const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
+  if(ready){
+    await generate();
+  } else {
+    // 파일 부족 시 IDB 저장 결과로 표시
+    const savedResults=await getAllResults();
+    if(savedResults.length>0) restoreResultFromSync(savedResults);
+  }
+}
 (async function init(){
   try {
     await openIDB();
-    allFiles = await idbGetAll();
-    updateStatusDots();
-    updateUploadStatus();
-
-    // 파일 4종이 모두 있으면 항상 재계산 (수동 그룹 수정은 generate 내에서 IDB에서 복원됨)
-    const ready=['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0);
-    if(ready){
-      generate();
-    } else {
-      // 파일 부족 시 IDB 저장 결과로 표시
-      const savedResults=await getAllResults();
-      if(savedResults.length>0) restoreResultFromSync(savedResults);
-    }
   } catch(err){
     console.error('IndexedDB 초기화 오류:', err);
     // 버전 충돌 시 DB 삭제 후 재생성
@@ -5811,6 +5854,7 @@ document.addEventListener('keydown',(e)=>{
   // 공휴일 최신화 (비차단): 캐시는 위에서 동기 주입됨. API에서 신규 공휴일(임시공휴일·재지정)
   // 발견 시 현재 탭 재계산. 다른 탭은 전환 시 재계산되므로 추가 처리 불필요.
   refreshHolidaysFromAPI().then(added=>{
+    if(added&&typeof srcTouched==='function')srcTouched();   // 계산해 둔 공용 원본 탭 결과도 버린다 (휴일 판정이 바뀜)
     if(added && ['db','cont','cancel','attend'].every(k=>getFilesByType(k).length>0)){
       console.log('[holiday] 신규 공휴일 반영 → 재계산');
       generate();
@@ -7197,13 +7241,24 @@ async function cdInfoHarvest(data){
 }
 
 // ── Init ──
-(async function cdInit(){
+// 로그인 후 applyAuth 로더가 권한(cancel-dash) 있을 때만 부른다 (예전엔 페이지 로드 즉시 실행 — 동기화와 겹치면 파일이 두 벌 저장될 수 있었다)
+let cdLoaded=false;
+const CD_HARVESTED_KEY='cd_info_harvested';   // 고객정보 캐시에 이미 옮긴 파일 (부팅마다 191개 파일을 다시 훑지 않게)
+async function cdLoadLocal(){
+  if(cdLoaded)return;
+  cdLoaded=true;
   try{await cdOpenIDB();cdAllFiles=await cdIdbGetAll();cdUpdateStatusDots();cdUpdateUploadStatus();
-    try{await cdInfoLoad();for(const f of cdAllFiles)if(f.type==='app'||f.type==='app-daily')await cdInfoHarvest(f.data);}catch(e){console.warn('고객정보 캐시 오류:',e);}
+    try{
+      await cdInfoLoad();
+      let done;try{done=new Set(JSON.parse(localStorage.getItem(CD_HARVESTED_KEY)||'[]'));}catch(e){done=new Set();}
+      const fid=f=>`${f.fileName}|${f.uploadTime}`;let changed=false;
+      for(const f of cdAllFiles)if((f.type==='app'||f.type==='app-daily')&&!done.has(fid(f))){await cdInfoHarvest(f.data);done.add(fid(f));changed=true;}
+      if(changed){const live=new Set(cdAllFiles.map(fid));localStorage.setItem(CD_HARVESTED_KEY,JSON.stringify([...done].filter(k=>live.has(k))));}
+    }catch(e){console.warn('고객정보 캐시 오류:',e);}
     const ok=cdGetFilesByType('attend').length>0&&(cdGetFilesByType('app-daily').length>0||cdGetFilesByType('app').length>0);
     if(ok)cdGenerate();
   }catch(err){console.error('Cancel Dashboard IDB 오류:',err);}
-})();
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  Inflow Analysis Tab (유입분석) — info_bin 전용
@@ -8765,6 +8820,14 @@ async function gdIngestFolderFile(type,file){
 async function gdScanFolder(opts={}){
   if(gdScanBusy)return;
   if(!window.showDirectoryPicker){ if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.'); return; }
+  gdScanBusy=true;   // 첫 await 전에 잡는다 (예전엔 권한 확인 뒤에 잡아서 두 호출이 함께 통과할 수 있었다)
+  try{ await gdLoadLocal(); }finally{ gdScanBusy=false; }   // 로컬 파일을 다 읽은 뒤에 스캔 (명단 중복 판정이 정확하도록)
+  if(gdScanBusy)return;
+  gdScanBusy=true;
+  try{ return await _gdScanFolder(opts); }finally{ gdScanBusy=false; }
+}
+async function _gdScanFolder(opts){
+  if(!window.showDirectoryPicker)return;
   if(!gdIdb)await gdOpenIDB();
   if(!spIdb)await spOpenIDB();
   const h=spDirHandle||await spIdbGetHandle();
@@ -11944,14 +12007,21 @@ async function gdDownloadAprilInitExcel(){
 }
 
 // ── Init: 페이지 로드 시 IDB 복원 ──
-(async function gdInit(){
+// 로그인 후 applyAuth 로더가 권한(grade-dash) 있을 때만 부른다 (예전엔 페이지 로드 즉시 — 권한 없는 계정도 283MB를 읽고 계산했다)
+let gdLoaded=false,_gdLoadP=null;
+function gdLoadLocal(){
+  if(gdLoaded)return Promise.resolve();
+  if(!_gdLoadP)_gdLoadP=_gdLoadLocal().finally(()=>{gdLoaded=true;_gdLoadP=null;});
+  return _gdLoadP;
+}
+async function _gdLoadLocal(){
   try{
     await gdOpenIDB();
     gdAllFiles=await gdIdbGetAll();
     gdUpdateStatusDots(); gdUpdateUploadStatus();
     const ready=['db','cont','cancel','attend'].every(k=>gdGetFilesByType(k).length>0);
     if(ready){
-      gdGenerate(undefined,{noSave:true});
+      await gdGenerate(undefined,{noSave:true});
     } else {
       // 결과만 있어도 이력 표시 가능하게
       const all=await gdGetAllResults();
@@ -11960,12 +12030,11 @@ async function gdDownloadAprilInitExcel(){
         gdRenderHistory();
       }
     }
-    // 초기 활성 탭이 차등성과면 공용폴더 자동 스캔(sp 함수 정의 이후 실행되도록 지연)
-    setTimeout(()=>{ const gp=document.getElementById('page-grade-dash'); if(gp&&gp.classList.contains('active')&&typeof gdAutoScanOnShow==='function') gdAutoScanOnShow(); },0);
+    // (초기 탭이 차등성과일 때의 공용폴더 자동 스캔은 applyAuth→switchPage가 이미 부른다 — 여기서 또 부르면 스캔이 두 번 돌았다)
   }catch(err){
     console.error('차등성과 IDB 초기화 오류:',err);
   }
-})();
+}
 </script>
 
 <!-- ═══════════ 부재인입 대시보드 ═══════════ -->
@@ -12015,12 +12084,14 @@ function mcOpenIDB(){
     req.onerror=()=>rej(req.error);
   });
 }
-function mcMarkDirty(){if(typeof wmSyncMarkDirty==='function')wmSyncMarkDirty();}
+// 부재인입은 클라우드 동기화 대상이 아니다 → '미업로드 변경' 표시를 켜지 않는다
+//  (켜면 다른 PC 데이터 자동 반영이 멈추고, 바뀐 것도 없는 전체 업로드를 하게 됐다)
+function mcMarkDirty(){}
 function mcIdbAdd(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').add(rec);r.onsuccess=()=>{mcMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
 function mcIdbGetAll(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readonly');const r=tx.objectStore('files').getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 function mcIdbDel(id){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=()=>{mcMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
 function mcIdbPut(rec){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');const r=tx.objectStore('files').put(rec);r.onsuccess=()=>{mcMarkDirty();res(r.result);};tx.onerror=()=>rej(tx.error);});}
-async function mcIdbClear(){const all=await mcIdbGetAll();for(const r of all)await mcIdbDel(r.id);}
+function mcIdbClear(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('files','readwrite');tx.objectStore('files').clear();tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}   // 전 행을 읽어 id만 뽑던 것을 한 번에 비우기로
 // 박제 스토어 (단일 레코드 id='meta')
 function mcSealedLoad(){return new Promise((res)=>{try{const tx=mcIdb.transaction('sealed','readonly');const r=tx.objectStore('sealed').get('meta');r.onsuccess=()=>{const v=r.result;mcSealed=(v&&v.records)||[];mcSealCutoffMs=(v&&v.cutoffMs)||0;res();};r.onerror=()=>res();}catch(e){res();}});}
 function mcSealedSave(){return new Promise((res,rej)=>{const tx=mcIdb.transaction('sealed','readwrite');const r=tx.objectStore('sealed').put({id:'meta',records:mcSealed,cutoffMs:mcSealCutoffMs});r.onsuccess=()=>{mcMarkDirty();res();};tx.onerror=()=>rej(tx.error);});}
@@ -13943,7 +14014,14 @@ function srcLoad(){
   _srcLoadP=(async()=>{
     if(!srcIdb)await srcOpenIDB();
     const all=await srcIdbGetAll();
-    srcFiles.length=0;for(const f of all)srcFiles.push(f);
+    // 자가 치유: 같은 type|fileHash가 여러 벌이면 id가 가장 큰 것만 남긴다 (2026-10-30 이중 복원 버그로 생긴 중복)
+    const keep=new Map();for(const f of all){const k=f.type+'|'+f.fileHash,c=keep.get(k);if(!c||f.id>c.id)keep.set(k,f);}
+    if(keep.size<all.length){
+      const ok=new Set(keep.values());let n=0;
+      for(const f of all)if(!ok.has(f)){await srcIdbDel(f.id);n++;}
+      console.log(`[원본] 중복 파일 ${n}개 정리`);
+    }
+    srcFiles.length=0;for(const f of keep.values())srcFiles.push(f);
     if(!srcFiles.length&&!localStorage.getItem('src_migrated')){
       try{await srcMigrateLocal();}catch(e){console.error('[원본] 이관 실패',e);}
     }
@@ -13952,14 +14030,24 @@ function srcLoad(){
   return _srcLoadP;
 }
 
+// ── 쓰기 잠금: 인제스트·삭제·전체 교체(동기화 복원)는 한 번에 하나만 ──
+//  폴더 스캔 인제스트와 동기화 복원(비우기→채우기)이 겹치면 파일이 두 벌 생기거나 방금 넣은 파일이 지워졌다
+let _srcMutP=Promise.resolve();
+function srcLocked(fn){const p=_srcMutP.then(fn,fn);_srcMutP=p.catch(()=>{});return p;}
 // ── 인제스트 (수동 업로드·공용폴더 스캔 공통) ──
 async function srcIngestFile(type,file){
   await srcLoad();
   const fileHash=`${file.name}|${file.size}`;
-  const old=srcFiles.find(f=>f.type===type&&f.fileHash===fileHash);
+  // 잠금 전 빠른 판정: 이미 있고 최신 파싱본이면 파일 내용을 읽지 않는다
+  const pre=srcFiles.find(f=>f.type===type&&f.fileHash===fileHash);
+  if(pre&&!srcStale(pre))return {status:'dup',name:file.name};
+  return srcLocked(()=>_srcIngestFile(type,file,fileHash));
+}
+async function _srcIngestFile(type,file,fileHash){
+  const old=srcFiles.find(f=>f.type===type&&f.fileHash===fileHash);   // 잠금 안에서 다시 확인 (기다리는 사이 다른 스캔이 넣었을 수 있음)
   if(old){
     if(!srcStale(old))return {status:'dup',name:file.name};
-    await srcDeleteRec(old,true);          // 옛 파싱본은 같은 파일로 다시 읽는다 (폴더에 실제로 있는 파일만이라 유실 없음)
+    await _srcDeleteRec(old,true);          // 옛 파싱본은 같은 파일로 다시 읽는다 (폴더에 실제로 있는 파일만이라 유실 없음)
   }
   const buf=await file.arrayBuffer();
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
@@ -13973,16 +14061,17 @@ async function srcIngestFile(type,file){
   srcTouched();wmSyncMarkDirty();
   return {status:'ok',name:file.name};
 }
-async function srcDeleteRec(rec,quiet){
+function srcDeleteRec(rec,quiet){return srcLocked(()=>_srcDeleteRec(rec,quiet));}
+async function _srcDeleteRec(rec,quiet){
   if(!srcIdb)await srcOpenIDB();
   if(rec.id!=null)await srcIdbDel(rec.id);
   const i=srcFiles.indexOf(rec);if(i>=0)srcFiles.splice(i,1);
   srcTouched();if(!quiet)wmSyncMarkDirty();
 }
-async function srcDeleteById(id){const rec=srcFiles.find(f=>f.id===id);if(rec)await srcDeleteRec(rec);}
+function srcDeleteById(id){return srcLocked(async()=>{const rec=srcFiles.find(f=>f.id===id);if(rec)await _srcDeleteRec(rec);});}
 async function srcDeleteTypes(types){
   await srcLoad();
-  for(const rec of srcFiles.filter(f=>types.includes(f.type)))await srcDeleteRec(rec,true);
+  await srcLocked(async()=>{for(const rec of srcFiles.filter(f=>types.includes(f.type)))await _srcDeleteRec(rec,true);});
   wmSyncMarkDirty();
 }
 function srcNeedsReparse(){return srcFiles.filter(f=>f.type!=='cti'&&srcStale(f)).length;}
@@ -14014,7 +14103,14 @@ function srcDecFile(o){
 }
 function srcDecodeSync(arr){return Array.isArray(arr)?arr.map(srcDecFile):arr;}
 function srcSyncBytes(f){return f.cols?(f.n||0)*(f.type==='cti'?16:72)+2048:(f.rows?f.rows.length*120:0)+1024;}
-async function srcReplaceAll(recs){
+function srcReplaceAll(recs){   // 인제스트·삭제와 같은 잠금 (겹치면 비우기·채우기가 섞여 같은 파일이 두 벌 들어간다)
+  return srcLocked(()=>_srcReplaceAll(recs));
+}
+function srcDedupe(recs){   // 같은 type|fileHash는 마지막 것 하나만
+  const m=new Map();for(const f of recs)m.set(f.type+'|'+f.fileHash,f);return [...m.values()];
+}
+async function _srcReplaceAll(recs){
+  recs=srcDedupe(recs);
   if(!srcIdb)await srcOpenIDB();
   await srcIdbClear();srcFiles.length=0;
   for(const f0 of recs){
@@ -14423,24 +14519,32 @@ async function spDisconnectFolder(){
   try{if(!spIdb)await spOpenIDB();await spIdbDelHandle();}catch(e){}
   spDirHandle=null;spDirName='';spUpdateDirStatus();spSetBanner('hide');
 }
-// 계열별성과 ↔ 타임보드성과 교차 스캔: 한쪽을 스캔하면 같은 공용폴더의 최신 파일을
-// 다른 쪽 IDB에도 함께 반영한다(탭별 데이터 시차 방지). 재진입은 cross 플래그로 차단.
-let _wmCrossScan=false;
-function wmHasTab(t){try{return !!(authUser&&authUser.tabs&&authUser.tabs.includes(t));}catch(e){return false;}}
-async function wmCrossScan(target){
-  if(_wmCrossScan)return;
-  if(!spDirHandle)return;
-  if(target==='tb'&&(!wmHasTab('timeboard-perf')||typeof tbScanFolder!=='function'))return;
-  if(target==='sp'&&(!wmHasTab('series-perf')||typeof spScanFolder!=='function'))return;
-  _wmCrossScan=true;
-  try{
-    if(target==='tb')await tbScanFolder({request:false,fromShow:true,cross:true});
-    else if(target==='sp')await spScanFolder({request:false,fromShow:true,cross:true});
-  }catch(e){console.warn('교차 폴더 스캔 실패',e);}
-  finally{_wmCrossScan=false;}
+// ── 공용폴더 스캔 관문 (계열별성과·성과진단·피벗·타임보드·톡이즈·뇌새김 콜 공통) ──
+//  여섯 탭이 같은 폴더를 같은 공용 원본으로 읽는데, 탭을 열 때마다 각자 폴더 전체를 훑고(계열별성과는 타임보드용으로 한 번 더)
+//  이미 받은 파일 수백 개를 네트워크 드라이브에서 하나씩 다시 열어 봤다. → 자동 스캔은
+//   ① 다른 스캔이 돌고 있으면 그것을 기다리고 끝 ② 마지막 스캔 후 1분 안이면 건너뜀. 사용자가 누른 스캔은 항상 끝까지 한다.
+const WM_SCAN_COOLDOWN_MS=60000;
+let _wmScanP=null,_wmScanAt=0;
+async function wmScanGate(opts,run,onSkip){
+  opts=opts||{};
+  const auto=!!opts.fromShow&&!opts.request;
+  if(auto&&(_wmScanP||Date.now()-_wmScanAt<WM_SCAN_COOLDOWN_MS)){
+    if(_wmScanP){try{await _wmScanP;}catch(e){}}
+    try{if(onSkip)onSkip();}catch(e){}
+    return {okCnt:0,dupCnt:0,skipped:0,cached:true};
+  }
+  while(_wmScanP){try{await _wmScanP;}catch(e){}}
+  const p=run();_wmScanP=p;
+  try{return await p;}finally{if(_wmScanP===p)_wmScanP=null;_wmScanAt=Date.now();}
 }
+// 자동 스캔 때 건너뛸 '이미 받은 일별 파일' (DB수·일마감은 날짜별 새 파일이라 이름이 같으면 같은 파일).
+//  월간누적(같은 이름으로 갱신됨)·명단·옛 파싱본(다시 읽어야 함)은 제외 → 그 파일들은 지금처럼 크기까지 확인
+function srcKnownNames(){const k=new Set();for(const f of srcFiles)if((f.type==='db'||f.type==='contDaily')&&!srcStale(f))k.add(f.type+'|'+f.fileName);return k;}
+function wmSkipKnown(opts,known,t){return !!(opts&&opts.fromShow)&&known.has(t.type+'|'+t.entry.name);}
+function wmHasTab(t){try{return !!(authUser&&authUser.tabs&&authUser.tabs.includes(t));}catch(e){return false;}}
 // 폴더(루트+하위 최대 3단계·월별 폴더 포함) 스캔 → 신규 .xlsx 인제스트
-async function spScanFolder(opts={}){
+function spScanFolder(opts={}){return wmScanGate(opts,()=>_spScanFolder(opts),()=>spSetBanner('hide'));}
+async function _spScanFolder(opts={}){
   if(spScanBusy)return;
   if(!spLoaded)await spLoadFiles();
   if(!spIdb)await spOpenIDB();
@@ -14473,7 +14577,9 @@ async function spScanFolder(opts={}){
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;const errs=[];
+  const known=srcKnownNames();
   for(const t of finalTasks){
+    if(wmSkipKnown(opts,known,t)){dupCnt++;continue;}
     try{const file=await t.entry.getFile();const r=await spIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}
     catch(err){errs.push(`${t.entry.name}: ${err.message}`);console.error(err);}
   }
@@ -14489,7 +14595,6 @@ async function spScanFolder(opts={}){
   // 사용자가 직접 스캔했고 미인식 파일이 있으면 모달로 목록 표시
   if(opts.announce&&skipped.length)spShowSkipModal();
   if(opts.announce&&errs.length)alert('처리 오류:\n- '+errs.join('\n- '));
-  if(!opts.cross)wmCrossScan('tb');   // 타임보드성과도 같은 폴더 최신본으로 함께 갱신
   return {okCnt,dupCnt,skipped:skipped.length};
 }
 let spLastSkipped=[];
@@ -14655,14 +14760,24 @@ function spCompute(){
 }
 
 // 필터 적용 (기간·담당·센터) → 레코드 배열
-function spInRange(day){const s=document.getElementById('spDateStart').value,e=document.getElementById('spDateEnd').value;if(s&&day<s)return false;if(e&&day>e)return false;return true;}
+// 기간 입력칸은 필터 1회당 한 번만 읽는다 (예전엔 레코드마다 getElementById ×2 — 100만 행 × 6번)
+let _spRangeS='',_spRangeE='';
+function spReadRange(){_spRangeS=document.getElementById('spDateStart').value;_spRangeE=document.getElementById('spDateEnd').value;}
+function spInRange(day){if(_spRangeS&&day<_spRangeS)return false;if(_spRangeE&&day>_spRangeE)return false;return true;}
 function spPassFilter(rec){if(spTeam!=='all'&&rec.team!==spTeam)return false;if(spCenter!=='all'&&rec.ctr!==spCenter)return false;return spInRange(rec.day);}
+// 한 번 그릴 때 섹션 6곳이 같은 조건으로 부르므로 결과를 재사용 (조건·모델이 같을 때만)
+let _spFiltMemo=null;
 function spFiltered(){
-  return {
+  spReadRange();
+  const key=`${_spRangeS}|${_spRangeE}|${spTeam}|${spCenter}`;
+  if(_spFiltMemo&&_spFiltMemo.model===spModel&&_spFiltMemo.key===key)return _spFiltMemo.out;
+  const out={
     db:spModel.dbRecs.filter(spPassFilter),
     gross:spModel.grossRecs.filter(spPassFilter),
     net:spModel.netRecs.filter(spPassFilter)
   };
+  _spFiltMemo={model:spModel,key,out};
+  return out;
 }
 // 계열별 집계: {db:[6], gross:[6], net:[6], unmatchedG, unmatchedN}
 function spAggBySeries(recs){
@@ -17358,7 +17473,8 @@ async function tbConnectFolder(){
   try{const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});if(!spIdb)await spOpenIDB();await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;tbUpdateDirStatus();await tbScanFolder({request:true,announce:true});}
   catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
 }
-async function tbScanFolder(opts={}){
+function tbScanFolder(opts={}){return wmScanGate(opts,()=>_tbScanFolder(opts),()=>tbSetBanner('hide'));}
+async function _tbScanFolder(opts={}){
   if(tbScanBusy)return;
   if(!tbLoaded)await tbLoadFiles();
   if(!window.showDirectoryPicker){if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.');return;}
@@ -17389,12 +17505,12 @@ async function tbScanFolder(opts={}){
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;
-  for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await tbIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
+  const known=srcKnownNames();
+  for(const t of finalTasks){if(wmSkipKnown(opts,known,t)){dupCnt++;continue;}try{const file=await t.entry.getFile();const r=await tbIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
   tbScanBusy=false;if(okCnt>0)tbModel=null;
   tbUpdateUploadStatus();tbRenderFileHistory();tbUpdateDirStatus('ok');
   if(!opts.fromShow||okCnt>0)tbSetBanner('ok',{okCnt,dupCnt});else tbSetBanner('hide');
   if(okCnt>0&&!opts.fromShow&&currentPage==='timeboard-perf')tbOnShow();
-  if(!opts.cross)wmCrossScan('sp');   // 계열별성과도 같은 폴더 최신본으로 함께 갱신
   return {okCnt,dupCnt};
 }
 async function tbAutoScanOnShow(){
@@ -17878,8 +17994,8 @@ function tzRenderCodiPanel(){
   tzUpdateCodiBtn();
 }
 function tzUpdateCodiBtn(){const b=document.getElementById('tzCodiBtn');if(!b||!tzModel)return;const n=(!tzSel)?tzModel.persons.length:tzSel.size;b.textContent=`코디 선택 (${n}/${tzModel.persons.length}) ▾`;}
-function tzToggleCodi(name,on){if(!tzSel)tzSel=new Set(tzModel.persons);if(on)tzSel.add(name);else tzSel.delete(name);tzUpdateCodiBtn();tzRender();}
-function tzCodiAll(on){tzSel=on?new Set(tzModel.persons):new Set();tzRenderCodiPanel();tzRender();}
+function tzToggleCodi(name,on){if(!tzModel){if(tzReady())tzGenerate(false);return;}if(!tzSel)tzSel=new Set(tzModel.persons);if(on)tzSel.add(name);else tzSel.delete(name);tzUpdateCodiBtn();tzRender();}
+function tzCodiAll(on){if(!tzModel){if(tzReady())tzGenerate(false);return;}tzSel=on?new Set(tzModel.persons):new Set();tzRenderCodiPanel();tzRender();}
 function tzToggleCodiPanel(){const p=document.getElementById('tzCodiPanel');if(p)p.classList.toggle('hidden');}
 function tzRender(){
   if(!tzModel)return;
@@ -18035,7 +18151,8 @@ async function tzConnectFolder(){
   try{const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});if(!spIdb)await spOpenIDB();await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;tzUpdateDirStatus();await tzScanFolder({request:true,announce:true});}
   catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
 }
-async function tzScanFolder(opts={}){
+function tzScanFolder(opts={}){return wmScanGate(opts,()=>_tzScanFolder(opts),()=>tzSetBanner('hide'));}
+async function _tzScanFolder(opts={}){
   if(tzScanBusy)return;
   if(!tzLoaded)await tzLoadFiles();
   if(!window.showDirectoryPicker){if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.');return;}
@@ -18067,7 +18184,8 @@ async function tzScanFolder(opts={}){
   const attendTasks=tasks.filter(t=>t.type==='attend').sort((a,b)=>a.entry.name>b.entry.name?1:-1);
   const finalTasks=tasks.filter(t=>t.type!=='attend').concat(attendTasks.length?[attendTasks[attendTasks.length-1]]:[]);
   let okCnt=0,dupCnt=0;
-  for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await tzIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
+  const known=srcKnownNames();
+  for(const t of finalTasks){if(wmSkipKnown(opts,known,t)){dupCnt++;continue;}try{const file=await t.entry.getFile();const r=await tzIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
   tzScanBusy=false;if(okCnt>0)tzModel=null;
   tzUpdateUploadStatus();tzRenderFileHistory();tzUpdateDirStatus('ok');
   if(!opts.fromShow||okCnt>0)tzSetBanner('ok',{okCnt,dupCnt});else tzSetBanner('hide');
@@ -18989,12 +19107,12 @@ function ncRenderCtrPanel(){
 }
 function ncUpdateCtrBtn(){const b=document.getElementById('ncCtrBtn');if(!b||!ncModel)return;
   const n=(!ncCtrSel)?ncModel.centers.length:ncCtrSel.size;b.textContent=`센터 선택 (${n}/${ncModel.centers.length}) ▾`;}
-function ncToggleCtr(c,on){if(!ncCtrSel)ncCtrSel=new Set(ncModel.centers);if(on)ncCtrSel.add(c);else ncCtrSel.delete(c);
+function ncToggleCtr(c,on){if(!ncModel){if(ncReady())ncGenerate(false);return;}if(!ncCtrSel)ncCtrSel=new Set(ncModel.centers);if(on)ncCtrSel.add(c);else ncCtrSel.delete(c);
   ncUpdateCtrBtn();ncRenderCodiPanel();ncRender();}
-function ncCtrAll(on){ncCtrSel=on?new Set(ncModel.centers):new Set();ncRenderCtrPanel();ncRenderCodiPanel();ncRender();}
+function ncCtrAll(on){if(!ncModel){if(ncReady())ncGenerate(false);return;}ncCtrSel=on?new Set(ncModel.centers):new Set();ncRenderCtrPanel();ncRenderCodiPanel();ncRender();}
 function ncToggleCtrPanel(){const p=document.getElementById('ncCtrPanel');if(p)p.classList.toggle('hidden');}
-function ncToggleCodi(name,on){if(!ncSel)ncSel=new Set(ncModel.persons);if(on)ncSel.add(name);else ncSel.delete(name);ncUpdateCodiBtn();ncRender();}
-function ncCodiAll(on){ncSel=on?new Set(ncModel.persons):new Set();ncRenderCodiPanel();ncUpdateCodiBtn();ncRender();}
+function ncToggleCodi(name,on){if(!ncModel){if(ncReady())ncGenerate(false);return;}if(!ncSel)ncSel=new Set(ncModel.persons);if(on)ncSel.add(name);else ncSel.delete(name);ncUpdateCodiBtn();ncRender();}
+function ncCodiAll(on){if(!ncModel){if(ncReady())ncGenerate(false);return;}ncSel=on?new Set(ncModel.persons):new Set();ncRenderCodiPanel();ncUpdateCodiBtn();ncRender();}
 function ncToggleCodiPanel(){const p=document.getElementById('ncCodiPanel');if(p)p.classList.toggle('hidden');}
 function ncRenderLangPanel(){
   const el=document.getElementById('ncLangList');if(!el)return;
@@ -19044,6 +19162,7 @@ function ncReady(){return ncFilesByType('db').length>0;}
 function ncGenerate(force){
   if(!ncReady()){document.getElementById('ncEmpty').classList.remove('hidden');document.getElementById('ncDashboard').classList.add('hidden');ncUpdateEmptyHint();return;}
   ncEnsureStyle();
+  ncModel=null;ncCache={key:' '};   // 옛 모델을 먼저 놓아 계산 중 메모리가 두 벌이 되지 않게
   ncModel=ncCompute();ncCache={key:' '};   // 모델 재계산 → 집계 캐시 무효화
   document.getElementById('ncEmpty').classList.add('hidden');
   document.getElementById('ncDashboard').classList.remove('hidden');
@@ -19053,7 +19172,10 @@ async function ncOnShow(){
   ncEnsureStyle();
   if(!ncLoaded)await ncLoadFiles();
   await ncAutoScanOnShow();
-  if(ncReady())ncGenerate(false);
+  // 모델이 있으면 재계산하지 않는다 — 예전엔 탭에 들어올 때마다 6~7초씩 처음부터 다시 계산했다
+  //  (데이터가 바뀌면 srcTouched()·폴더 스캔이 ncModel을 비우므로 그때만 다시 계산된다)
+  if(ncReady()&&ncModel){document.getElementById('ncEmpty').classList.add('hidden');document.getElementById('ncDashboard').classList.remove('hidden');ncRender();}
+  else if(ncReady())ncGenerate(false);
   else{document.getElementById('ncEmpty').classList.remove('hidden');document.getElementById('ncDashboard').classList.add('hidden');ncUpdateEmptyHint();}
 }
 
@@ -19123,7 +19245,8 @@ async function ncConnectFolder(){
   try{const h=await window.showDirectoryPicker({id:'sp-shared',mode:'read'});if(!spIdb)await spOpenIDB();await spIdbPutHandle(h);spDirHandle=h;spDirName=h.name;ncUpdateDirStatus();await ncScanFolder({request:true,announce:true});}
   catch(e){if(e&&e.name!=='AbortError')console.error('공용폴더 연결',e);}
 }
-async function ncScanFolder(opts={}){
+function ncScanFolder(opts={}){return wmScanGate(opts,()=>_ncScanFolder(opts),()=>ncSetBanner('hide'));}
+async function _ncScanFolder(opts={}){
   if(ncScanBusy)return;
   if(!ncLoaded)await ncLoadFiles();
   if(!window.showDirectoryPicker){if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.');return;}
@@ -19154,7 +19277,8 @@ async function ncScanFolder(opts={}){
   try{await walk(h,'',0,false,null);}catch(e){console.error('뇌새김콜 폴더 스캔',e);ncScanBusy=false;ncUpdateDirStatus('error');return;}
   const finalTasks=tasks;   // 명단도 전부 누적(중복은 fileHash로 스킵)
   let okCnt=0,dupCnt=0;
-  for(const t of finalTasks){try{const file=await t.entry.getFile();const r=await ncIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
+  const known=srcKnownNames();
+  for(const t of finalTasks){if(wmSkipKnown(opts,known,t)){dupCnt++;continue;}try{const file=await t.entry.getFile();const r=await ncIngestFile(t.type,file);if(r.status==='ok')okCnt++;else dupCnt++;}catch(err){console.error(err);}}
   ncScanBusy=false;if(okCnt>0)ncModel=null;
   ncUpdateUploadStatus();ncRenderFileHistory();ncUpdateDirStatus('ok');
   if(!opts.fromShow||okCnt>0)ncSetBanner('ok',{okCnt,dupCnt});else ncSetBanner('hide');
@@ -20021,7 +20145,12 @@ function vcGetFilesByType(t){return vcFiles.filter(f=>f.type===t).sort((a,b)=>b.
 function vcGetLatest(t){return vcGetFilesByType(t)[0]||null;}
 function vcReady(){return vcGetFilesByType('app-daily').length>0||vcGetFilesByType('app').length>0;}
 
-async function vcLoadFiles(){
+let _vcLoadP=null;
+function vcLoadFiles(){   // 동시에 두 번 불려도 IDB는 한 번만 읽는다
+  if(!_vcLoadP)_vcLoadP=_vcLoadFiles().finally(()=>{_vcLoadP=null;});
+  return _vcLoadP;
+}
+async function _vcLoadFiles(){
   try{
     if(!vcIdb)await vcOpenIDB();
     vcFiles=await vcIdbGetAll();
@@ -20050,7 +20179,7 @@ function vcCollectProducts(){return vcProducts||{};}
 async function vcRestoreSync(arr,prods){
   if(!Array.isArray(arr))return;
   if(!vcIdb)await vcOpenIDB();
-  for(const f of vcFiles)await vcIdbDelete(f.id);
+  for(const f of await vcIdbGetAll())await vcIdbDelete(f.id);   // 메모리가 아니라 IDB 기준으로 비운다 (아직 로드 전이어도 중복이 안 생기게)
   vcFiles=[];
   for(const f of arr){
     if(!f)continue;
@@ -20062,7 +20191,13 @@ async function vcRestoreSync(arr,prods){
     rec.id=await vcIdbAdd(rec);vcFiles.push(rec);
     if(window.wmLoadRowTick)wmLoadRowTick((data&&data.length)||1);
   }
-  if(prods&&typeof prods==='object'&&!Array.isArray(prods)){vcProducts=prods;vcMigrateLabels();await vcMetaPut('products',vcProducts);}
+  if(prods&&typeof prods==='object'&&!Array.isArray(prods)){
+    vcProducts=prods;
+    // 표시명 규칙 정규화는 규칙 버전이 오를 때 한 번만 — 매 복원마다 돌리면 손으로 고친 표시명이 기본값으로 되돌아갔다
+    const rv=await vcMetaGet('labelRuleVer');
+    if(((rv&&rv.v)||1)<VC_LABEL_RULE_VER){vcMigrateLabels();await vcMetaPut('labelRuleVer',VC_LABEL_RULE_VER);}
+    await vcMetaPut('products',vcProducts);
+  }
   vcLoaded=true;vcResult=null;
   vcUpdateStatusDots();vcUpdateUploadStatus();vcUpdateHeader();
   if(typeof currentPage!=='undefined'&&currentPage==='via-cancel')vcOnShow();
@@ -21351,7 +21486,7 @@ async function vcOnShow(){
   const b=document.getElementById('vcBtnGenerate');
   if(b)b.addEventListener('click',()=>{vcGenerate();vcCloseModal();});
 })();
-(async function vcInit(){try{await vcLoadFiles();}catch(e){console.error('Via 취소율 초기화:',e);}})();
+// (Via 로컬 데이터는 로그인 후 applyAuth 로더가 권한 있을 때만 읽는다 — 예전엔 여기서 한 번 더 읽어 두 번 로드됐다)
 </script>
 </body>
 </html>
