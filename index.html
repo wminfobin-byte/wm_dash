@@ -686,6 +686,20 @@ tr.row-h td{background:var(--gh-light)}
 .pv-btn.pv-dark:hover{background:#1e293b}
 .pv-btn.pv-green{background:#047857;border-color:#047857;color:#fff}
 .pv-btn.pv-green:hover{background:#065f46}
+.pv-gen{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--pv-line);font-size:12.5px;color:var(--pv-sub)}
+.pv-gen .pv-gen-btn{background:#4361ee;border-color:#4361ee;color:#fff;padding:9px 22px;font-size:13.5px}
+.pv-gen .pv-gen-btn:hover{background:#3651d4}
+.pv-gen .pv-gen-btn:disabled{opacity:.6;cursor:wait}
+.pv-gen.pv-gen-on{color:#b45309;font-weight:600}
+.pv-gen.pv-gen-on .pv-gen-btn{box-shadow:0 0 0 3px rgba(67,97,238,.25);animation:pvGenPulse 1.4s ease-in-out infinite}
+@keyframes pvGenPulse{50%{box-shadow:0 0 0 6px rgba(67,97,238,.12)}}
+.pv-stale #pvTable,.pv-stale #pvBA,.pv-stale #pvChartBox{opacity:.4;pointer-events:none;filter:grayscale(.5)}
+.pv-chart-wrap{max-width:1100px;margin-bottom:14px}
+.pv-chart-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--pv-sub)}
+.pv-chart-ctl .pv-select{padding:4px 8px;font-size:12px}
+.pv-chart-lb{font-weight:600;color:#475569}
+.pv-chart-note{margin-left:auto;font-size:11.5px;color:var(--pv-sub)}
+.pv-chart-cv{position:relative;width:100%}
 .pv-input,.pv-select{height:34px;padding:0 10px;border:1px solid var(--pv-line);border-radius:9px;background:#fff;font-family:inherit;font-size:13px;color:var(--pv-ink);outline:none;transition:.15s}
 .pv-input:focus,.pv-select:focus{border-color:var(--pv-acc);box-shadow:0 0 0 3px rgba(67,97,238,.12)}
 .pv-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -2579,6 +2593,7 @@ tr.vc-left:hover{opacity:.75}
             <div class="pv-zone" id="pvZone-vals" data-zone="vals"></div>
           </div>
         </div>
+        <div class="pv-gen" id="pvGenBar"><span id="pvGenMsg">조건을 고른 뒤 「표 만들기」를 누르세요 (Ctrl+Enter)</span><button class="pv-btn pv-gen-btn" id="pvGenBtn" onclick="pvGenerate()">표 만들기</button></div>
       </div>
       <div id="pvWarn" class="pv-warn hidden"></div>
       <div class="pv-card" id="pvCapSec" style="margin-top:14px">
@@ -2594,6 +2609,7 @@ tr.vc-left:hover{opacity:.75}
         </div>
         <div class="pv-title" id="pvTitle" contenteditable="true" spellcheck="false" data-ph="제목 입력 (캡쳐·엑셀에 들어갑니다)"></div>
         <div class="pv-cond pv-nocap" id="pvCond"></div>
+        <div id="pvChartBox"></div>
         <div class="pv-scroll" id="pvTable"></div>
       </div>
       <div class="pv-card" id="pvBASec" style="margin-top:14px">
@@ -15914,7 +15930,32 @@ function pvPlace(k,zone,at){
   const arr=pvCfg[zone];if(at==null||at>arr.length)arr.push(k);else arr.splice(at,0,k);
   pvAfterChange();
 }
-function pvAfterChange(){pvSort=null;pvForce=false;pvRenderZones();pvRender();}
+function pvAfterChange(){pvSort=null;pvForce=false;pvRenderZones();pvMarkDirty();}
+// 조건을 바꾸면 표를 바로 다시 그리지 않고 「표 만들기」를 기다린다 (조건 하나 바꿀 때마다 집계가 돌아 느렸음)
+let pvDirty=false;
+function pvMarkDirty(){
+  pvDirty=true;
+  document.getElementById('pvGenBar').classList.add('pv-gen-on');
+  document.getElementById('pvGenMsg').textContent='조건이 바뀌었습니다 — 「표 만들기」를 누르면 반영됩니다';
+  for(const id of ['pvCapSec','pvBASec'])document.getElementById(id).classList.add('pv-stale');
+}
+function pvClearDirty(){
+  pvDirty=false;
+  const bar=document.getElementById('pvGenBar');if(!bar)return;
+  bar.classList.remove('pv-gen-on');
+  document.getElementById('pvGenMsg').textContent='조건을 고른 뒤 「표 만들기」를 누르세요 (Ctrl+Enter)';
+  for(const id of ['pvCapSec','pvBASec'])document.getElementById(id).classList.remove('pv-stale');
+}
+function pvGenerate(){
+  if(!pvModel||!pvCfg)return;
+  const btn=document.getElementById('pvGenBtn');btn.disabled=true;btn.textContent='만드는 중…';
+  setTimeout(()=>{try{pvRender();}finally{btn.disabled=false;btn.textContent='표 만들기';}},30);   // 버튼 글자가 먼저 그려지게
+}
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.key!=='Enter')return;
+  const pg=document.getElementById('page-pivot');if(!pg||pg.offsetParent===null)return;
+  e.preventDefault();pvGenerate();
+});
 
 // ═══ 화면 ═══
 async function pvOnShow(){
@@ -16004,10 +16045,10 @@ function pvRenderZones(){
 }
 function pvSetRange(q){pvApplyRange(pvCfg,{q});pvAfterChange();}
 function pvSetDates(){const s=document.getElementById('pvStart').value,e=document.getElementById('pvEnd').value;if(!s||!e)return;pvCfg.q=null;pvCfg.s=s<=e?s:e;pvCfg.e=s<=e?e:s;pvAfterChange();}
-function pvSetHeat(on){pvHeat=on;pvRender(true);}
+function pvSetHeat(on){pvHeat=on;if(!pvDirty)pvRender(true);}
 function pvSetBasis(b){pvCfg.basis=b;pvAfterChange();}
 function pvSetH(h){pvCfg.H=+h;pvAfterChange();}
-function pvUsePreset(i){pvCfg=pvCfgFromSaved(PV_PRESETS[i].c);pvCollapsed.clear();pvAfterChange();}
+function pvUsePreset(i){pvCfg=pvCfgFromSaved(PV_PRESETS[i].c);pvCollapsed.clear();pvAfterChange();pvGenerate();}   // 완성된 구성이라 바로 그림
 
 // ── 필터 팝업 ──
 let pvPopDim=null;
@@ -16058,7 +16099,7 @@ function pvPopOnly(){   // 검색 결과만 선택
   pvCfg.fsel[k]=new Set(vis);pvRenderPopList();pvFilterChanged();
 }
 let pvFT=null;
-function pvFilterChanged(){pvForce=false;clearTimeout(pvFT);pvFT=setTimeout(()=>{pvRenderZones();pvRender();},150);}
+function pvFilterChanged(){pvForce=false;clearTimeout(pvFT);pvFT=setTimeout(()=>{pvRenderZones();pvMarkDirty();},150);}
 
 // ── 조건 문장 ──
 function pvFilterTxt(k){
@@ -16127,7 +16168,7 @@ function pvBuildGrid(agg,cfg){
   const accOf=pvAccFn(agg,cfg.rows,cfg.cols);
   const colDefs=[];   // 각 데이터 열 = (leaf | 총계) × 값
   for(const v of vals)colDefs.push({ck:'__T',v,tot:1});   // 총계 열은 맨 왼쪽 (열 차원이 없으면 총계 열만)
-  if(hasCols)for(const lf of leaves)for(const v of vals)colDefs.push({ck:lf.key,v});
+  if(hasCols)for(const lf of leaves)for(const v of vals)colDefs.push({ck:lf.key,v,codes:lf.codes});
   // 머리 행
   const head=[];const nH=(hasCols?cfg.cols.length:0)+1;
   const rowHdr=cfg.rows.length?cfg.rows.map(k=>PV_DIM[k].l).join(' > '):'구분';
@@ -16159,7 +16200,7 @@ function pvBuildGrid(agg,cfg){
       const p=path+'/'+kid.code;const hasKids=kid.kids.size>0;const col=pvCollapsed.has(p);
       const lab=pvDimLabelHtml(kid.dim,kid.code);
       const kc=codes.concat(kid.code);
-      body.push({lab:lab.t,labCls:lab.cls,level,kind:hasKids?'sub':'leaf',path:p,hasKids,collapsed:col,cells:cellsOf(kid,kc)});
+      body.push({lab:lab.t,labCls:lab.cls,level,kind:hasKids?'sub':'leaf',path:p,hasKids,collapsed:col,cells:cellsOf(kid,kc),dim:kid.dim,code:kid.code});
       if(hasKids&&!col)walk(kid,level+1,p,kc);
     }
   };
@@ -16204,6 +16245,8 @@ function pvExpandAll(open){
 let pvLastAgg=null;
 function pvRender(keepAgg){
   if(!pvModel||!pvCfg)return;
+  if(keepAgg&&pvDirty)return;   // 바뀐 조건 + 옛 집계가 섞이지 않게 (정렬·접기·색 농도는 표 만들기 후에)
+  if(!keepAgg)pvClearDirty();
   const t0=performance.now();
   document.getElementById('pvCond').textContent=pvCondTxt();
   // 경고
@@ -16217,10 +16260,11 @@ function pvRender(keepAgg){
   if(pvCfg.e>M.maxIso)warns.push(`데이터는 ${M.maxIso}까지 있습니다.`);
   const wb=document.getElementById('pvWarn');wb.innerHTML=warns.map(w=>'⚠ '+pdEsc(w)).join('<br>');wb.classList.toggle('hidden',!warns.length);
   const box=document.getElementById('pvTable');
-  if(!pvCfg.vals.length){box.innerHTML='<div class="pv-empty-msg">「값」 칸에 보고 싶은 지표를 넣으세요 (예: DB수, 계약수, 계약률)</div>';pvGridMain=null;pvRenderBA();return;}
+  if(!pvCfg.vals.length){box.innerHTML='<div class="pv-empty-msg">「값」 칸에 보고 싶은 지표를 넣으세요 (예: DB수, 계약수, 계약률)</div>';pvGridMain=null;pvRenderChart(null);pvRenderBA();return;}
   const agg=keepAgg&&pvLastAgg?pvLastAgg:pvAggregate(pvCfg);pvLastAgg=agg;
   const G=pvBuildGrid(agg,pvCfg);
   const cells=G.body.length*G.nLeafCols;
+  pvRenderChart(G);   // 그래프는 첫 행 항목만 쓰므로 표가 커도 그린다
   if(cells>20000&&!pvForce){
     box.innerHTML=`<div class="pv-big">표가 너무 큽니다 — 행 ${G.body.length.toLocaleString()}줄 × 열 ${G.nLeafCols.toLocaleString()}칸 = ${cells.toLocaleString()}칸. 그리면 느려질 수 있습니다.<br>기간을 줄이거나 필터로 범위를 좁히는 것을 권합니다. <button class="sp-btn" onclick="pvForce=true;pvRender(true)">그래도 그리기</button></div>`;
     pvGridMain=null;pvRenderBA();return;
@@ -16237,9 +16281,160 @@ document.addEventListener('click',e=>{
   pvRender(true);
 });
 
+// ═══ 그래프 ═══
+// 표 위 그래프: 첫 행 항목(행이 없으면 열 항목) 기준.
+//  날짜·순서가 있는 항목(일자·주차·월·요일·계열·연령대…) → 세로 막대 + 선(보조 지표, 오른쪽 축)
+//  센터·코디·패키지처럼 순서 없는 항목 → 값 큰 순서 가로 막대 + 전체값 기준선(비율·평균 지표)
+const PV_PAL=['#4361ee','#f0920e','#2ec4b6','#d1182b','#7c3aed','#0ea5e9','#64748b','#16a34a'];
+const PV_SEQ_DIMS=new Set(['day','week','month','wd','se','ml','ag','lagb','dbk','emp','ty']);
+let pvChartOpt={on:true,top:'t15'},pvChartSel={m1:null,m2:null},pvBAChartSel={m:null,top:'15'},pvChartM=null,pvChartB=null,pvGridChart=null;
+try{const o=JSON.parse(localStorage.getItem('pv_chart_opt')||'null');if(o)Object.assign(pvChartOpt,o);}catch(_){}
+function pvSetChartOpt(k,v){
+  if(k==='m1'||k==='m2')pvChartSel[k]=v;else{pvChartOpt[k]=v;try{localStorage.setItem('pv_chart_opt',JSON.stringify(pvChartOpt));}catch(_){}}
+  if(!pvDirty)pvRenderChart(pvGridChart);
+}
+function pvSetBAChart(k,v){pvBAChartSel[k]=v;if(!pvDirty&&pvGridBA)pvRenderBAChart(pvGridBA);}
+const pvFont=()=>getComputedStyle(document.body).fontFamily||'sans-serif';
+function pvTick(fmt,delta){return v=>{if(fmt==='p')return (v*100).toFixed(Math.abs(v)<0.1?1:0)+(delta?'%p':'%');if(fmt==='d1'||fmt==='d2')return (+v).toFixed(1);return Math.round(v).toLocaleString();};}
+function pvFmtD(v,fmt){if(v==null||!isFinite(v))return '-';const sg=v>0?'+':v<0?'−':'';return fmt==='p'?sg+Math.abs(v*100).toFixed(2)+'%p':sg+pvFmt(Math.abs(v),fmt);}
+// 막대 끝 값 표시 + 기준선 (이 탭 그래프에만 쓰는 Chart.js 플러그인)
+const pvChartPlugin={id:'pvLab',afterDatasetsDraw(ch,_a,o){
+  if(!o)return;const ctx=ch.ctx,a=ch.chartArea,ff=pvFont();ctx.save();
+  if(o.ref&&o.ref.v!=null&&isFinite(o.ref.v)){
+    const x=ch.scales.x.getPixelForValue(o.ref.v);
+    if(x>=a.left&&x<=a.right){
+      ctx.strokeStyle='#d1182b';ctx.setLineDash([5,4]);ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x,a.top);ctx.lineTo(x,a.bottom);ctx.stroke();ctx.setLineDash([]);
+      const rt=x>a.right-120;ctx.fillStyle='#d1182b';ctx.font='700 11px '+ff;ctx.textBaseline='bottom';ctx.textAlign=rt?'right':'left';ctx.fillText(o.ref.label,x+(rt?-4:4),a.top-3);
+    }
+  }
+  if(o.labels){
+    ctx.font='600 10.5px '+ff;ctx.textBaseline='middle';
+    ch.data.datasets.forEach((ds,di)=>{const meta=ch.getDatasetMeta(di);if(meta.hidden||meta.type!=='bar')return;
+      meta.data.forEach((el,i)=>{const v=ds.data[i];if(v==null||!isFinite(v))return;const neg=v<0;
+        ctx.fillStyle=o.delta?(v>0?'#059669':v<0?'#dc2626':'#94a3b8'):'#334155';ctx.textAlign=neg?'right':'left';
+        ctx.fillText(o.delta?pvFmtD(v,ds.fmt):pvFmt(v,ds.fmt),el.x+(neg?-5:5),el.y);});});
+  }
+  ctx.restore();
+}};
+function pvChartBase(){return {responsive:true,maintainAspectRatio:false,animation:false,
+  plugins:{legend:{position:'top',align:'end',labels:{boxWidth:10,boxHeight:10,font:{size:11.5,family:pvFont()}}},
+    tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.dataset.delta?pvFmtD(c.raw,c.dataset.fmt):pvFmt(c.raw,c.dataset.fmt)}`}}}};}
+function pvTopOpts(cur,list){return list.map(([v,l])=>`<option value="${v}"${cur===v?' selected':''}>${l}</option>`).join('');}
+function pvRenderChart(G){
+  pvGridChart=G;
+  if(pvChartM){pvChartM.destroy();pvChartM=null;}
+  const box=document.getElementById('pvChartBox');if(!box)return;
+  if(!G||typeof Chart==='undefined'){box.innerHTML='';return;}
+  const cfg=pvCfg,vals=G.vals,V=k=>PV_VAL[k];
+  const catDim=cfg.rows[0]||cfg.cols[0];
+  if(!catDim){box.innerHTML='';return;}
+  const has=k=>k&&vals.some(v=>v.k===k);
+  const seq=PV_SEQ_DIMS.has(catDim);
+  // 지표 기본값: 순서형 = 건수 막대 + 비율 선 / 순위형 = 비율(없으면 첫 값)
+  const firstRate=(vals.find(v=>v.fmt==='p')||{}).k,firstCnt=(vals.find(v=>v.fmt!=='p')||{}).k;
+  const m1=has(pvChartSel.m1)?pvChartSel.m1:(seq?(firstCnt||vals[0].k):(firstRate||vals[0].k));
+  const m2=pvChartSel.m2==='none'?'none':has(pvChartSel.m2)&&pvChartSel.m2!==m1?pvChartSel.m2:(seq&&V(m1).fmt!=='p'&&firstRate?firstRate:'none');
+  pvChartSel.m1=m1;
+  const tot=G.body[0];
+  const idxOf=(ck,k)=>G.colDefs.findIndex(c=>c.ck===ck&&c.v.k===k);
+  const totIdx=k=>G.colDefs.findIndex(c=>c.tot&&c.v.k===k);
+  const leafCks=[...new Set(G.colDefs.filter(c=>!c.tot).map(c=>c.ck))];
+  const leafLab=ck=>{const cd=G.colDefs.find(c=>c.ck===ck);return cd.codes.map((c,j)=>pvDimLabelHtml(cfg.cols[j],c).t).join(' · ');};
+  let items,leaves=[];const notes=[];
+  if(cfg.rows.length){
+    items=G.body.filter(r=>r.level===0).map(r=>({lab:r.lab,code:r.code,get:k=>r.cells[totIdx(k)].v,leaf:(ck,k)=>{const i=idxOf(ck,k);return i<0?null:r.cells[i].v;}}));
+    if(cfg.cols.length){leaves=leafCks.slice(0,seq?8:6).map(ck=>({ck,lab:leafLab(ck)}));if(leafCks.length>leaves.length)notes.push(`열 항목이 많아 앞 ${leaves.length}개만 그립니다`);}
+    if(cfg.rows.length>1)notes.push(`첫 행 항목(${PV_DIM[catDim].l}) 기준`);
+  }else{
+    items=leafCks.map(ck=>({lab:leafLab(ck),get:k=>{const i=idxOf(ck,k);return i<0?null:tot.cells[i].v;}}));
+  }
+  if(seq&&cfg.rows.length)items.sort((a,b)=>pvCmpCodes(catDim,a.code,b.code));
+  const valOpts=cur=>vals.map(v=>`<option value="${v.k}"${cur===v.k?' selected':''}>${pdEsc(v.l)}</option>`).join('');
+  let ctl=`<label class="pv-switch"><input type="checkbox" ${pvChartOpt.on?'checked':''} onchange="pvSetChartOpt('on',this.checked)"> 그래프</label>`;
+  if(!pvChartOpt.on){box.innerHTML=`<div class="pv-chart-wrap"><div class="pv-chart-ctl pv-nocap">${ctl}</div></div>`;return;}
+  const combo=seq&&!leaves.length;
+  ctl+=`<span class="pv-chart-lb">${combo?'막대':'지표'}</span><select class="pv-select" onchange="pvSetChartOpt('m1',this.value)">${valOpts(m1)}</select>`;
+  if(combo)ctl+=`<span class="pv-chart-lb">선 (오른쪽 축)</span><select class="pv-select" onchange="pvSetChartOpt('m2',this.value)"><option value="none">없음</option>${valOpts(m2)}</select>`;
+  if(!seq)ctl+=`<select class="pv-select" onchange="pvSetChartOpt('top',this.value)">${pvTopOpts(pvChartOpt.top,[['t10','상위 10'],['t15','상위 15'],['t30','상위 30'],['b10','하위 10'],['all','전체']])}</select>`;
+  const V1=V(m1),V2=m2!=='none'?V(m2):null;
+  let cfgC,h;
+  if(seq){
+    const n=items.length;let ds;
+    if(leaves.length){
+      ds=leaves.map((lf,i)=>({type:'line',label:lf.lab,data:items.map(it=>it.leaf(lf.ck,m1)),borderColor:PV_PAL[i%8],backgroundColor:PV_PAL[i%8],borderWidth:2,tension:.25,pointRadius:n>40?0:2.5,fmt:V1.fmt,spanGaps:true}));
+    }else{
+      const rate1=V1.fmt==='p';
+      ds=[{type:rate1?'line':'bar',label:V1.l,data:items.map(i=>i.get(m1)),backgroundColor:rate1?'#4361ee':'rgba(67,97,238,.72)',borderColor:'#4361ee',borderWidth:rate1?2:0,borderRadius:3,maxBarThickness:42,tension:.25,pointRadius:n>40?0:2.5,yAxisID:'y',order:2,fmt:V1.fmt}];
+      if(V2)ds.push({type:'line',label:V2.l,data:items.map(i=>i.get(m2)),borderColor:'#f0920e',backgroundColor:'#f0920e',borderWidth:2.2,tension:.25,pointRadius:n>40?0:3,yAxisID:'y2',order:1,fmt:V2.fmt,spanGaps:true});
+    }
+    const o=pvChartBase();
+    o.scales={x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,font:{size:11}}},y:{beginAtZero:true,grid:{color:'#eef1f5'},ticks:{callback:pvTick(V1.fmt),font:{size:11}}}};
+    if(V2&&combo)o.scales.y2={position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{callback:pvTick(V2.fmt),font:{size:11}}};
+    o.interaction={mode:'index',intersect:false};
+    cfgC={type:'bar',data:{labels:items.map(i=>i.lab),datasets:ds},options:o};h=300;
+  }else{
+    let arr=items.filter(i=>{const v=i.get(m1);return v!=null&&isFinite(v);}).sort((a,b)=>b.get(m1)-a.get(m1));
+    const all=arr.length,t=pvChartOpt.top;
+    if(t!=='all'){const N=+t.slice(1);if(all>N){arr=t[0]==='b'?arr.slice(-N):arr.slice(0,N);notes.push(`${t[0]==='b'?'하위':'상위'} ${N}개 / 전체 ${all}개`);}}
+    const ds=leaves.length
+      ?leaves.map((lf,i)=>({type:'bar',label:lf.lab,data:arr.map(it=>it.leaf(lf.ck,m1)),backgroundColor:PV_PAL[i%8],borderRadius:3,fmt:V1.fmt}))
+      :[{type:'bar',label:V1.l,data:arr.map(i=>i.get(m1)),backgroundColor:'rgba(67,97,238,.78)',borderRadius:3,maxBarThickness:22,fmt:V1.fmt}];
+    const refV=V1.fmt!=='n'&&cfg.rows.length?tot.cells[totIdx(m1)].v:null;   // 건수 합계는 기준선 의미가 없어 비율·평균 지표만
+    const o=pvChartBase();
+    o.indexAxis='y';o.layout={padding:{right:70,top:refV!=null?18:0}};
+    o.plugins.legend.display=leaves.length>0;
+    o.plugins.pvLab={labels:!leaves.length,ref:refV!=null?{v:refV,label:'전체 '+pvFmt(refV,V1.fmt)}:null};
+    o.scales={x:{beginAtZero:true,grid:{color:'#eef1f5'},ticks:{callback:pvTick(V1.fmt),font:{size:11}}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11.5}}}};
+    cfgC={type:'bar',data:{labels:arr.map(i=>i.lab),datasets:ds},options:o,plugins:[pvChartPlugin]};
+    h=Math.max(150,arr.length*(leaves.length?Math.min(14*leaves.length+10,60):26)+(leaves.length?90:60));
+  }
+  const noteHtml=notes.length?`<span class="pv-chart-note">${pdEsc(notes.join(' · '))}</span>`:'';
+  box.innerHTML=`<div class="pv-chart-wrap"><div class="pv-chart-ctl pv-nocap">${ctl}${noteHtml}</div><div class="pv-chart-cv" style="height:${h}px"><canvas id="pvChartCv"></canvas></div></div>`;
+  pvChartM=new Chart(document.getElementById('pvChartCv'),cfgC);
+}
+// 전후 비교 그래프: 항목별 증감 막대 (늘어남 = 초록·오른쪽 / 줄어듦 = 빨강·왼쪽). 행이 없으면 전·후 두 막대.
+function pvRenderBAChart(G){
+  if(pvChartB){pvChartB.destroy();pvChartB=null;}
+  const box=document.getElementById('pvBAChartBox');if(!box||!G||typeof Chart==='undefined')return;
+  const vals=G.vals;
+  const m=vals.some(v=>v.k===pvBAChartSel.m)?pvBAChartSel.m:((vals.find(v=>v.fmt==='p')||vals[0]).k);pvBAChartSel.m=m;
+  const V=PV_VAL[m];
+  const ci=ck=>G.colDefs.findIndex(c=>c.ck===ck&&c.v.k===m);
+  const iD=ci('D'),iB=ci('B'),iA=ci('A');
+  const rows=G.body.filter(r=>r.level===0);
+  let ctl=`<span class="pv-chart-lb">그래프 지표</span><select class="pv-select" onchange="pvSetBAChart('m',this.value)">${vals.map(v=>`<option value="${v.k}"${m===v.k?' selected':''}>${pdEsc(v.l)}</option>`).join('')}</select>`;
+  let cfgC,h,note='';
+  if(!rows.length){
+    const t=G.body[0];
+    const o=pvChartBase();o.plugins.legend.display=false;o.layout={padding:{top:24}};
+    o.scales={x:{grid:{display:false},ticks:{font:{size:12,weight:'600'}}},y:{beginAtZero:true,grid:{color:'#eef1f5'},ticks:{callback:pvTick(V.fmt),font:{size:11}}}};
+    const topLab={id:'pvLabTop',afterDatasetsDraw(ch){const ctx=ch.ctx;ctx.save();ctx.font='700 12px '+pvFont();ctx.fillStyle='#334155';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ch.getDatasetMeta(0).data.forEach((el,i)=>{const v=ch.data.datasets[0].data[i];if(v!=null&&isFinite(v))ctx.fillText(pvFmt(v,V.fmt),el.x,el.y-4);});
+      const d=t.cells[iD].v;if(d!=null&&isFinite(d)){ctx.fillStyle=d>0?'#059669':d<0?'#dc2626':'#64748b';ctx.textAlign='right';ctx.fillText('증감 '+pvFmtD(d,V.fmt),ch.chartArea.right,ch.chartArea.top-8);}
+      ctx.restore();}};
+    cfgC={type:'bar',data:{labels:['전','후'],datasets:[{label:V.l,data:[t.cells[iB].v,t.cells[iA].v],backgroundColor:['#94a3b8','#4361ee'],borderRadius:4,maxBarThickness:90,fmt:V.fmt}]},options:o,plugins:[topLab]};
+    h=240;
+  }else{
+    ctl+=`<select class="pv-select" onchange="pvSetBAChart('top',this.value)">${pvTopOpts(pvBAChartSel.top,[['15','증감 큰 15개'],['30','증감 큰 30개'],['all','전체']])}</select>`;
+    let arr=rows.map(r=>({lab:r.lab,d:r.cells[iD].v})).filter(x=>x.d!=null&&isFinite(x.d));
+    const all=arr.length;
+    if(pvBAChartSel.top!=='all'&&all>+pvBAChartSel.top){arr=arr.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,+pvBAChartSel.top);note=`증감 큰 ${arr.length}개 / 전체 ${all}개 · `;}
+    arr.sort((a,b)=>b.d-a.d);
+    note+=`늘어남 ${arr.filter(x=>x.d>0).length} · 줄어듦 ${arr.filter(x=>x.d<0).length}`;
+    const o=pvChartBase();o.indexAxis='y';o.plugins.legend.display=false;o.layout={padding:{left:60,right:70}};
+    o.plugins.pvLab={labels:true,delta:true};
+    o.scales={x:{grid:{color:c=>c.tick&&c.tick.value===0?'#94a3b8':'#eef1f5'},ticks:{callback:pvTick(V.fmt,true),font:{size:11}}},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11.5}}}};
+    cfgC={type:'bar',data:{labels:arr.map(x=>x.lab),datasets:[{label:V.l+' 증감',data:arr.map(x=>x.d),backgroundColor:arr.map(x=>x.d>0?'rgba(5,150,105,.8)':x.d<0?'rgba(220,38,38,.8)':'#cbd5e1'),borderRadius:3,maxBarThickness:22,fmt:V.fmt,delta:1}]},options:o,plugins:[pvChartPlugin]};
+    h=Math.max(150,arr.length*26+60);
+  }
+  box.innerHTML=`<div class="pv-chart-wrap"><div class="pv-chart-ctl pv-nocap">${ctl}${note?`<span class="pv-chart-note">${pdEsc(note)}</span>`:''}</div><div class="pv-chart-cv" style="height:${h}px"><canvas id="pvBAChartCv"></canvas></div></div>`;
+  pvChartB=new Chart(document.getElementById('pvBAChartCv'),cfgC);
+}
+
 // ═══ 전후 비교 ═══
-function pvSetBA(k,v){pvBA[k]=v;pvRenderBA();}
+function pvSetBA(k,v){pvBA[k]=v;if(!pvDirty)pvRenderBA();}
 function pvRenderBA(){
+  if(pvChartB){pvChartB.destroy();pvChartB=null;}
   const box=document.getElementById('pvBA');if(!box||!pvCfg)return;
   const ctl=`<div class="pv-ba-ctl pv-nocap"><label>기준일</label><input type="date" class="pv-input" value="${pvBA.cut}" onchange="pvSetBA('cut',this.value)">
     <div class="pv-seg"><button class="${pvBA.mode==='split'?'active':''}" onclick="pvSetBA('mode','split')">조회기간을 기준일로 나눔</button><button class="${pvBA.mode==='same'?'active':''}" onclick="pvSetBA('mode','same')">같은 일수로 비교</button></div>
@@ -16268,7 +16463,7 @@ function pvRenderBA(){
   const body=[{lab:'총계',level:-1,kind:'total',cells:cellsOf(agg.root,[])}];
   const walk=(node,level,path,codes)=>{const kids=[...node.kids.values()].filter(k=>!pvHideKid(k)).sort((a,b)=>pvCmpCodes(a.dim,a.code,b.code));
     for(const kid of kids){const p=path+'/'+kid.code;const lab=pvDimLabelHtml(kid.dim,kid.code);const col=pvCollapsed.has(p);const kc=codes.concat(kid.code);
-      body.push({lab:lab.t,labCls:lab.cls,level,kind:kid.kids.size?'sub':'leaf',path:p,hasKids:kid.kids.size>0,collapsed:col,cells:cellsOf(kid,kc)});
+      body.push({lab:lab.t,labCls:lab.cls,level,kind:kid.kids.size?'sub':'leaf',path:p,hasKids:kid.kids.size>0,collapsed:col,cells:cellsOf(kid,kc),dim:kid.dim,code:kid.code});
       if(kid.kids.size&&!col)walk(kid,level+1,p,kc);}};
   walk(agg.root,0,'',[]);
   const G={head,body,colDefs,vals,nLeafCols:colDefs.length,flat:baRows.length<=1,ba:{bs,be,as,ae}};pvGridBA=G;
@@ -16288,7 +16483,8 @@ function pvRenderBA(){
       }else{t=pvFmt(c.v,c.fmt);if(t==='0'||t==='0.00%'||t==='-'||t==='0.0'||t==='0.00')cls+=' pv-zero';}
       return `<td class="${cls}">${t}</td>`;}).join('')+'</tr>';
   }).join('')+'</tbody></table>';
-  box.innerHTML=ctl+`<div class="pv-cond pv-nocap">${pdEsc(pvCondTxt())} · 기준일 ${pvBA.cut} (${pvBA.mode==='split'?'조회기간 분할':'같은 일수'})</div><div class="pv-scroll">${html}</div>`;
+  box.innerHTML=ctl+`<div class="pv-cond pv-nocap">${pdEsc(pvCondTxt())} · 기준일 ${pvBA.cut} (${pvBA.mode==='split'?'조회기간 분할':'같은 일수'})</div><div id="pvBAChartBox"></div><div class="pv-scroll">${html}</div>`;
+  pvRenderBAChart(G);
   const info=document.getElementById('pvBAInfo');
   const notes=[];if(baRows.length<pvCfg.rows.length)notes.push('일자·주차·월 행은 전후 비교에서 뺐습니다');
   if(pvBA.mode==='split'&&days(bs,be)!==days(as,ae))notes.push('전·후 일수가 달라 건수는 그대로 비교하기 어렵습니다 (비율로 보세요)');
@@ -16309,7 +16505,7 @@ function pvSaveView(){
   if(i>=0){if(!confirm(`「${name}」이 이미 있습니다. 덮어쓸까요?`))return;vs[i]=rec;}else vs.push(rec);
   localStorage.setItem(PV_LS,JSON.stringify(vs));wmSyncMarkDirty();pvRenderViews();pvToast(`「${name}」 저장됨 — 동기화하면 다른 PC에서도 보입니다`);
 }
-function pvLoadView(){const i=document.getElementById('pvViewSel').value;if(i==='')return;const v=pvViews()[+i];if(!v)return;pvCfg=pvCfgFromSaved(v.c);if(v.c.title!=null)pvSetTitle('pvTitle',v.c.title);if(v.c.baTitle!=null)pvSetTitle('pvBATitle',v.c.baTitle);pvCollapsed.clear();pvAfterChange();}
+function pvLoadView(){const i=document.getElementById('pvViewSel').value;if(i==='')return;const v=pvViews()[+i];if(!v)return;pvCfg=pvCfgFromSaved(v.c);if(v.c.title!=null)pvSetTitle('pvTitle',v.c.title);if(v.c.baTitle!=null)pvSetTitle('pvBATitle',v.c.baTitle);pvCollapsed.clear();pvAfterChange();pvGenerate();}
 function pvDeleteView(){
   const i=document.getElementById('pvViewSel').value;if(i===''){pvToast('삭제할 보기를 먼저 고르세요');return;}
   const vs=pvViews();const v=vs[+i];if(!v||!confirm(`「${v.n}」 보기를 삭제할까요?`))return;
@@ -16318,6 +16514,7 @@ function pvDeleteView(){
 
 // ═══ 내보내기 ═══
 async function pvCapture(secId,btn){
+  if(pvDirty){pvToast('조건이 바뀌었습니다 — 먼저 「표 만들기」를 누르세요');return;}
   const sec=document.getElementById(secId);if(!sec)return;
   if(typeof html2canvas==='undefined'){alert('html2canvas가 로드되지 않았습니다.');return;}
   const tbl=sec.querySelector('table');if(!tbl){alert('캡쳐할 표가 없습니다.');return;}
@@ -16325,7 +16522,8 @@ async function pvCapture(secId,btn){
   const saved={w:sec.style.width,bs:sec.style.boxSizing,wr:wraps.map(w=>w.style.overflow)};
   const cs=getComputedStyle(sec),px=v=>parseFloat(v)||0;
   // 너비를 표 실제 폭으로 직접 지정 (max-content는 Chrome에서 거대한 값이 나와 빈 PNG가 됨 — 토익·JLPT 탭에서 확인)
-  const fullW=Math.ceil(Math.max(tbl.scrollWidth,tbl.offsetWidth)+px(cs.paddingLeft)+px(cs.paddingRight)+px(cs.borderLeftWidth)+px(cs.borderRightWidth));
+  const chW=[...sec.querySelectorAll('.pv-chart-cv')].reduce((m,el)=>Math.max(m,el.offsetWidth),0);   // 표가 좁아도 그래프가 줄어들지 않게
+  const fullW=Math.ceil(Math.max(tbl.scrollWidth,tbl.offsetWidth,chW)+px(cs.paddingLeft)+px(cs.paddingRight)+px(cs.borderLeftWidth)+px(cs.borderRightWidth));
   wraps.forEach(w=>w.style.overflow='visible');sec.style.boxSizing='border-box';sec.style.width=fullW+'px';
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
   const tEl=sec.querySelector('.pv-title'),tTxt=tEl?pvTitleOf(tEl.id):'';
@@ -16376,6 +16574,7 @@ function pvGridToSheet(G,title,cond){
   return ws;
 }
 async function pvDownloadExcel(){
+  if(pvDirty){pvToast('조건이 바뀌었습니다 — 먼저 「표 만들기」를 누르세요');return;}
   if(!pvGridMain){alert('먼저 표를 만드세요.');return;}
   const wb=XLSX.utils.book_new();
   const tMain=pvTitleOf('pvTitle'),tBA=pvTitleOf('pvBATitle');
