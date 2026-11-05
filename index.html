@@ -10555,6 +10555,26 @@ async function gdGenerate(dbFileId, opts={}){
       groups[name]=manualGroups[name];
     }
 
+    // 수동 순위 범위 (사용자 지정 2026-11-05): 누군가를 수동으로 A(B)로 올리면 그보다 순위
+    // (취소율반영계약률)가 높거나 같은 자동 B(C) 인원도 기본 A(B)로 본다. 예) 자동 A 1~11등에서
+    // 13등을 A로 수정 → 12등도 기본 A → 프로모션 1등은 14등 이하에서 뽑힘.
+    // 매 산정마다 처음부터 계산하므로 수정을 되돌리면 범위도 같이 돌아간다.
+    // 근태 강등·출근 1일 상한·정당사유·H탈출처럼 규칙으로 정해진 등급은 올리지 않는다.
+    const rangeLifted=new Set();
+    [['A','B'],['B','C']].forEach(([upper,lower])=>{
+      const manualUpper=[...manualSet].filter(n=>groups[n]===upper);
+      if(manualUpper.length===0) return;
+      const minRate=Math.min(...manualUpper.map(n=>stats[n].refAdjRate||0));
+      for(const name of members){
+        if(manualSet.has(name) || groups[name]!==lower) continue;
+        if(legitimateMembers.has(name) || escapedFromH[name] || protectedMembers.has(name)) continue;
+        if((periodAttend[name]?.penaltyCount||0)>=2) continue;
+        if(upper==='A' && periodAttend[name]?.totalDays===3 && periodAttend[name]?.workCount===1) continue;
+        if((stats[name].refAdjRate||0)>=minRate-1e-12){ groups[name]=upper; rangeLifted.add(name); }
+      }
+    });
+    if(rangeLifted.size>0) console.log('[수동 순위 범위] 기본 등급 상향:', [...rangeLifted].map(n=>`${n}→${groups[n]}`).join(', '));
+
     // 프로모션: B/C 1위 → 한 단계 위로 승급 (총계약수=실계약수 기준, 동률 시 취소반영계약률)
     // 제외: 신입보호자 / 정당사유 / H탈출자 / DB0 강제 / 근태이슈 ≥ 2  (수동은 포함)
     // localStorage GD_PROMO_KEY === '0' 이면 프로모션 OFF
@@ -10671,6 +10691,7 @@ async function gdGenerate(dbFileId, opts={}){
       totalDays:periodAttend[name]?.totalDays||0,
       isLongAbsent:(periodAttend[name]?.longAbsentCount||0)>0 && (periodAttend[name]?.longAbsentCount||0)===(periodAttend[name]?.totalDays||0),
       promoted:promotedSet.has(name),
+      rangeLifted:rangeLifted.has(name) && !promotedSet.has(name),
       db:s.db, contract:s.contract, contractRate:s.contractRate,
       cancelCount:s.cancelCount, refAdjContract:s.refAdjContract, refAdjRate:s.refAdjRate,
       streak:streaks[name]||0
@@ -10871,7 +10892,7 @@ function gdRenderTable(){
   const sheetName=gdResult.maxDistDate?fmtDateShort(gdResult.maxDistDate):null;
   const periodMeta={};
   if(sheetName && gdResult.savedRows){
-    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, workCount:r.workCount||0, totalDays:r.totalDays||0, isLongAbsent:!!r.isLongAbsent, promoted:!!r.promoted, manualGroup:!!r.manualGroup};
+    for(const r of gdResult.savedRows) periodMeta[r.name]={isLegitimate:!!r.isLegitimate, attendIssues:r.attendIssues||0, workCount:r.workCount||0, totalDays:r.totalDays||0, isLongAbsent:!!r.isLongAbsent, promoted:!!r.promoted, rangeLifted:!!r.rangeLifted, manualGroup:!!r.manualGroup};
   }
   let rows=Object.entries(gdResult.stats).map(([name,s])=>({
     name, group:gdResult.groups[name]||'C', streak:gdResult.streaks[name]||0,
@@ -10882,6 +10903,7 @@ function gdRenderTable(){
     totalDays:periodMeta[name]?.totalDays||0,
     isLongAbsent:periodMeta[name]?.isLongAbsent||false,
     promoted:periodMeta[name]?.promoted||false,
+    rangeLifted:periodMeta[name]?.rangeLifted||false,
     manualGroup:periodMeta[name]?.manualGroup||false,
     ...s
   }));
@@ -10957,6 +10979,7 @@ function gdRenderTable(){
         if(r.attendIssues>=2) ns.push('<span style="color:#dc3545;font-weight:700">근태이슈 강등</span>');
         if(r.totalDays===3 && r.workCount===1) ns.push('<span style="color:#92400e;font-weight:600">출근 1일 · B상한</span>');
         if(r.promoted) ns.push('<span style="color:#6d28d9;font-weight:700">실계약수 프로모션 1등</span>');
+        if(r.rangeLifted) ns.push('<span style="color:#7c3aed;font-weight:600">수동 범위 포함</span>');
         if(r.isProtected) ns.push('<span style="color:#0e7490;font-weight:700">신규입사자</span>');
         return ns.join(' <span style="color:#64748b;font-weight:500">/</span> ');
       })()}</td></tr>`;
@@ -11200,6 +11223,8 @@ async function gdApplyGroupEdit(){
       return;
     }
   }
+  // 바뀐 게 없어도 [적용] = 재산정 (프로모션 1등 포함)
+  if(gdResult.dbFileId){ await gdGenerate(gdResult.dbFileId); return; }
   gdRenderDashboard();
 }
 async function gdResetAllAuto(){
@@ -11519,6 +11544,7 @@ async function gdDownloadExcel(){
       if((r.attendIssues||0)>=2) ns.push('근태이슈 강등');
       if(r.totalDays===3 && r.workCount===1) ns.push('출근 1일 · B상한');
       if(r.promoted) ns.push('실계약수 프로모션 1등');
+      if(r.rangeLifted) ns.push('수동 범위 포함');
       if(r.isProtected) ns.push('신규입사자');
       return ns.join(' / ');
     };
