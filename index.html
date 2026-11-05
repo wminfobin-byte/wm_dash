@@ -10979,7 +10979,7 @@ function gdRenderTable(){
         if(r.attendIssues>=2) ns.push('<span style="color:#dc3545;font-weight:700">근태이슈 강등</span>');
         if(r.totalDays===3 && r.workCount===1) ns.push('<span style="color:#92400e;font-weight:600">출근 1일 · B상한</span>');
         if(r.promoted) ns.push('<span style="color:#6d28d9;font-weight:700">실계약수 프로모션 1등</span>');
-        if(r.rangeLifted) ns.push('<span style="color:#7c3aed;font-weight:600">수동 범위 포함</span>');
+        if(r.rangeLifted && gdGroupEditMode) ns.push('<span style="color:#7c3aed;font-weight:600">수동 범위 포함</span>');
         if(r.isProtected) ns.push('<span style="color:#0e7490;font-weight:700">신규입사자</span>');
         return ns.join(' <span style="color:#64748b;font-weight:500">/</span> ');
       })()}</td></tr>`;
@@ -11544,7 +11544,6 @@ async function gdDownloadExcel(){
       if((r.attendIssues||0)>=2) ns.push('근태이슈 강등');
       if(r.totalDays===3 && r.workCount===1) ns.push('출근 1일 · B상한');
       if(r.promoted) ns.push('실계약수 프로모션 1등');
-      if(r.rangeLifted) ns.push('수동 범위 포함');
       if(r.isProtected) ns.push('신규입사자');
       return ns.join(' / ');
     };
