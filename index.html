@@ -14105,7 +14105,7 @@ function srcParseDb(wb){
   const aoa=spReadAOA(wb);
   const mlI=(aoa[0]||[]).findIndex(v=>String(v).replace(/\s/g,'')==='ML계열');   // 2026-07-15 파일부터 있음
   const T=v=>String(v==null?'':v).trim();
-  const K=[],OB=[],AG=[],ST=[],PK=[],MG=[],MC=[],ML=[],P1=[],P2=[],P3=[],D=[],INF=[],SE=[],RCL=[],FL=[];
+  const K=[],OB=[],AG=[],ST=[],PK=[],MG=[],MC=[],ML=[],DI=[],P1=[],P2=[],P3=[],D=[],INF=[],SE=[],RCL=[],FL=[];
   const diHist={};let diN=0;
   for(let i=1;i<aoa.length;i++){
     const r=aoa[i];if(!r)continue;
@@ -14113,14 +14113,14 @@ function srcParseDb(wb){
     const media=T(r[19]),di=T(r[15]),ser=parseInt(T(r[2]),10);
     if(diHist[di]!==undefined)diHist[di]++;else if(diN<NC_DI_MAX){diHist[di]=1;diN++;}
     K.push(k);OB.push(T(r[7]));AG.push(T(r[11])||'00');ST.push(T(r[24]));
-    PK.push(T(r[20]));MG.push(T(r[18]));MC.push(media);ML.push(mlI<0?'':T(r[mlI]));
+    PK.push(T(r[20]));MG.push(T(r[18]));MC.push(media);ML.push(mlI<0?'':T(r[mlI]));DI.push(di);
     P1.push(phTok(tzNormPhone(r[12])));P2.push(phTok(tzNormPhone(r[13])));P3.push(phTok(tzNormPhone(r[14])));   // 원문 대신 대체값 (공개 싱크 레포에 번호가 안 올라가게)
     D.push(srcDayNum(spNormDay(r[8])));INF.push(srcDayNum(spNormDay(r[9])));
     SE.push(ser>=0&&ser<=5?ser:-1);RCL.push(ncRecallLevel(di));
     FL.push((media===''?1:0)|((media.includes('callback')||media.includes('tv_b'))?2:0));   // 1=IN(매체 빈값) 2=callback/tv_b
   }
   return {n:K.length,mlNone:mlI<0,diHist,phT:1,cols:{
-    k:K,ob:srcStrCol(OB),ag:srcStrCol(AG),st:srcStrCol(ST),pk:srcStrCol(PK),mg:srcStrCol(MG),mc:srcStrCol(MC),ml:srcStrCol(ML),
+    k:K,ob:srcStrCol(OB),ag:srcStrCol(AG),st:srcStrCol(ST),pk:srcStrCol(PK),mg:srcStrCol(MG),mc:srcStrCol(MC),ml:srcStrCol(ML),di:srcStrCol(DI),
     p1:P1,p2:P2,p3:P3,d:Int32Array.from(D),inf:Int32Array.from(INF),se:Int8Array.from(SE),rcl:Uint8Array.from(RCL),fl:Uint8Array.from(FL)}};
 }
 // CTI(걸은전화상세): tzParseCti 결과 → 열. valid는 원본 판정(연결 & 90초↑)을 그대로 보존
@@ -14141,7 +14141,10 @@ function srcMkRec(type,meta,parsed){
   rec.dmax=srcMaxDayOf(rec);
   return rec;
 }
-function srcStale(f){return (f.pv||0)<SRC_PARSER_VER||!!(f.miss&&f.miss.length);}
+function srcStaleCore(f){return (f.pv||0)<SRC_PARSER_VER||!!(f.miss&&f.miss.length);}   // 탭별 '옛 파일' 경고용
+// 다시 읽을지 판정: 위 + DB정보 원문(di, 2026-11-05 피벗 차원) 없이 저장된 db 파일.
+// di는 파서 버전을 올리지 않고 열 유무로 본다 — 버전을 올리면 다른 탭이 '옛 파일' 경고를 띄운다.
+function srcStale(f){return srcStaleCore(f)||(f.type==='db'&&!!f.cols&&!f.cols.di);}
 
 // ── 변경 알림: 공용 데이터가 바뀌면 이걸 쓰는 모든 탭의 계산 결과를 버린다 ──
 function srcTouched(){
@@ -15504,7 +15507,7 @@ function pdCompute(){
   const pkOf=r=>r.pk==null?'(미수집)':(r.pk||'(없음)'), mgOf=r=>r.mg==null?'(미수집)':(r.mg||'(없음)');
   // DB 반복은 공용 원본 열에서 직접 읽는다 (행 객체를 만들지 않음). 이관 때 패키지·매체그룹이 빠진 파일은 (미수집)
   for(const f of dbFiles){
-    if(srcStale(f))staleFiles++;
+    if(srcStaleCore(f))staleFiles++;
     const C=f.cols;if(!C)continue;
     const noPk=!!(f.miss&&f.miss.includes('pk'));
     const n=f.n,K=C.k,D=C.d,FL=C.fl,OB=C.ob,RC=C.rcl,SE=C.se,AG=C.ag,PK=C.pk,MG=C.mg;
@@ -15608,7 +15611,7 @@ async function pdCheckFolder(request){
     if(await spVerifyPerm(spDirHandle,true)){
       const stale=srcFiles.filter(f=>f.type==='db'&&srcStale(f)).length;
       const staleC=srcFiles.filter(f=>(f.type==='contDaily'||f.type==='contCum')&&srcStale(f)).length;
-      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 패키지·매체 포함으로 다시 읽습니다 (처음 한 번, 수 분 소요)`:staleC?`⏳ 공용폴더 확인 중 — 계약 파일 ${staleC}개를 분류코드 포함으로 다시 읽습니다 (처음 한 번)`:'⏳ 공용폴더 확인 중…',true);
+      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 다시 읽습니다 (처음 한 번, 수 분 소요)`:staleC?`⏳ 공용폴더 확인 중 — 계약 파일 ${staleC}개를 분류코드 포함으로 다시 읽습니다 (처음 한 번)`:'⏳ 공용폴더 확인 중…',true);
       const r=await spScanFolder({request:false,announce:false,fromShow:!request});
       if(r&&r.okCnt>0)pdModel=null;
       b.classList.add('hidden');
@@ -15637,6 +15640,7 @@ const PV_DIMS=[
   {k:'se',l:'DB 계열',ap:'b',tip:'고객관리 DB계열(C열, 0~5, 0=최상위). 계약은 고객키로 DB에 붙여서 가져옴'},
   {k:'ml',l:'ML 계열',ap:'b',tip:'고객관리 ML계열(머리글 ML계열, 0~6). 2026-07-15 이전 파일엔 없어 (ML 도입 전). 계약은 고객키로 DB에 붙여서'},
   {k:'ag',l:'연령대',ap:'b',tip:'DB 연령대(L열). 계약은 고객키로 DB에 붙여서 가져옴'},
+  {k:'di',l:'DB정보',ap:'b',tip:'고객관리 DB정보(P열) 원문 (예: 고객센터IN, (부재재콜)). 계약은 고객키로 DB에 붙여서 가져옴'},
   {k:'ty',l:'계약 유형',ap:'c',tip:'성과진단 일자 비교 판정: 군자 → IN(코드번호) → 재콜(코드번호) → 분배일=신청일이면 당일, 아니면 이전. 이 차원으로 나누면 DB수는 나누지 않고 그 행의 DB수를 그대로 씀'},
   {k:'lagb',l:'경과일 구간',ap:'c',tip:'DB 분배일부터 계약 신청일까지 걸린 날. 이 차원으로 나누면 DB수는 나누지 않고 그 행의 DB수를 그대로 씀'},
   {k:'dbk',l:'신규/재콜 DB',ap:'d',tip:'DB정보(P열)에 재콜이 있으면 재콜 DB'}
@@ -15770,22 +15774,25 @@ function pvBuild(){
   };
   // DB
   // 계약 조인용 요약은 계약에 나오는 고객키만 담는다 (전 DB 행을 담으면 수십만 객체)
-  const keyMeta=new Map();const seen=new Set();let staleDb=0,exAdmin=0;
+  const keyMeta=new Map();const seen=new Set();let staleDb=0,noDi=0,exAdmin=0;
   const contKeys=new Set();for(const f of daily)for(const r of f.rows)if(r.k)contKeys.add(r.k);
   for(const f of dbFiles){
-    if(srcStale(f))staleDb++;
+    if(srcStaleCore(f))staleDb++;
+    if(f.cols&&!f.cols.di)noDi++;
     const Cc=f.cols;if(!Cc)continue;
     const miss=new Set(f.miss||[]);
     const n=f.n,K=Cc.k,DD=Cc.d,FL=Cc.fl,OB=Cc.ob,RC=Cc.rcl,SE=Cc.se,AG=Cc.ag;
     // 공용 원본의 문자열 사전 → 피벗 사전 코드 (파일마다 고유값 수만큼만 변환)
     const lab={pk:L=>miss.has('pk')?'(미수집)':(L||'(없음)'),mg:L=>miss.has('pk')?'(미수집)':(L||'(없음)'),
-      mc:L=>miss.has('mc')?'(미수집)':(L||'(빈값)'),ml:L=>miss.has('ml')?'(미수집)':f.mlNone?'(ML 도입 전)':mlL(L),ag:agL};
+      mc:L=>miss.has('mc')?'(미수집)':(L||'(빈값)'),di:L=>L||'(빈값)',ml:L=>miss.has('ml')?'(미수집)':f.mlNone?'(ML 도입 전)':mlL(L),ag:agL};
     const M={};for(const k of ['pk','mg','mc','ml','ag'])M[k]=Cc[k].dict.map(L=>pvCode(D[k],lab[k](L)));
-    const PKc=Cc.pk.codes,MGc=Cc.mg.codes,MCc=Cc.mc.codes,MLc=Cc.ml.codes,AGc=AG.codes;
+    const diMiss=pvCode(D.di,'(미수집)');   // DB정보 열 없이 저장된 옛 파싱본
+    M.di=Cc.di?Cc.di.dict.map(L=>pvCode(D.di,lab.di(L))):null;
+    const PKc=Cc.pk.codes,MGc=Cc.mg.codes,MCc=Cc.mc.codes,MLc=Cc.ml.codes,AGc=AG.codes,DIc=Cc.di?Cc.di.codes:null;
     for(let i=0;i<n;i++){
       const k=K[i];if(!k||seen.has(k))continue;seen.add(k);
       const rc=RC[i]?1:0,dn=DD[i];
-      if(contKeys.has(k))keyMeta.set(k,{pkL:D.pk.labels[M.pk[PKc[i]]],mgL:D.mg.labels[M.mg[MGc[i]]],mlL:D.ml.labels[M.ml[MLc[i]]],se:SE[i],ag:srcS(AG,i),rc,d:srcDay(dn)});
+      if(contKeys.has(k))keyMeta.set(k,{pkL:D.pk.labels[M.pk[PKc[i]]],mgL:D.mg.labels[M.mg[MGc[i]]],mlL:D.ml.labels[M.ml[MLc[i]]],diC:DIc?M.di[DIc[i]]:diMiss,se:SE[i],ag:srcS(AG,i),rc,d:srcDay(dn)});
       if(FL[i]||!dn)continue;                          // IN(매체 빈값)·callback/tv_b·분배일 없음 — 성과진단과 같음
       const ob=srcS(OB,i);
       if(!ob||/군자|관리자/.test(ob)){exAdmin++;continue;}   // DB관리(군자)·미배정(관리자)은 코디 DB가 아님
@@ -15793,7 +15800,7 @@ function pvBuild(){
       const a=app.get(k);const lag=a?pvDayNum(a)-dn:null;
       const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
         pk:M.pk[PKc[i]],mg:M.mg[MGc[i]],mc:M.mc[MCc[i]],
-        se:pvCode(D.se,seL(SE[i])),ml:M.ml[MLc[i]],ag:M.ag[AGc[i]],dbk:pvCode(D.dbk,rc?'재콜':'신규')};
+        se:pvCode(D.se,seL(SE[i])),ml:M.ml[MLc[i]],ag:M.ag[AGc[i]],di:DIc?M.di[DIc[i]]:diMiss,dbk:pvCode(D.dbk,rc?'재콜':'신규')};
       const ext={rc};
       if(lag!=null&&lag>=0){ext.clag=lag;ext.cty=pvCode(D.ty,rc?'재콜':lag===0?'당일':'이전');ext.clagb=pvCode(D.lagb,lagL(lag));ext.cpc=pcOf(k,a);ext.cx=rtKeys.has(k)?1:0;}
       push(0,srcDay(dn),codes,ext);
@@ -15818,7 +15825,7 @@ function pvBuild(){
       const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
         pk:pvCode(D.pk,m?m.pkL:'(DB미매칭)'),mg:pvCode(D.mg,m?m.mgL:'(DB미매칭)'),
         mc:pvCode(D.mc,r.q===undefined?'(미수집)':(r.q||'(빈값·IN)')),
-        se:pvCode(D.se,m?seL(m.se):'미상'),ml:pvCode(D.ml,m?m.mlL:'(DB미매칭)'),ag:pvCode(D.ag,m?agL(m.ag):'미상(00)'),
+        se:pvCode(D.se,m?seL(m.se):'미상'),ml:pvCode(D.ml,m?m.mlL:'(DB미매칭)'),ag:pvCode(D.ag,m?agL(m.ag):'미상(00)'),di:m?m.diC:pvCode(D.di,'(DB미매칭)'),
         ty:pvCode(D.ty,ty),lagb:pvCode(D.lagb,lagL(lag))};
       const pc=pcOf(r.k,r.d);if(pc)pcN++;
       push(1,r.d,codes,{pc,x:rtKeys.has(r.k)?1:0});
@@ -15840,7 +15847,7 @@ function pvBuild(){
   }
   Object.assign(D,dd);
   const months=[...latestByYm.keys()].sort();
-  pvModel={F,D,dayLook,minD,maxD,minIso:n?pvIso(minD):'',maxIso:n?pvIso(maxD):'',cumMonths:new Set(months),staleDb,staleC,exAdmin,gunja,pcN};
+  pvModel={F,D,dayLook,minD,maxD,minIso:n?pvIso(minD):'',maxIso:n?pvIso(maxD):'',cumMonths:new Set(months),staleDb,noDi,staleC,exAdmin,gunja,pcN};
   pvSig=pvFilesSig();
   console.log(`[피벗] 사실 테이블 ${n.toLocaleString()}행 (${(performance.now()-t0).toFixed(0)}ms)`);
   return pvModel;
@@ -16007,7 +16014,7 @@ async function pvCheckFolder(){
     if(!spDirHandle){b.classList.add('hidden');return;}
     if(await spVerifyPerm(spDirHandle,true)){
       const stale=srcNeedsReparse();
-      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 매체코드 포함으로 다시 읽습니다 (처음 한 번, 수 분 소요)`:'⏳ 공용폴더 확인 중…',true);
+      show(stale?`⏳ 공용폴더 확인 중 — 옛 DB 파일 ${stale}개를 다시 읽습니다 (처음 한 번, 수 분 소요)`:'⏳ 공용폴더 확인 중…',true);
       await spScanFolder({request:false,announce:false,fromShow:true,cross:true});
       b.classList.add('hidden');
     }else show('📁 <b>공용폴더 접근 허용이 필요합니다</b> — 버튼을 눌러 최신 데이터를 불러오세요',false);
@@ -16277,6 +16284,7 @@ function pvRender(keepAgg){
   // 경고
   const warns=[];
   const M=pvModel;
+  if(M.noDi)warns.push(`DB정보 없이 저장된 DB 파일 ${M.noDi}개 — 그 기간 DB정보는 「(미수집)」. 공용폴더 새로고침 시 자동으로 다시 읽습니다(폴더 없는 PC는 동기화로 받음).`);
   if(M.staleDb)warns.push(`매체코드 없이 저장된 옛 DB 파일 ${M.staleDb}개 — 그 기간 매체코드는 「(미수집)」. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
   if(M.staleC)warns.push(`옛 형식 일마감 파일 ${M.staleC}개 — 그 기간 계약 유형은 DB 조인으로 판정됩니다(DB미매칭 발생).`);
   const noCum=[];for(let y=+pvCfg.s.slice(0,4),m=+pvCfg.s.slice(5,7);`${y}-${String(m).padStart(2,'0')}`<=pvCfg.e.slice(0,7);m===12?(y++,m=1):m++){const ym=`${y}${String(m).padStart(2,'0')}`;if(!M.cumMonths.has(ym))noCum.push(`${y%100}.${m}`);}
@@ -17354,7 +17362,7 @@ function tbSlotMin(slot){const m=String(slot).match(/^(\d{1,2})(?::(\d{2}))?\s*(
 // ── 인제스트 (수동 업로드·폴더 스캔 공통) ──
 // db 파일 중 계열(sr) 없이 파싱된 구버전 → 폴더 재스캔 시 같은 파일이라도 재파싱 대상
 // 구버전 파싱본(계열 sr 없음 / 유입일 inf 없음) → 폴더 재스캔 시 삭제 후 재파싱
-function tbFileStale(f){return srcStale(f);}
+function tbFileStale(f){return srcStaleCore(f);}
 async function tbIngestFile(type,file){return srcIngestFile(type,file);}   // shared store
 
 // ── 집계 ──
