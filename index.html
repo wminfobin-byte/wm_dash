@@ -16121,7 +16121,9 @@ const TG_DEF={
     {id:1,name:'홈페이지 IN',f:'mc',v:'_hp_in',x:'',on:true},
     {id:2,name:'네이버 브랜드검색',f:'mc',v:'naverbrand_brand, naversearch_brand',x:'japer, cnper, esper, frper',on:true},
     {id:3,name:'타임보드 · 더위크',f:'mc',v:'naver_tb+tw2',x:'',on:true},
-    {id:4,name:'타임보드 · 더위크 외',f:'mc',v:'naver_tb',x:'tw2',on:false}
+    {id:4,name:'타임보드 · 더위크 외',f:'mc',v:'naver_tb',x:'tw2',on:false},
+    {id:5,name:'차선 · 당근 더위크 0~2계열',f:'mc',v:'daangn+tw2',x:'',se:'0~2',on:false},
+    {id:6,name:'차선 · GDN 더위크 0~2계열',f:'mc',v:'gdn+tw2',x:'',se:'0~2',on:false}
   ],
   team:'뇌새김영어',empOnly:true,basis:'cohort',H:14,net:false,q:'3m',s:'',e:'',
   minT:50,minN:300,minA:500,topN:5,botN:3,peakX:{},baseMonths:null,candDim:'mg'
@@ -16205,6 +16207,13 @@ function tgExcl(r){return String(r.x||'').split(',').map(s=>s.trim().toLowerCase
 function tgHit(r,L){const ks=tgKeys(r),xs=tgExcl(r);return ks.some(all=>all.every(t=>L.includes(t)))&&!xs.some(t=>L.includes(t));}
 function tgActiveRules(){return tgCfg.rules.filter(r=>r.on&&tgKeys(r).length);}
 // 사전 코드별 규칙 비트마스크 (문자열 비교를 행마다 하지 않게)
+// 계열 조건(se): '0~2', '0,1', '0-2' 같은 DB계열(C열) 숫자. 비우면 계열 무관. 계열이 있으면 '미상'은 빠짐
+function tgSeSet(r){
+  const t=String(r.se||'').replace(/\s/g,'');if(!t)return null;
+  const set=new Set();
+  for(const p of t.split(',')){const m=p.match(/^(\d)(?:[~\-](\d))?$/);if(!m)continue;const a=+m[1],b=m[2]==null?a:+m[2];for(let v=Math.min(a,b);v<=Math.max(a,b);v++)set.add(v);}
+  return set.size?set:null;
+}
 function tgMasks(){
   const D=pvModel.D,rules=tgActiveRules();
   const mk=f=>{
@@ -16215,7 +16224,10 @@ function tgMasks(){
     });
     return arr;
   };
-  return {rules,mc:mk('mc'),pk:mk('pk'),mg:mk('mg')};
+  // 계열 마스크: 계열 조건이 없는 규칙은 모든 계열에서 통과
+  const seL=D.se.labels,se=new Uint32Array(seL.length);
+  rules.forEach((r,ri)=>{const set=tgSeSet(r);for(let c=0;c<seL.length;c++){const m=String(seL[c]||'').match(/^(\d)계열$/);if(!set||(m&&set.has(+m[1])))se[c]|=(1<<ri);}});
+  return {rules,mc:mk('mc'),pk:mk('pk'),mg:mk('mg'),se};
 }
 function tgMatchStr(r,o){return tgHit(r,String(o[r.f]||'').toLowerCase());}
 
@@ -16255,7 +16267,7 @@ function tgCompute(){
   const tyOk=new Set(['당일','이전'].map(L=>D.ty.idx.get(L)).filter(v=>v!==undefined));
   const okTeam=i=>!teamSet||teamSet.has(F.codes.team[i]);
   const okEmp=i=>!c.empOnly||F.codes.emp[i]===empC;
-  const maskOf=i=>mk.mc[F.dmc[i]]|mk.pk[F.codes.pk[i]]|mk.mg[F.codes.mg[i]];
+  const maskOf=i=>(mk.mc[F.dmc[i]]|mk.pk[F.codes.pk[i]]|mk.mg[F.codes.mg[i]])&mk.se[F.codes.se[i]];
   const nA=()=>({db:0,ct:0,x:0});
   const put=(a,kind,x)=>{if(kind===0)a.db++;else{a.ct++;if(x)a.x++;}};
   const mapPut=(m,k,kind,x,tm)=>{let a=m.get(k);if(!a){a={db:0,ct:0,x:0,tdb:0};m.set(k,a);}put(a,kind,x);if(tm&&kind===0)a.tdb++;};
@@ -16486,13 +16498,14 @@ function tgSec1Html(res){
       <td><select class="pv-select" onchange="tgRuleSet(${r.id},'f',this.value)">${Object.entries(TG_FIELD).map(([k,l])=>`<option value="${k}" ${r.f===k?'selected':''}>${l}</option>`).join('')}</select></td>
       <td><input class="pv-input tg-in" style="width:220px" value="${tgEsc(r.v)}" placeholder="포함 단어" onchange="tgRuleSet(${r.id},'v',this.value)"></td>
       <td><input class="pv-input tg-in" style="width:150px" value="${tgEsc(r.x||'')}" placeholder="제외 단어" onchange="tgRuleSet(${r.id},'x',this.value)"></td>
+      <td><input class="pv-input tg-in" style="width:80px" value="${tgEsc(r.se||'')}" placeholder="전체" title="DB계열 (예: 0~2, 0,1). 비우면 전체" onchange="tgRuleSet(${r.id},'se',this.value)"></td>
       <td class="n">${a?tgNum(a.db):'-'}</td><td class="n">${a?tgNum(a.ct):'-'}</td><td class="n"><b>${tgPct(rr)}</b></td>
       <td class="n">${rr!=null&&totR?(rr/totR).toFixed(2)+'배':'-'}</td>
       <td><button class="pv-btn tg-x" onclick="tgRuleDel(${r.id})">✕</button></td></tr>`;
   }).join('');
-  const sumRow=`<tr class="tg-sum"><td></td><td colspan="4">타게팅 합계 (규칙 중 하나라도 맞으면)</td><td class="n">${tgNum(tot.T.db)}</td><td class="n">${tgNum(tot.T.ct)}</td><td class="n"><b>${tgPct(tgRate(tot.T))}</b></td><td class="n">${tgRate(tot.T)!=null&&totR?(tgRate(tot.T)/totR).toFixed(2)+'배':'-'}</td><td></td></tr>
-    <tr class="tg-sub"><td></td><td colspan="4">타게팅 외</td><td class="n">${tgNum(tot.N.db)}</td><td class="n">${tgNum(tot.N.ct)}</td><td class="n">${tgPct(tgRate(tot.N))}</td><td class="n">${tgRate(tot.N)!=null&&totR?(tgRate(tot.N)/totR).toFixed(2)+'배':'-'}</td><td></td></tr>
-    <tr class="tg-sub"><td></td><td colspan="4">전체</td><td class="n">${tgNum(tot.A.db)}</td><td class="n">${tgNum(tot.A.ct)}</td><td class="n">${tgPct(totR)}</td><td class="n">1.00배</td><td></td></tr>`;
+  const sumRow=`<tr class="tg-sum"><td></td><td colspan="5">타게팅 합계 (규칙 중 하나라도 맞으면)</td><td class="n">${tgNum(tot.T.db)}</td><td class="n">${tgNum(tot.T.ct)}</td><td class="n"><b>${tgPct(tgRate(tot.T))}</b></td><td class="n">${tgRate(tot.T)!=null&&totR?(tgRate(tot.T)/totR).toFixed(2)+'배':'-'}</td><td></td></tr>
+    <tr class="tg-sub"><td></td><td colspan="5">타게팅 외</td><td class="n">${tgNum(tot.N.db)}</td><td class="n">${tgNum(tot.N.ct)}</td><td class="n">${tgPct(tgRate(tot.N))}</td><td class="n">${tgRate(tot.N)!=null&&totR?(tgRate(tot.N)/totR).toFixed(2)+'배':'-'}</td><td></td></tr>
+    <tr class="tg-sub"><td></td><td colspan="5">전체</td><td class="n">${tgNum(tot.A.db)}</td><td class="n">${tgNum(tot.A.ct)}</td><td class="n">${tgPct(totR)}</td><td class="n">1.00배</td><td></td></tr>`;
   // 후보 표
   const dim=c.candDim==='pk'?'pk':'mg',m=dim==='pk'?tot.pk:tot.mg;
   const cand=[...m.entries()].map(([code,a])=>({L:D[dim].labels[code],a,r:tgRate(a)})).filter(x=>x.a.db>=20).sort((x,y)=>(y.r||0)-(x.r||0));
@@ -16504,8 +16517,8 @@ function tgSec1Html(res){
     <td class="n">${x.a.tdb?Math.round(x.a.tdb/x.a.db*100)+'%':'-'}</td>
     <td>${x.a.tdb===x.a.db?'<span class="tg-tag tg-t">타게팅</span>':`<button class="pv-btn tg-mini" onclick='tgRuleAdd("${dim}",${JSON.stringify(String(x.L)).replace(/'/g,'&#39;')},${JSON.stringify(String(x.L)).replace(/'/g,'&#39;')})'>+ 규칙</button>`}</td></tr>`).join('');
   return `<div class="tg-h2">① 타게팅 대상 DB 정하기</div>
-  <div class="tg-help">규칙에 맞는 DB가 '타게팅 DB'입니다. 포함 단어: 쉼표 = 또는, + = 그리고 (예: naver_tb+tw2 = 타임보드이면서 더위크). 제외 단어가 하나라도 있으면 빠짐. 대소문자 무시. 기본 규칙 = 11/9 분석 추천안 ('처음 값으로'를 누르면 이 규칙으로 돌아감).</div>
-  <table class="tg-tbl"><thead><tr><th>사용</th><th>이름</th><th>기준</th><th>포함 단어</th><th>제외 단어</th><th>DB수</th><th>계약수</th><th>계약률</th><th>전체 대비</th><th></th></tr></thead><tbody>${ruleRows}${sumRow}</tbody></table>
+  <div class="tg-help">규칙에 맞는 DB가 '타게팅 DB'입니다. 포함 단어: 쉼표 = 또는, + = 그리고 (예: naver_tb+tw2 = 타임보드이면서 더위크). 제외 단어가 하나라도 있으면 빠짐. 계열 = DB계열(0이 최상위) 범위, 예: 0~2 (비우면 전체). 대소문자 무시. 기본 규칙 = 11/9 분석 추천안 ('처음 값으로'를 누르면 이 규칙으로 돌아감).</div>
+  <table class="tg-tbl"><thead><tr><th>사용</th><th>이름</th><th>기준</th><th>포함 단어</th><th>제외 단어</th><th>계열</th><th>DB수</th><th>계약수</th><th>계약률</th><th>전체 대비</th><th></th></tr></thead><tbody>${ruleRows}${sumRow}</tbody></table>
   <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
     <button class="pv-btn" onclick="tgRuleAdd('mc','','새 규칙')">+ 규칙 추가</button>
     <div class="pv-vsep"></div>
