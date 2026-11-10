@@ -16310,10 +16310,12 @@ function tgCompute(){
   const list=[...P.values()].map(p=>({p,name:D.codi.labels[p.code],ctr:D.ctr.labels[p.ctr],
     rT:tgRate(p.T),rN:tgRate(p.N),rA:tgRate(p.A),nd:p.days.size,pd:p.days.size?p.A.db/p.days.size:0}));
   const byRate=(rk,ck)=>(a,b)=>(b[rk]-a[rk])||(b.p[ck].ct-a.p[ck].ct);
-  const topT=list.filter(x=>x.p.T.db>=c.minT&&x.rT!=null).sort(byRate('rT','T')).slice(0,c.topN);
-  const topA=list.filter(x=>x.p.A.db>=c.minA&&x.rA!=null).sort(byRate('rA','A')).slice(0,c.topN);
-  const topN=list.filter(x=>x.p.N.db>=c.minN&&x.rN!=null).sort(byRate('rN','N')).slice(0,c.topN);
-  const bot=list.filter(x=>x.p.A.db>=c.minA&&x.rA!=null).sort((a,b)=>(a.rA-b.rA)||(a.p.A.ct-b.p.A.ct)).slice(0,c.botN);
+  // 정렬된 목록에서 n명을 자르되, n번째와 계약률이 같은 사람은 함께 포함(공동 순위)
+  const takeTies=(arr,n,rk)=>{if(n<=0)return [];if(arr.length<=n)return arr;const cut=arr[n-1][rk];let k=n;while(k<arr.length&&Math.abs(arr[k][rk]-cut)<1e-12)k++;return arr.slice(0,k);};
+  const topT=takeTies(list.filter(x=>x.p.T.db>=c.minT&&x.rT!=null).sort(byRate('rT','T')),c.topN,'rT');
+  const topA=takeTies(list.filter(x=>x.p.A.db>=c.minA&&x.rA!=null).sort(byRate('rA','A')),c.topN,'rA');
+  const topN=takeTies(list.filter(x=>x.p.N.db>=c.minN&&x.rN!=null).sort(byRate('rN','N')),c.topN,'rN');
+  const bot=takeTies(list.filter(x=>x.p.A.db>=c.minA&&x.rA!=null).sort((a,b)=>(a.rA-b.rA)||(a.p.A.ct-b.p.A.ct)),c.botN,'rA');
   const nElig={T:list.filter(x=>x.p.T.db>=c.minT).length,A:list.filter(x=>x.p.A.db>=c.minA).length,N:list.filter(x=>x.p.N.db>=c.minN).length};
   // 월 목록: 끝 달(데이터 마지막 날이 말일 전)·첫 달(1일부터가 아니면)은 '일부'
   const maxIso=M.maxIso,minIso=M.minIso;
@@ -16561,8 +16563,15 @@ function tgSec2Html(res,season){
 }
 
 // ③④⑤ 상위
+// 계약률이 같으면 같은 순위. 동률이 있는 순위는 '공동 n'
+function tgRankLabels(arr,rk){
+  const same=(a,b)=>a!=null&&b!=null&&Math.abs(a[rk]-b[rk])<1e-12;
+  const rank=[];arr.forEach((x,i)=>rank.push(i&&same(arr[i-1],x)?rank[i-1]:i+1));
+  return arr.map((x,i)=>(same(arr[i-1],x)||same(arr[i+1],x)?'공동 ':'')+rank[i]);
+}
 function tgTopTable(title,sub,arr,rk,ck,teamR,nElig){
-  const rows=arr.map((x,i)=>`<tr><td class="n">${i+1}</td><td><b>${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span></td>
+  const rk_=tgRankLabels(arr,rk);
+  const rows=arr.map((x,i)=>`<tr><td class="n" style="white-space:nowrap">${rk_[i]}</td><td><b>${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span></td>
     <td class="n">${tgNum(x.p[ck].db)}</td><td class="n">${tgNum(x.p[ck].ct)}</td><td class="n"><b>${tgPct(x[rk])}</b></td>
     <td class="n">${x[rk]!=null&&teamR?(x[rk]/teamR).toFixed(2)+'배':'-'}</td></tr>`).join('');
   return `<div class="tg-topcard"><div class="tg-h3" style="margin-top:0">${title}</div><div class="tg-src">${sub} · 대상 ${nElig}명 · 평균 ${tgPct(teamR)}</div>
@@ -16572,13 +16581,14 @@ function tgSec3Html(res){
   const c=tgCfg,{tot,topT,topA,topN,nElig}=res;
   const rT=tgRate(tot.T),rN=tgRate(tot.N),rA=tgRate(tot.A);
   const inT=new Set(topT.map(x=>x.p.code)),inN=new Set(topN.map(x=>x.p.code));
+  const rkA=tgRankLabels(topA,'rA');
   const cls=topA.map((x,i)=>{
     const tag=inT.has(x.p.code)&&inN.has(x.p.code)?'<span class="tg-tag tg-both">둘 다 강함</span>':inT.has(x.p.code)?'<span class="tg-tag tg-t">타게팅 DB로 성과</span>':inN.has(x.p.code)?'<span class="tg-tag tg-n">타게팅 외 DB로 성과</span>':'<span class="tg-tag">고르게</span>';
-    return `<tr><td class="n">${i+1}</td><td><b>${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span></td><td class="n">${tgPct(x.rA)}</td>
+    return `<tr><td class="n" style="white-space:nowrap">${rkA[i]}</td><td><b>${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span></td><td class="n">${tgPct(x.rA)}</td>
       <td class="n">${tgNum(x.p.T.db)}</td><td class="n">${tgPct(x.rT)}${x.p.T.db<c.minT?' <span class="tg-src">(모수 부족)</span>':''}</td>
       <td class="n">${tgNum(x.p.N.db)}</td><td class="n">${tgPct(x.rN)}</td><td>${tag}</td></tr>`;
   }).join('');
-  return `<div class="tg-h2">③ 상위 ${c.topN}명</div>
+  return `<div class="tg-h2">③ 상위 ${c.topN}명 <span class="tg-src" style="font-weight:400">계약률이 같으면 공동 순위로 함께 포함</span></div>
   <div class="tg-tops">
     ${tgTopTable('타게팅 DB를 잘 살리는 사람',`타게팅 DB ${c.minT}건 이상`,topT,'rT','T',rT,nElig.T)}
     ${tgTopTable('전체 계약률 상위',`전체 DB ${c.minA}건 이상`,topA,'rA','A',rA,nElig.A)}
@@ -16595,6 +16605,7 @@ function tgSec4Html(res){
   if(!bot.length)return `<div class="tg-h2">④ 하위 ${c.botN}명과 줄 DB</div><div class="tg-none">최소 모수(전체 ${c.minA}건)를 넘는 사람이 없음</div>`;
   const teamN=tgRate(tot.N),topTR=topT.length?topT.reduce((s,x)=>s+x.p.T.ct-(c.net?x.p.T.x:0),0)/Math.max(1,topT.reduce((s,x)=>s+x.p.T.db,0)):null;
   const daysAvg=tgLast&&tgLast.season&&tgLast.season.daysAvg?tgLast.season.daysAvg:null;
+  const rkB=tgRankLabels(bot,'rA');
   const cards=bot.map((x,bi)=>{
     const p=x.p,pd=x.pd;
     // 타게팅 외 DB를 매체그룹별로 — 팀 평균과 비교
@@ -16613,7 +16624,7 @@ function tgSec4Html(res){
     const gain=gT!=null&&gN!=null?gT+gN:null;
     const segRows=segs.map(s=>`<tr class="${good.includes(s)?'tg-good':weak.includes(s)?'tg-weak':''}"><td>${tgEsc(s.L)}</td><td class="n">${tgNum(s.a.db)}</td><td class="n">${tgNum(s.a.ct)}</td><td class="n">${tgPct(s.r)}</td><td class="n">${tgPct(s.tr)}</td><td class="n">${s.idx!=null?s.idx.toFixed(2)+'배':'-'}</td></tr>`).join('');
     return `<div class="tg-botcard">
-      <div class="tg-bothead"><b>${bi+1}. ${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span>
+      <div class="tg-bothead"><b>${rkB[bi]}. ${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span>
         <span class="tg-kv">전체 DB ${tgNum(p.A.db)} · 계약 ${tgNum(p.A.ct)} · 계약률 <b>${tgPct(x.rA)}</b> (평균 ${tgPct(tgRate(tot.A))})</span>
         <span class="tg-kv">하루 DB ${tgD1(pd)}건 (분배일 ${x.nd}일) · 타게팅 DB ${tgNum(p.T.db)}건 받음, 계약률 ${tgPct(x.rT)}</span></div>
       <div class="tg-botgrid">
@@ -16634,22 +16645,32 @@ function tgSec4Html(res){
 }
 function tgAllocSet(name,v){if(v===''||v==null)delete tgAlloc[name];else tgAlloc[name]={perDay:Math.max(0,+v)};tgSaveAlloc();tgRender();}
 
-// ⑤ 전체 코디 표 (확인·검증용)
+// ⑤ 전체 코디 표 (확인·검증용) — 머리글 클릭 정렬
+let tgSort={k:'rA',d:-1},tgAllOpen=false;
+function tgSortBy(k){
+  if(tgSort.k===k)tgSort.d*=-1;else tgSort={k,d:k==='name'?1:-1};
+  if(tgLast&&tgLast.res)tgEl('tgSec5').innerHTML=tgSec5Html(tgLast.res);
+}
 function tgSec5Html(res){
   const c=tgCfg,{list,topT,topA,topN,bot}=res;
   const tag=new Map();const addTag=(arr,t)=>arr.forEach(x=>{const a=tag.get(x.p.code)||[];a.push(t);tag.set(x.p.code,a);});
   addTag(topT,'<span class="tg-tag tg-t">타게팅 상위</span>');addTag(topA,'<span class="tg-tag tg-both">전체 상위</span>');addTag(topN,'<span class="tg-tag tg-n">타게팅 외 상위</span>');addTag(bot,'<span class="tg-tag tg-weak-tag">하위</span>');
-  const sorted=list.slice().sort((a,b)=>(b.rA==null?-1:b.rA)-(a.rA==null?-1:a.rA));
+  const val=x=>{const k=tgSort.k;if(k==='name')return x.name;if(k.includes('.')){const [g,f]=k.split('.');return x.p[g][f];}return x[k];};
+  const sorted=list.slice().sort((a,b)=>{const va=val(a),vb=val(b);
+    if(va==null||vb==null)return va==null?(vb==null?0:1):-1;   // 값 없음은 항상 맨 아래
+    const r=tgSort.k==='name'?String(va).localeCompare(String(vb),'ko'):va-vb;
+    return r*tgSort.d||String(a.name).localeCompare(String(b.name),'ko');});
+  const th=(k,l,attr)=>`<th ${attr||''} style="cursor:pointer;white-space:nowrap;user-select:none" title="누르면 정렬" onclick="tgSortBy('${k}')">${l}${tgSort.k===k?(tgSort.d<0?' ▼':' ▲'):''}</th>`;
   const low=(n,min)=>n<min?' tg-dim':'';
   const rows=sorted.map(x=>`<tr><td><b>${tgEsc(x.name)}</b> <span class="tg-src">${tgEsc(x.ctr)}</span></td>
     <td class="n${low(x.p.A.db,c.minA)}">${tgNum(x.p.A.db)}</td><td class="n${low(x.p.A.db,c.minA)}">${tgNum(x.p.A.ct)}</td><td class="n${low(x.p.A.db,c.minA)}">${tgPct(x.rA)}</td>
     <td class="n${low(x.p.T.db,c.minT)}">${tgNum(x.p.T.db)}</td><td class="n${low(x.p.T.db,c.minT)}">${tgNum(x.p.T.ct)}</td><td class="n${low(x.p.T.db,c.minT)}">${tgPct(x.rT)}</td>
     <td class="n${low(x.p.N.db,c.minN)}">${tgNum(x.p.N.db)}</td><td class="n${low(x.p.N.db,c.minN)}">${tgNum(x.p.N.ct)}</td><td class="n${low(x.p.N.db,c.minN)}">${tgPct(x.rN)}</td>
     <td class="n">${tgD1(x.pd)}</td><td>${(tag.get(x.p.code)||[]).join(' ')}</td></tr>`).join('');
-  return `<details class="tg-all"><summary class="tg-h2" style="cursor:pointer">⑤ 전체 코디 (${list.length}명) — 확인용</summary>
-    <div class="tg-help">회색 숫자 = 최소 모수 미만이라 순위에서 빠짐. 전체 계약률 높은 순.</div>
-    <div class="tg-scroll"><table class="tg-tbl"><thead><tr><th rowspan="2">코디</th><th colspan="3">전체</th><th colspan="3">타게팅 DB</th><th colspan="3">타게팅 외</th><th rowspan="2">하루 DB</th><th rowspan="2">구분</th></tr>
-    <tr><th>DB</th><th>계약</th><th>계약률</th><th>DB</th><th>계약</th><th>계약률</th><th>DB</th><th>계약</th><th>계약률</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  return `<details class="tg-all" ${tgAllOpen?'open':''} ontoggle="tgAllOpen=this.open"><summary class="tg-h2" style="cursor:pointer">⑤ 전체 코디 (${list.length}명) — 확인용</summary>
+    <div class="tg-help">회색 숫자 = 최소 모수 미만이라 순위에서 빠짐. 머리글(DB · 계약 · 계약률 등)을 누르면 그 순서로 정렬, 한 번 더 누르면 반대로.</div>
+    <div class="tg-scroll"><table class="tg-tbl"><thead><tr>${th('name','코디','rowspan="2"')}<th colspan="3">전체</th><th colspan="3">타게팅 DB</th><th colspan="3">타게팅 외</th>${th('pd','하루 DB','rowspan="2"')}<th rowspan="2">구분</th></tr>
+    <tr>${th('A.db','DB')}${th('A.ct','계약')}${th('rA','계약률')}${th('T.db','DB')}${th('T.ct','계약')}${th('rT','계약률')}${th('N.db','DB')}${th('N.ct','계약')}${th('rN','계약률')}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
 function pvRebuild(){const saved=pvCfg?pvCfgToSaved(pvCfg):null;pvBuild();pvCfg=saved?pvCfgFromSaved(saved):pvDefaultCfg();pvRenderZones();pvRender();}
