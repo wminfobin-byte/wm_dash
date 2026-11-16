@@ -14183,8 +14183,9 @@ function srcMaxDayOf(f){   // 파일의 최종 일자(db=분배일, cti=통화�
 function srcParseDb(wb){
   const aoa=spReadAOA(wb);
   const mlI=(aoa[0]||[]).findIndex(v=>String(v).replace(/\s/g,'')==='ML계열');   // 2026-07-15 파일부터 있음
+  let ptI=(aoa[0]||[]).findIndex(v=>String(v).replace(/\s/g,'').includes('제품(코드)타입'));if(ptI<0)ptI=5;   // 제품(코드)타입 (현재 F열)
   const T=v=>String(v==null?'':v).trim();
-  const K=[],OB=[],AG=[],ST=[],PK=[],MG=[],MC=[],ML=[],DI=[],P1=[],P2=[],P3=[],D=[],INF=[],SE=[],RCL=[],FL=[];
+  const K=[],OB=[],AG=[],ST=[],PK=[],MG=[],MC=[],ML=[],DI=[],PT=[],P1=[],P2=[],P3=[],D=[],INF=[],SE=[],RCL=[],FL=[];
   const diHist={};let diN=0;
   for(let i=1;i<aoa.length;i++){
     const r=aoa[i];if(!r)continue;
@@ -14192,14 +14193,14 @@ function srcParseDb(wb){
     const media=T(r[19]),di=T(r[15]),ser=parseInt(T(r[2]),10);
     if(diHist[di]!==undefined)diHist[di]++;else if(diN<NC_DI_MAX){diHist[di]=1;diN++;}
     K.push(k);OB.push(T(r[7]));AG.push(T(r[11])||'00');ST.push(T(r[24]));
-    PK.push(T(r[20]));MG.push(T(r[18]));MC.push(media);ML.push(mlI<0?'':T(r[mlI]));DI.push(di);
+    PK.push(T(r[20]));MG.push(T(r[18]));MC.push(media);ML.push(mlI<0?'':T(r[mlI]));DI.push(di);PT.push(T(r[ptI]));
     P1.push(phTok(tzNormPhone(r[12])));P2.push(phTok(tzNormPhone(r[13])));P3.push(phTok(tzNormPhone(r[14])));   // 원문 대신 대체값 (공개 싱크 레포에 번호가 안 올라가게)
     D.push(srcDayNum(spNormDay(r[8])));INF.push(srcDayNum(spNormDay(r[9])));
     SE.push(ser>=0&&ser<=5?ser:-1);RCL.push(ncRecallLevel(di));
     FL.push((media===''?1:0)|((media.includes('callback')||media.includes('tv_b'))?2:0));   // 1=IN(매체 빈값) 2=callback/tv_b
   }
   return {n:K.length,mlNone:mlI<0,diHist,phT:1,cols:{
-    k:K,ob:srcStrCol(OB),ag:srcStrCol(AG),st:srcStrCol(ST),pk:srcStrCol(PK),mg:srcStrCol(MG),mc:srcStrCol(MC),ml:srcStrCol(ML),di:srcStrCol(DI),
+    k:K,ob:srcStrCol(OB),ag:srcStrCol(AG),st:srcStrCol(ST),pk:srcStrCol(PK),mg:srcStrCol(MG),mc:srcStrCol(MC),ml:srcStrCol(ML),di:srcStrCol(DI),pt:srcStrCol(PT),
     p1:P1,p2:P2,p3:P3,d:Int32Array.from(D),inf:Int32Array.from(INF),se:Int8Array.from(SE),rcl:Uint8Array.from(RCL),fl:Uint8Array.from(FL)}};
 }
 // CTI(걸은전화상세): tzParseCti 결과 → 열. valid는 원본 판정(연결 & 90초↑)을 그대로 보존
@@ -14223,7 +14224,8 @@ function srcMkRec(type,meta,parsed){
 function srcStaleCore(f){return (f.pv||0)<SRC_PARSER_VER||!!(f.miss&&f.miss.length);}   // 탭별 '옛 파일' 경고용
 // 다시 읽을지 판정: 위 + DB정보 원문(di, 2026-11-05 피벗 차원) 없이 저장된 db 파일.
 // di는 파서 버전을 올리지 않고 열 유무로 본다 — 버전을 올리면 다른 탭이 '옛 파일' 경고를 띄운다.
-function srcStale(f){return srcStaleCore(f)||(f.type==='db'&&!!f.cols&&!f.cols.di);}
+// pt = 제품(코드)타입(F열, 2026-11-16 피벗 차원)도 같은 방식.
+function srcStale(f){return srcStaleCore(f)||(f.type==='db'&&!!f.cols&&(!f.cols.di||!f.cols.pt));}
 
 // ── 변경 알림: 공용 데이터가 바뀌면 이걸 쓰는 모든 탭의 계산 결과를 버린다 ──
 function srcTouched(){
@@ -15716,6 +15718,7 @@ const PV_DIMS=[
   {k:'pk',l:'패키지',ap:'b',tip:'DB 패키지(U열). 계약은 고객키로 DB에 붙여서 가져옴'},
   {k:'mg',l:'매체그룹',ap:'b',tip:'DB 매체그룹(S열). 계약은 고객키로 DB에 붙여서 가져옴'},
   {k:'mc',l:'매체코드',ap:'b',tip:'DB=매체코드(T열), 계약=분류(Q열) 원문'},
+  {k:'pt',l:'제품(코드)타입',ap:'b',tip:'DB 제품(코드)타입(F열). 계약은 고객키로 DB에 붙여서, DB에 없으면 분류(Q열)를 DB 매체코드→제품타입 학습값으로 판정. DB F열이 빈 행도 매체코드로 채움'},
   {k:'se',l:'DB 계열',ap:'b',tip:'고객관리 DB계열(C열, 0~5, 0=최상위). 계약은 고객키로 DB에 붙여서 가져옴'},
   {k:'ml',l:'ML 계열',ap:'b',tip:'고객관리 ML계열(머리글 ML계열, 0~6). 2026-07-15 이전 파일엔 없어 (ML 도입 전). 계약은 고객키로 DB에 붙여서'},
   {k:'ag',l:'연령대',ap:'b',tip:'DB 연령대(L열). 계약은 고객키로 DB에 붙여서 가져옴'},
@@ -15808,6 +15811,35 @@ function pvCode(dc,label){let c=dc.idx.get(label);if(c===undefined){c=dc.labels.
 function pvFilesSig(){let n=0,t=0;for(const f of srcFiles){if(f.type==='cti')continue;n+=f.n!=null?f.n:(f.rows?f.rows.length:0);t=Math.max(t,f.uploadTime||0);}return srcFiles.length+'|'+n+'|'+t;}
 
 // ═══ 사실 테이블 빌드 (원본 1회 순회) ═══
+// 매체코드 → 제품(코드)타입 학습 (고객관리 F열 ↔ T열). 2026-11-16 실파일 검증: 매체코드 6,318종 중 서로 다른 타입이 섞인 코드 0개,
+//  9월 계약 2,121건을 분류(Q)로 판정한 값 = DB F열 값 100% 일치(정확 일치·토큰 투표 모두).
+//  ① 매체코드 그대로(대소문자 무시) 다수결 ② 처음 보는 코드는 '_' 조각(숫자 제거, 예 TW26→tw, Japer26→japer)별 순도 98%↑·10건↑ 조각의 투표.
+function pvLearnPt(dbFiles){
+  const ex=new Map(),tk=new Map();
+  const toks=q=>{const o=new Set();for(let t of q.toLowerCase().split(/[_\-\s\[\]()]+/)){t=t.replace(/\d+/g,'');if(t.length>=2)o.add(t);}return o;};
+  const add=(map,key,pt,c)=>{let m=map.get(key);if(!m){m=new Map();map.set(key,m);}m.set(pt,(m.get(pt)||0)+c);};
+  for(const f of dbFiles){
+    const C=f.cols;if(!C||!C.pt||!C.mc)continue;
+    const P=C.pt.dict.length,cnt=new Map(),mcC=C.mc.codes,ptC=C.pt.codes;
+    for(let i=0;i<f.n;i++){const p=ptC[i];if(!C.pt.dict[p])continue;const key=mcC[i]*P+p;cnt.set(key,(cnt.get(key)||0)+1);}
+    for(const [key,c] of cnt){const mc=String(C.mc.dict[Math.floor(key/P)]||'').trim();if(!mc)continue;add(ex,mc.toLowerCase(),C.pt.dict[key%P],c);}
+  }
+  const top=m=>{let bp=null,bc=0,s=0;for(const [p,c] of m){s+=c;if(c>bc){bc=c;bp=p;}}return [bp,bc,s];};
+  const exact=new Map();
+  for(const [mc,m] of ex){exact.set(mc,top(m)[0]);for(const t of toks(mc))for(const [p,c] of m)add(tk,t,p,c);}
+  const pure=new Map();
+  for(const [t,m] of tk){const [bp,bc,s]=top(m);if(s>=10&&bc/s>=0.98)pure.set(t,[bp,Math.log(s)]);}
+  const cache=new Map();
+  return q=>{
+    q=String(q==null?'':q).trim().toLowerCase();if(!q)return null;
+    if(cache.has(q))return cache.get(q);
+    let g=exact.get(q)||null;
+    if(!g){const v=new Map();for(const t of toks(q)){const p=pure.get(t);if(p)v.set(p[0],(v.get(p[0])||0)+p[1]);}let b=0;for(const [p,w] of v)if(w>b){b=w;g=p;}}
+    // DB 쪽은 매체 빈값(IN)이라 배울 수 없는 제2외국어 홈페이지 IN 코드 (뇌새김 콜 ncLang과 같은 규칙)
+    if(!g&&/(^|_)[jcsf]hp_in/.test(q)&&exact.size)g='제2외국어';
+    cache.set(q,g);return g;
+  };
+}
 function pvBuild(){
   const t0=performance.now();
   const roster=spBuildRoster();
@@ -15854,11 +15886,14 @@ function pvBuild(){
   };
   // DB
   // 계약 조인용 요약은 계약에 나오는 고객키만 담는다 (전 DB 행을 담으면 수십만 객체)
-  const keyMeta=new Map();const seen=new Set();let staleDb=0,noDi=0,exAdmin=0;
+  const keyMeta=new Map();const seen=new Set();let staleDb=0,noDi=0,noPt=0,exAdmin=0;
   const contKeys=new Set();for(const f of daily)for(const r of f.rows)if(r.k)contKeys.add(r.k);
+  const ptGuess=pvLearnPt(dbFiles);   // 매체코드 → 제품(코드)타입 (F열 빈 DB 행·DB미매칭 계약용)
+  let ptGuessDb=0,ptGuessC=0,ptNoneC=0;
   for(const f of dbFiles){
     if(srcStaleCore(f))staleDb++;
     if(f.cols&&!f.cols.di)noDi++;
+    if(f.cols&&!f.cols.pt)noPt++;
     const Cc=f.cols;if(!Cc)continue;
     const miss=new Set(f.miss||[]);
     const n=f.n,K=Cc.k,DD=Cc.d,FL=Cc.fl,OB=Cc.ob,RC=Cc.rcl,SE=Cc.se,AG=Cc.ag;
@@ -15868,19 +15903,24 @@ function pvBuild(){
     const M={};for(const k of ['pk','mg','mc','ml','ag'])M[k]=Cc[k].dict.map(L=>pvCode(D[k],lab[k](L)));
     const diMiss=pvCode(D.di,'(미수집)');   // DB정보 열 없이 저장된 옛 파싱본
     M.di=Cc.di?Cc.di.dict.map(L=>pvCode(D.di,lab.di(L))):null;
+    // 제품타입: F열 값 우선, 비었거나 열이 없는 옛 파싱본이면 매체코드 학습값 (mc 사전 코드 단위로 미리 계산)
+    const PTc=Cc.pt?Cc.pt.codes:null,ptRaw=Cc.pt?Cc.pt.dict.map(L=>L?pvCode(D.pt,L):0):null;
+    const ptByMc=Cc.mc.dict.map(L=>{const g=ptGuess(L);return pvCode(D.pt,g||'(미판정)');});
+    const ptOf=i=>{const c=PTc?ptRaw[PTc[i]]:0;return c||ptByMc[MCc[i]];};
     const PKc=Cc.pk.codes,MGc=Cc.mg.codes,MCc=Cc.mc.codes,MLc=Cc.ml.codes,AGc=AG.codes,DIc=Cc.di?Cc.di.codes:null;
     for(let i=0;i<n;i++){
       const k=K[i];if(!k||seen.has(k))continue;seen.add(k);
       const rc=RC[i]?1:0,dn=DD[i];
-      if(contKeys.has(k))keyMeta.set(k,{mcC:M.mc[MCc[i]],pkL:D.pk.labels[M.pk[PKc[i]]],mgL:D.mg.labels[M.mg[MGc[i]]],mlL:D.ml.labels[M.ml[MLc[i]]],diC:DIc?M.di[DIc[i]]:diMiss,se:SE[i],ag:srcS(AG,i),rc,d:srcDay(dn)});
+      if(contKeys.has(k))keyMeta.set(k,{mcC:M.mc[MCc[i]],pkL:D.pk.labels[M.pk[PKc[i]]],mgL:D.mg.labels[M.mg[MGc[i]]],mlL:D.ml.labels[M.ml[MLc[i]]],diC:DIc?M.di[DIc[i]]:diMiss,ptC:ptOf(i),se:SE[i],ag:srcS(AG,i),rc,d:srcDay(dn)});
       if(FL[i]||!dn)continue;                          // IN(매체 빈값)·callback/tv_b·분배일 없음 — 성과진단과 같음
       const ob=srcS(OB,i);
       if(!ob||/군자|관리자/.test(ob)){exAdmin++;continue;}   // DB관리(군자)·미배정(관리자)은 코디 DB가 아님
       const w=who(ob);
       const a=app.get(k);const lag=a?pvDayNum(a)-dn:null;
       const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
-        pk:M.pk[PKc[i]],mg:M.mg[MGc[i]],mc:M.mc[MCc[i]],
+        pk:M.pk[PKc[i]],mg:M.mg[MGc[i]],mc:M.mc[MCc[i]],pt:ptOf(i),
         se:pvCode(D.se,seL(SE[i])),ml:M.ml[MLc[i]],ag:M.ag[AGc[i]],di:DIc?M.di[DIc[i]]:diMiss,dbk:pvCode(D.dbk,rc?'재콜':'신규')};
+      if(!(PTc&&ptRaw[PTc[i]]))ptGuessDb++;
       const ext={rc,dmc:codes.mc};
       if(lag!=null&&lag>=0){ext.clag=lag;ext.cty=pvCode(D.ty,rc?'재콜':lag===0?'당일':'이전');ext.clagb=pvCode(D.lagb,lagL(lag));ext.cpc=pcOf(k,a);ext.cx=rtKeys.has(k)?1:0;}
       push(0,srcDay(dn),codes,ext);
@@ -15888,6 +15928,8 @@ function pvBuild(){
   }
   // 계약 (일마감, 신청일 기준)
   const seenC=new Set();let staleC=0,gunja=0,pcN=0;
+  // DB미매칭 계약: 분류(Q) = 매체코드 원문이라 DB에서 배운 매체코드→제품타입으로 판정
+  const ptC=q=>{const g=ptGuess(q);if(g){ptGuessC++;return pvCode(D.pt,g);}ptNoneC++;return pvCode(D.pt,'(미판정)');};
   for(const f of daily){
     if(f.miss&&f.miss.includes('dd'))staleC++;
     for(const r of f.rows){
@@ -15904,7 +15946,7 @@ function pvBuild(){
       const lag=m&&m.d?pvDayNum(r.d)-pvDayNum(m.d):null;
       const codes={team:pvCode(D.team,w.team),ctr:pvCode(D.ctr,w.ctr),codi:pvCode(D.codi,w.codi),emp:pvCode(D.emp,w.emp),
         pk:pvCode(D.pk,m?m.pkL:'(DB미매칭)'),mg:pvCode(D.mg,m?m.mgL:'(DB미매칭)'),
-        mc:pvCode(D.mc,r.q===undefined?'(미수집)':(r.q||'(빈값·IN)')),
+        mc:pvCode(D.mc,r.q===undefined?'(미수집)':(r.q||'(빈값·IN)')),pt:m?m.ptC:ptC(r.q),
         se:pvCode(D.se,m?seL(m.se):'미상'),ml:pvCode(D.ml,m?m.mlL:'(DB미매칭)'),ag:pvCode(D.ag,m?agL(m.ag):'미상(00)'),di:m?m.diC:pvCode(D.di,'(DB미매칭)'),
         ty:pvCode(D.ty,ty),lagb:pvCode(D.lagb,lagL(lag))};
       const pc=pcOf(r.k,r.d);if(pc)pcN++;
@@ -15927,7 +15969,7 @@ function pvBuild(){
   }
   Object.assign(D,dd);
   const months=[...latestByYm.keys()].sort();
-  pvModel={F,D,dayLook,minD,maxD,minIso:n?pvIso(minD):'',maxIso:n?pvIso(maxD):'',cumMonths:new Set(months),staleDb,noDi,staleC,exAdmin,gunja,pcN};
+  pvModel={F,D,dayLook,minD,maxD,minIso:n?pvIso(minD):'',maxIso:n?pvIso(maxD):'',cumMonths:new Set(months),staleDb,noDi,noPt,ptGuessDb,ptGuessC,ptNoneC,staleC,exAdmin,gunja,pcN};
   pvSig=pvFilesSig();
   console.log(`[피벗] 사실 테이블 ${n.toLocaleString()}행 (${(performance.now()-t0).toFixed(0)}ms)`);
   return pvModel;
@@ -16937,6 +16979,10 @@ function pvRender(keepAgg){
   const warns=[];
   const M=pvModel;
   if(M.noDi)warns.push(`DB정보 없이 저장된 DB 파일 ${M.noDi}개 — 그 기간 DB정보는 「(미수집)」. 공용폴더 새로고침 시 자동으로 다시 읽습니다(폴더 없는 PC는 동기화로 받음).`);
+  if(pvInZone('pt')&&pvInZone('pt')!=='vals'){
+    if(M.noPt)warns.push(`제품(코드)타입(F열) 없이 저장된 DB 파일 ${M.noPt}개 — 그 파일은 매체코드 학습값으로 채웁니다. 공용폴더 새로고침 시 자동으로 다시 읽습니다(폴더 없는 PC는 동기화로 받음).`);
+    if(M.ptNoneC)warns.push(`제품(코드)타입: DB에 없고 분류(Q)로도 판정 못 한 계약 ${M.ptNoneC.toLocaleString()}건은 「(미판정)」(IN·빈 분류 등).`);
+  }
   if(M.staleDb)warns.push(`매체코드 없이 저장된 옛 DB 파일 ${M.staleDb}개 — 그 기간 매체코드는 「(미수집)」. 공용폴더 새로고침 시 자동으로 다시 읽습니다.`);
   if(M.staleC)warns.push(`옛 형식 일마감 파일 ${M.staleC}개 — 그 기간 계약 유형은 DB 조인으로 판정됩니다(DB미매칭 발생).`);
   const noCum=[];for(let y=+pvCfg.s.slice(0,4),m=+pvCfg.s.slice(5,7);`${y}-${String(m).padStart(2,'0')}`<=pvCfg.e.slice(0,7);m===12?(y++,m=1):m++){const ym=`${y}${String(m).padStart(2,'0')}`;if(!M.cumMonths.has(ym))noCum.push(`${y%100}.${m}`);}
