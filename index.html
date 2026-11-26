@@ -9028,6 +9028,8 @@ async function gdIngestFolderFile(type,file){
 async function gdScanFolder(opts={}){
   if(gdScanBusy)return;
   if(!window.showDirectoryPicker){ if(opts.announce)alert('이 브라우저는 폴더 자동연동을 지원하지 않습니다.\nChrome 또는 Edge에서 사용하세요.'); return; }
+  {const pp=wmPermNow(opts);if(pp){try{await pp;}catch(e){}}}   // 로컬 로드를 기다리기 전에 권한부터 (클릭 유효시간)
+  if(gdScanBusy)return;
   gdScanBusy=true;   // 첫 await 전에 잡는다 (예전엔 권한 확인 뒤에 잡아서 두 호출이 함께 통과할 수 있었다)
   try{ await gdLoadLocal(); }finally{ gdScanBusy=false; }   // 로컬 파일을 다 읽은 뒤에 스캔 (명단 중복 판정이 정확하도록)
   if(gdScanBusy)return;
@@ -9041,7 +9043,7 @@ async function _gdScanFolder(opts){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){ if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요.\n(계열별성과 탭에서 이미 연결했다면 자동으로 잡힙니다)'); gdSetBanner('hide'); gdUpdateDirStatus(); return; }
   spDirHandle=h; spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){ gdUpdateDirStatus('need-perm'); gdSetBanner('need-perm'); return; }
+  if(!await spVerifyPerm(h,!!opts.request)){ gdUpdateDirStatus('need-perm'); gdSetBanner('need-perm'); spPermAlert(opts); return; }
   gdScanBusy=true; gdUpdateDirStatus('busy'); if(!opts.fromShow&&!opts.silent)gdSetBanner('busy');
   try{
     const attEntries=[];
@@ -14715,14 +14717,36 @@ function spDetectType(folderName,fileName){
   if(/신청자|계약/.test(f))return 'contDaily';
   return null;
 }
+// 권한이 안 될 때 이유 (버튼을 눌러도 조용히 끝나던 문제 → 화면에 안내): denied=차단됨 / gone=폴더 핸들 무효(드라이브 재연결 등) / gesture=클릭 유효시간 지남 / prompt=허용 창에서 허용 안 함
+let spPermWhy='';
 async function spVerifyPerm(h,request){
+  spPermWhy='';
   try{
     if(!h||!h.queryPermission)return false;
     const opt={mode:'read'};
-    if(await h.queryPermission(opt)==='granted')return true;
-    if(request&&await h.requestPermission(opt)==='granted')return true;
-  }catch(e){}
+    const q=await h.queryPermission(opt);
+    if(q==='granted')return true;
+    if(q==='denied'){spPermWhy='denied';return false;}
+    if(request){const r=await h.requestPermission(opt);if(r==='granted')return true;spPermWhy=r==='denied'?'denied':'prompt';}
+    else spPermWhy='prompt';
+  }catch(e){spPermWhy=(e&&e.name==='NotFoundError')?'gone':(e&&(e.name==='SecurityError'||e.name==='NotAllowedError'))?'gesture':'gone';console.warn('공용폴더 권한 확인',e);}
   return false;
+}
+// 클릭 직후(첫 await 전)에 권한부터 요청 — 앞선 스캔·로컬 로드를 기다리는 사이 클릭 유효시간(약 5초)이 지나 requestPermission이 거절되던 문제
+function wmPermNow(opts){
+  if(!opts||!opts.request||!spDirHandle||!spDirHandle.requestPermission)return null;
+  try{return spDirHandle.requestPermission({mode:'read'}).catch(e=>{console.warn('공용폴더 권한 요청',e);return 'err';});}catch(e){return null;}
+}
+// 사용자가 누른 스캔인데 권한이 안 됐을 때 이유와 해결 방법을 알린다
+function spPermAlert(opts){
+  if(!opts||!opts.request)return;
+  const m={
+    denied:'이 사이트의 공용폴더 접근이 「차단」으로 저장돼 있습니다.\n\n주소창 왼쪽 자물쇠(사이트 정보) → 사이트 설정에서 파일 편집 권한을 「확인」 또는 「허용」으로 바꾸거나,\n파일 관리 창의 [공용폴더 연결]로 폴더를 다시 지정하세요.',
+    gone:'저장된 공용폴더 연결이 더 이상 유효하지 않습니다 (네트워크 드라이브 재연결·경로 변경 등).\n\n파일 관리 창의 [공용폴더 연결]로 「09_WM_데일리 성과 RAW」 폴더를 다시 지정하세요.',
+    gesture:'권한 요청이 브라우저에서 거절됐습니다 (클릭 후 시간이 지남).\n버튼을 한 번 더 눌러 주세요.',
+    prompt:'공용폴더 접근이 허용되지 않았습니다. 버튼을 다시 누르고 허용 창에서 「파일 보기 허용」을 선택하세요.'
+  };
+  alert(m[spPermWhy]||m.prompt);
 }
 function spUpdateDirStatus(state,info){
   const el=document.getElementById('spDirStatus');const scanBtn=document.getElementById('spScanBtn');const connBtn=document.getElementById('spConnBtn');const discBtn=document.getElementById('spDiscBtn');
@@ -14786,6 +14810,7 @@ const WM_SCAN_COOLDOWN_MS=60000;
 let _wmScanP=null,_wmScanAt=0;
 async function wmScanGate(opts,run,onSkip){
   opts=opts||{};
+  {const pp=wmPermNow(opts);if(pp){try{await pp;}catch(e){}}}
   const auto=!!opts.fromShow&&!opts.request;
   if(auto&&(_wmScanP||Date.now()-_wmScanAt<WM_SCAN_COOLDOWN_MS)){
     if(_wmScanP){try{await _wmScanP;}catch(e){}}
@@ -14810,7 +14835,7 @@ async function _spScanFolder(opts={}){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){if(opts.announce)alert('먼저 공용폴더를 연결하세요.');return;}
   spDirHandle=h;spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');spSetBanner('need-perm');return;}
+  if(!await spVerifyPerm(h,!!opts.request)){spUpdateDirStatus('need-perm');spSetBanner('need-perm');spPermAlert(opts);return;}
   spScanBusy=true;spUpdateDirStatus('busy');if(!opts.fromShow)spSetBanner('busy');
   const tasks=[],skipped=[];
   async function walk(dir,folderName,depth,inside,hint){
@@ -18547,7 +18572,7 @@ async function _tbScanFolder(opts={}){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
   spDirHandle=h;spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){tbUpdateDirStatus('need-perm');tbSetBanner('need-perm');return;}
+  if(!await spVerifyPerm(h,!!opts.request)){tbUpdateDirStatus('need-perm');tbSetBanner('need-perm');spPermAlert(opts);return;}
   tbScanBusy=true;tbUpdateDirStatus('busy');if(!opts.fromShow)tbSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);
   const tasks=[];
@@ -19225,7 +19250,7 @@ async function _tzScanFolder(opts={}){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
   spDirHandle=h;spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){tzUpdateDirStatus('need-perm');tzSetBanner('need-perm');return;}
+  if(!await spVerifyPerm(h,!!opts.request)){tzUpdateDirStatus('need-perm');tzSetBanner('need-perm');spPermAlert(opts);return;}
   tzScanBusy=true;tzUpdateDirStatus('busy');if(!opts.fromShow)tzSetBanner('busy');
   const WANT=new Set(['db','contDaily','attend']);   // CTI는 수동 업로드
   const tasks=[];
@@ -20319,7 +20344,7 @@ async function _ncScanFolder(opts={}){
   const h=spDirHandle||await spIdbGetHandle();
   if(!h){if(opts.announce)alert('먼저 [공용폴더 연결]로 폴더를 지정하세요. (계열별성과와 공유)');return;}
   spDirHandle=h;spDirName=h.name;
-  if(!await spVerifyPerm(h,!!opts.request)){ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');return;}
+  if(!await spVerifyPerm(h,!!opts.request)){ncUpdateDirStatus('need-perm');ncSetBanner('need-perm');spPermAlert(opts);return;}
   await ncPurgeStaleContracts();   // 구버전(분류 미포함) 계약 파일 제거 → 아래 스캔에서 재파싱
   await ncPurgeStaleDb();          // 구버전(유입일 미포함) DB 파일 제거 → 재파싱으로 리드 추적 활성화
   ncScanBusy=true;ncUpdateDirStatus('busy');if(!opts.fromShow)ncSetBanner('busy');
