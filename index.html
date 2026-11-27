@@ -698,6 +698,25 @@ tr.row-h td{background:var(--gh-light)}
 .tg-barcell span{position:absolute;left:0;top:2px;bottom:2px;background:#dbe4ff;border-radius:3px}
 .tg-barcell b{position:relative}
 .tg-tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#f1f5f9;color:#475569;margin-right:3px}
+#page-afternoon{--pv-ink:#0f172a;--pv-sub:#64748b;--pv-line:#e6eaf0;--pv-soft:#f6f8fb;--pv-acc:#4361ee;--pv-acc-soft:#eef1fe;--pv-val:#059669;--pv-val-soft:#ecfdf5;position:relative}
+#page-afternoon .container{max-width:1200px;padding:24px 36px;background:var(--pv-soft)}
+@media (max-width:760px){#page-afternoon .container{padding:16px}}
+#page-afternoon.af-drag::after{content:'여기에 놓으세요 — 일일성과 파일 또는 분배표';position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(67,97,238,.10);border:3px dashed #4361ee;color:#1e3a8a;font-size:20px;font-weight:800;z-index:9000;pointer-events:none}
+.af-srcs{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px;margin-top:14px}
+.af-tots{display:flex;flex-wrap:wrap;gap:14px;margin:4px 0 8px}
+.af-tot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#334155}
+@media (max-width:760px){.af-srcs{grid-template-columns:1fr}}
+.af-src{border:1px solid var(--pv-line);border-radius:12px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.af-src-empty{border-style:dashed;background:#fafbff}
+.af-src-t{font-size:12px;font-weight:700;color:var(--pv-sub)}
+.af-src-d{font-size:20px;font-weight:800;color:var(--pv-ink)}
+.af-src-f{font-size:12px;color:#475569}
+.af-warn{margin-top:10px;font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 12px}
+.af-sum{font-size:13.5px;color:#334155;margin-bottom:10px}
+.af-tbl td.af-db{color:#1e3a8a;background:#eef1fe}
+.af-tbl td.af-db b{font-size:14px}
+.af-rest{display:flex;flex-wrap:wrap;gap:4px}
+.af-rest .tg-tag{margin:0}
 .tg-tag.tg-t{background:#fff1e6;color:#b4501f}.tg-tag.tg-n{background:#e0f2fe;color:#0369a1}.tg-tag.tg-both{background:#eef1fe;color:#3445c9}.tg-tag.tg-weak-tag{background:#fee2e2;color:#b91c1c}
 .tg-tops{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}
 .tg-topcard{border:1px solid var(--pv-line);border-radius:12px;padding:12px}
@@ -1283,6 +1302,12 @@ tr.vc-left:hover{opacity:.75}
     <button class="btn-header btn-sync" onclick="syncData()">동기화</button>
     <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
+  <div class="header-right" id="headerRight-afternoon" style="display:none">
+    <span style="font-size:12px;color:rgba(255,255,255,.6);white-space:nowrap">일일성과 끌어놓기</span>
+    <div class="header-sep"></div>
+    <button class="btn-header btn-sync" onclick="syncData()">동기화</button>
+    <button class="btn-header btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
   <div class="header-right" id="headerRight-timeboard-perf" style="display:none">
     <div class="status-dots" id="tbStatusDots" title="파일 상태: DB수 / 계약(일마감) / 명단">
       <div class="status-dot" id="tb-dot-db"></div>
@@ -1346,6 +1371,7 @@ tr.vc-left:hover{opacity:.75}
   <div class="tab-item" data-page="perf-diag" onclick="switchPage('perf-diag')">성과진단</div>
   <div class="tab-item" data-page="pivot" onclick="switchPage('pivot')">피벗 분석</div>
   <div class="tab-item" data-page="targeting" onclick="switchPage('targeting')">타게팅</div>
+  <div class="tab-item" data-page="afternoon" onclick="switchPage('afternoon')">오후 분배</div>
   <div class="tab-item" data-page="missed-call" onclick="switchPage('missed-call')">부재인입</div>
   <div class="tab-item" data-page="timeboard-perf" onclick="switchPage('timeboard-perf')">타임보드성과</div>
   <div class="tab-item" data-page="naesaegim-call" onclick="switchPage('naesaegim-call')">뇌새김 콜 현황</div>
@@ -2703,6 +2729,27 @@ tr.vc-left:hover{opacity:.75}
     </div>
   </div>
 </div><!-- /page-targeting -->
+<div class="page" id="page-afternoon">
+  <div class="container">
+    <div class="pv-card">
+      <div class="pv-head"><div><div class="pv-h1">오후 분배</div><div class="pv-h1-sub">오후 2시 추가 분배 · 어제 계약 1건 = 1점, 오늘 오전 일계약 1건 = 2점 · <b>2점부터</b> 점수에 비례 · 대상 = 대전·유성(영어), 송내·인천(톡이즈)</div></div></div>
+      <div class="af-srcs" id="afSrc"></div>
+      <div class="af-warn hidden" id="afWarn"></div>
+      <div class="tg-help" style="margin-top:10px">파일은 이 화면 아무 곳에나 끌어놓으면 됩니다 — 오늘 15-7 일일성과, DB 분배 현황표 모두.</div>
+    </div>
+    <div class="pv-card">
+      <div class="pv-head"><div class="tg-h2">코디별 수량</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="pv-btn" id="afCopyBtn" onclick="afCopy()">복사</button><button class="pv-btn" id="afExcelBtn" onclick="afDownloadExcel()">코디명·DB개수 엑셀</button><button class="pv-btn pv-dark" id="afSheetBtn" onclick="afDownloadSheet()">현황표 수정본 다운로드</button></div></div>
+      <div id="afResult" style="margin-top:8px"></div>
+    </div>
+    <div class="pv-card">
+      <details><summary style="cursor:pointer;font-size:13px;font-weight:700;color:#334155">제외 명단 (<span id="afExCnt"></span>명) — 대상 그룹이지만 오후 분배를 받지 않는 사람 </summary>
+        <div class="tg-help" style="margin-top:8px">이름을 띄어쓰기로 구분해 입력하세요(센터 표기 없이). 제외된 사람의 칸은 현황표에 써놓은 값 그대로 둡니다.</div>
+        <textarea id="afExText" class="pv-input" style="width:100%;height:70px;padding:8px 10px;box-sizing:border-box" onchange="afSaveExcludes(this.value)"></textarea>
+      </details>
+    </div>
+  </div>
+  <div id="afToast" class="pv-toast hidden" style="white-space:pre-line"></div>
+</div><!-- /page-afternoon -->
 
 <div class="page" id="page-timeboard-perf">
   <!-- Modal -->
@@ -3387,7 +3434,7 @@ tr.vc-left:hover{opacity:.75}
 //  Authentication
 // ═══════════════════════════════════════════
 const AUTH_ACCOUNTS=[
-  {id:'info_bin',salt:'adb78d5109b4695d98694c31b95e962b',ph:'ea45192ab102734e680d36dcbc12aabef8d72599d05252d9f338e166c5ffa1cb',pk:{s:'a017cd13b7f9f35eae4b90459bab39b0',iv:'x3QSNM1W3KeWe5cS',ct:'PIyKxNlDc9x/Rccj30auX964Y/XFk6PkrLBA7PsGm8kgDFihu3lv6PUDaWppOvF/'},role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pivot','targeting','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
+  {id:'info_bin',salt:'adb78d5109b4695d98694c31b95e962b',ph:'ea45192ab102734e680d36dcbc12aabef8d72599d05252d9f338e166c5ffa1cb',pk:{s:'a017cd13b7f9f35eae4b90459bab39b0',iv:'x3QSNM1W3KeWe5cS',ct:'PIyKxNlDc9x/Rccj30auX964Y/XFk6PkrLBA7PsGm8kgDFihu3lv6PUDaWppOvF/'},role:'master',tabs:['grade-dash','cancel-dash','via-cancel','series-perf','perf-diag','pivot','targeting','afternoon','ngroup','missed-call','timeboard-perf','talkis-perf','naesaegim-call','ad-cost']},
   {id:'admin',salt:'a36602e8385bcf8a8ba69e8a3f34a695',ph:'9c49975ff8a2da110fa21eb2f27035d2567fb29c61a9a30c7beff19325c06cc1',pk:{s:'2078184a7901bd6de2e315d863da2e51',iv:'jdOx1nAchY7I5P3P',ct:'lXV0OADNLbS3bYmDbl+WvkWb52Y8mj9njlsqRat31NjgeaWKo7rSZEvXKMbPXGBA'},role:'viewer',tabs:['cancel-dash','via-cancel','series-perf','perf-diag','pivot','timeboard-perf','talkis-perf','naesaegim-call']},
 ];
 let authUser=null;
@@ -4260,7 +4307,7 @@ async function _doSyncUpload(token){
     const gdData=keepRemote.has('gd')?null:{files:(Array.isArray(gdSyncFiles)?gdSyncFiles.map(wmEncFile):gdSyncFiles),results:gdResultsSync};
 
     // localStorage 이력 데이터
-    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules','pv_views','tg_cfg','tg_season'];
+    const lsKeys=['ngroup_streak_data','ngroup_streak_adj','ngroup_history','ngroup_history_times','ngroup_history_start','cd_member_history','gd_init_uploaded','gd_streak_adj','gd_promotion_enabled','gd_long_absent_include','gd_contract_adj','gd_cancel_adj','gd_db_adj','gd_db_rules','pv_views','tg_cfg','tg_season','af_exclude','af_groups'];
     const lsData={};lsKeys.forEach(k=>{const v=localStorage.getItem(k);if(v)lsData[k]=v;});
 
     // (일자별 성과 탭 삭제됨 — 싱크 제외)
@@ -4691,6 +4738,8 @@ function switchPage(pageId){
   if(hrPv) hrPv.style.display = pageId==='pivot' ? 'flex' : 'none';
   const hrTg=document.getElementById('headerRight-targeting');
   if(hrTg) hrTg.style.display = pageId==='targeting' ? 'flex' : 'none';
+  const hrAf=document.getElementById('headerRight-afternoon');
+  if(hrAf) hrAf.style.display = pageId==='afternoon' ? 'flex' : 'none';
   const hrTb=document.getElementById('headerRight-timeboard-perf');
   if(hrTb) hrTb.style.display = pageId==='timeboard-perf' ? 'flex' : 'none';
   const hrTz=document.getElementById('headerRight-talkis-perf');
@@ -4711,6 +4760,7 @@ function switchPage(pageId){
   if(pageId==='perf-diag' && typeof pdOnShow==='function') pdOnShow();
   if(pageId==='pivot' && typeof pvOnShow==='function') pvOnShow();
   if(pageId==='targeting' && typeof tgOnShow==='function') tgOnShow();
+  if(pageId==='afternoon' && typeof afOnShow==='function') afOnShow();
   if(pageId==='talkis-perf' && typeof tzOnShow==='function') tzOnShow();
   if(pageId==='grade-dash' && typeof gdAutoScanOnShow==='function') gdAutoScanOnShow();
 }
@@ -22577,6 +22627,400 @@ async function vcOnShow(){
   if(b)b.addEventListener('click',()=>{vcGenerate();vcCloseModal();});
 })();
 // (Via 로컬 데이터는 로그인 후 applyAuth 로더가 권한 있을 때만 읽는다 — 예전엔 여기서 한 번 더 읽어 두 번 로드됐다)
+
+// ═══════════════════════════════════════════
+//  오후 분배 (af*) — 오후 2시 추가 분배 (뇌새김 영어 분배 정책 개편_261126 6p)
+//  점수 = 어제 실계약 ×1 + 오늘 오전 DB일계약(P열) ×2, 2점부터 점수 비례. 2점 미만은 0.
+//  어제 성과 = 공용폴더 「15-7 일일성과」에서 기준일 직전 영업일(주말·공휴일 제외) 파일
+//  오늘 오전 성과 = 화면에 끌어놓은 15-7 파일 / DB 분배 현황표 = 끌어놓으면 대상 열의 수량을 고쳐 다시 내려받는다
+// ═══════════════════════════════════════════
+const AF_MIN_SCORE=2, AF_W_YEST=1, AF_W_TODAY=2;
+// 사업부별 대상 센터 — 이 센터만 다시 나누고 나머지(강동·당산 등)는 써놓은 값 그대로
+const AF_POOLS={eng:{label:'영어',centers:['대전','유성']},tz:{label:'톡이즈',centers:['송내','인천']}};
+const afEl=id=>document.getElementById(id);
+const afEsc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let afToday=null, afYest=null, afYestAuto=true, afFolderMsg='', afBusy=false, afBound=false;
+let afSheet=null;     // 현황표 {fileName, buf, sheetName, sheetPath, rows:[{r,name,bare,center,pool,vals:{col:n},att}], cols:[{c,addr,label,pools}], tot:{col|pool:n}}
+let afTotOv={};       // 사업부별 총 수량 직접 입력 {col|pool:n}
+
+const afBare=s=>String(s||'').replace(/^\s*\([^)]*\)\s*/,'').trim();
+const afCenter=s=>{const m=String(s||'').match(/^\s*\(R?_?([^)]*)\)/);return m?m[1].replace(/^R_/,''):'';};
+const afNum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,\s]/g,''));return isNaN(n)?0:n;};
+const afFmtD=d=>{if(!d)return '-';const w='일월화수목금토'[new Date(d+'T00:00:00').getDay()];return `${+d.slice(5,7)}/${+d.slice(8,10)}(${w})`;};
+const afIsOff=d=>typeof isHoliday==='function'&&isHoliday(new Date(d+'T00:00:00'));
+function afTodayISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function afPoolOf(center){for(const k in AF_POOLS)if(AF_POOLS[k].centers.includes(center))return k;return null;}
+// 열 이름 → 다시 나눌 사업부. 「오후」 = 영어·톡이즈 둘 다, 「(영)」 = 영어, 「(톡)」 = 톡이즈, 그 외(14(일) 등) = 손대지 않음
+function afColPools(label){
+  const s=String(label||'').replace(/\s+/g,'');
+  if(/\(영\)$/.test(s))return ['eng'];
+  if(/\(톡\)$/.test(s))return ['tz'];
+  if(/^오후/.test(s))return ['eng','tz'];
+  return null;
+}
+function afExcludes(){let s='';try{s=localStorage.getItem('af_exclude')||'';}catch(e){}return s.split(/[\s,·]+/).map(x=>x.trim()).filter(Boolean);}
+// 대상 그룹 = 현황표 「그룹」 열(I열) 값. 사업부별, 쉼표로 여러 개, 비우면 그룹 무관. 기본 영어 = A·W
+//  0 그룹 = 무조건 0으로 쓰는 그룹(H). 대상도 0 그룹도 아닌 그룹(B·C·D 등)은 써놓은 값 그대로
+const AF_DEFAULT_GROUPS={eng:'A, W',tz:''}, AF_ZERO_GROUPS=new Set(['H']);
+function afGroups(){let g={};try{g=JSON.parse(localStorage.getItem('af_groups')||'{}')||{};}catch(e){}return Object.assign({},AF_DEFAULT_GROUPS,g);}
+function afGroupSet(pk){const v=afGroups()[pk]||'';return new Set(v.split(/[,\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean));}
+function afSetGroups(pk,v){const g=afGroups();g[pk]=String(v||'').trim();try{localStorage.setItem('af_groups',JSON.stringify(g));}catch(e){}if(typeof wmSyncMarkDirty==='function')try{wmSyncMarkDirty();}catch(e){}afRenderResult();}
+function afSaveExcludes(txt){
+  try{localStorage.setItem('af_exclude',txt.split(/[\s,·]+/).map(x=>x.trim()).filter(Boolean).join(' '));}catch(e){}
+  if(typeof wmSyncMarkDirty==='function')try{wmSyncMarkDirty();}catch(e){}
+  afRender();
+}
+function afLoadState(){
+  try{const s=JSON.parse(localStorage.getItem('af_state')||'null');if(s){afToday=s.today||null;if(s.yest&&!s.yestAuto){afYest=s.yest;afYestAuto=false;}}}catch(e){}
+}
+function afSaveState(){
+  try{localStorage.setItem('af_state',JSON.stringify({today:afToday,yest:afYestAuto?null:afYest,yestAuto:afYestAuto}));}catch(e){}
+}
+
+// ── 파일 → AOA (일일성과는 HTML 형식 .xls) ──
+async function afFileAoa(file,buf){
+  buf=buf||await file.arrayBuffer();
+  const head=new TextDecoder('utf-8').decode(buf.slice(0,400)).trim().toLowerCase();
+  if(head.startsWith('<')){
+    const doc=new DOMParser().parseFromString(new TextDecoder('utf-8').decode(buf),'text/html');
+    return {aoa:[...doc.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(td=>td.textContent.trim()))};
+  }
+  const wb=XLSX.read(buf,{type:'array'});
+  return {wb,aoa:XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false})};
+}
+// 일일성과(15-7) — 머리글로 열을 찾는다(실계약 = O열, DB일계약 = P열). 아니면 null
+function afParsePerf(aoa,fileName){
+  const hi=aoa.findIndex(r=>r&&r.some(c=>String(c).trim()==='상담원')&&r.some(c=>String(c).trim()==='실계약'));
+  if(hi<0)return null;
+  const h=aoa[hi].map(c=>String(c).trim());
+  const ci={d:h.indexOf('날짜'),n:h.indexOf('상담원'),c:h.indexOf('실계약'),dc:h.indexOf('DB일계약')};
+  if(ci.dc<0)return null;
+  const rows={};let date='';
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i];if(!r)continue;
+    const raw=String(r[ci.n]||'').trim();
+    if(!raw||raw===':'||/합\s*계/.test(String(r[0]||'')))continue;
+    const m=String(r[ci.d]||'').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+    if(m&&!date)date=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    const name=afBare(raw);if(!name)continue;
+    const p=rows[name]||(rows[name]={center:afCenter(raw),c:0,dc:0});
+    p.c+=afNum(r[ci.c]);p.dc+=afNum(r[ci.dc]);
+  }
+  if(!date){const m=String(fileName||'').match(/(\d{4})-(\d{2})-(\d{2})/);if(m)date=`${m[1]}-${m[2]}-${m[3]}`;}
+  return {date,fileName,at:new Date().toISOString(),rows};
+}
+// DB 분배 현황표 — 코디 이름 열(「(R_센터)이름」)과 다시 나눌 열(머리글 「오후…」「…(영)」「…(톡)」)을 찾는다
+function afParseSheet(wb,fileName,buf){
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn];if(!ws||!ws['!ref'])continue;
+    const rg=XLSX.utils.decode_range(ws['!ref']);
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    // 이름 열 = 「(R_」로 시작하는 칸이 가장 많은 열
+    const nameCnt={};
+    aoa.forEach(r=>(r||[]).forEach((v,c)=>{if(typeof v==='string'&&/^\s*\(R_/.test(v))nameCnt[c]=(nameCnt[c]||0)+1;}));
+    const nc=+Object.keys(nameCnt).sort((a,b)=>nameCnt[b]-nameCnt[a])[0];
+    if(isNaN(nc)||nameCnt[nc]<5)continue;
+    // 머리글 = 대상 열 이름이 가장 많이 나온 행 (현황표는 코디 표 아래 96행에 있다)
+    let best=-1,bestN=0;
+    aoa.forEach((r,i)=>{const n=(r||[]).filter(v=>typeof v==='string'&&afColPools(v)).length;if(n>bestN){bestN=n;best=i;}});
+    if(best<0)continue;
+    // 그룹 열 = 「그룹」 머리글이 있는 열(현재 I열), 없으면 I열
+    let gc=-1;
+    for(let i=0;i<aoa.length&&gc<0;i++){const r=aoa[i]||[];for(let c=0;c<r.length;c++){if(typeof r[c]==='string'&&r[c].trim()==='그룹'){gc=c;break;}}}
+    if(gc<0)gc=8-rg.s.c;
+    const cols=[];
+    (aoa[best]||[]).forEach((v,c)=>{const pools=typeof v==='string'&&afColPools(v);if(pools)cols.push({c,label:String(v).trim(),pools,letter:XLSX.utils.encode_col(c+rg.s.c)});});
+    const rows=[];
+    aoa.forEach((r,i)=>{
+      const raw=r&&r[nc];if(typeof raw!=='string'||!/^\s*\(R_/.test(raw))return;
+      const center=afCenter(raw),pool=afPoolOf(center);
+      const vals={};cols.forEach(col=>{vals[col.c]=afNum(r[col.c]);});
+      const att=(r||[]).some(v=>typeof v==='string'&&v.trim()==='출근');
+      const grp=String((r||[])[gc]==null?'':r[gc]).trim();
+      rows.push({r:i+rg.s.r+1,raw:raw.trim(),bare:afBare(raw),center,pool,grp,vals,att});
+    });
+    // 시트 XML 경로 (내려받을 때 그 칸만 고쳐 쓴다)
+    return {fileName,buf,sheetName:sn,headRow:best+rg.s.r+1,grpLetter:XLSX.utils.encode_col(gc+rg.s.c),cols,rows};
+  }
+  return null;
+}
+
+// ── 공용폴더 「15-7 일일성과」에서 기준일 직전 영업일 파일 ──
+async function afPerfDir(){
+  if(!window.showDirectoryPicker)return null;
+  if(typeof spIdb!=='undefined'&&!spIdb&&typeof spOpenIDB==='function')await spOpenIDB();
+  spDirHandle=spDirHandle||await spIdbGetHandle();
+  if(!spDirHandle)return null;
+  if(!await spVerifyPerm(spDirHandle,false))return 'perm';
+  try{return await spDirHandle.getDirectoryHandle('15-7 일일성과');}catch(e){}
+  for await(const [n,h] of spDirHandle.entries())if(h.kind==='directory'&&n.includes('일일성과'))return h;
+  return 'nodir';
+}
+async function afFindYest(base){
+  afFolderMsg='';
+  let dir;
+  try{dir=await afPerfDir();}catch(e){console.warn('오후 분배 폴더',e);dir=null;}
+  if(!dir){afFolderMsg='nohandle';return null;}
+  if(dir==='perm'){afFolderMsg='perm';return null;}
+  if(dir==='nodir'){afFolderMsg='nodir';return null;}
+  const files=[];
+  for await(const [n,h] of dir.entries()){
+    const m=n.match(/^(\d{4}-\d{2}-\d{2})_?(\d*)\.(xls|xlsx)$/i);
+    if(h.kind==='file'&&m&&!n.startsWith('~$'))files.push({n,h,d:m[1],ts:+m[2]||0});
+  }
+  // 파일명 날짜와 안쪽 날짜가 하루 어긋나는 파일(새벽 저장)이 있어 안쪽 날짜로 판정. 주말·공휴일 파일은 건너뛴다
+  const cand=files.filter(f=>f.d<=base).sort((a,b)=>b.d.localeCompare(a.d)||b.ts-a.ts);
+  for(const f of cand.slice(0,10)){
+    try{
+      const p=afParsePerf((await afFileAoa(await f.h.getFile())).aoa,f.n);
+      if(p&&p.date&&p.date<base&&!afIsOff(p.date)){p.src='공용폴더';return p;}
+    }catch(e){console.warn('일일성과 읽기',f.n,e);}
+  }
+  afFolderMsg='nofile';return null;
+}
+
+// ── 화면 진입·끌어놓기 ──
+async function afOnShow(){
+  if(!afBound)afBind();
+  if(!afToday&&!afYest)afLoadState();
+  await afRefreshYest(false);
+}
+async function afRefreshYest(request){
+  if(afBusy)return;
+  if(request&&spDirHandle&&!await spVerifyPerm(spDirHandle,true)){afRender();return;}
+  if(!afYestAuto&&afYest){afRender();return;}
+  afBusy=true;afRender();
+  try{afYest=await afFindYest(afBase());}finally{afBusy=false;}
+  afRender();
+}
+function afBase(){return (afToday&&afToday.date)||afTodayISO();}
+function afBind(){
+  afBound=true;
+  const pg=afEl('page-afternoon');
+  let depth=0;
+  pg.addEventListener('dragenter',e=>{if(![...(e.dataTransfer.types||[])].includes('Files'))return;depth++;pg.classList.add('af-drag');});
+  pg.addEventListener('dragleave',()=>{depth=Math.max(0,depth-1);if(!depth)pg.classList.remove('af-drag');});
+  pg.addEventListener('dragover',e=>{e.preventDefault();});
+  pg.addEventListener('drop',async e=>{e.preventDefault();depth=0;pg.classList.remove('af-drag');if(e.dataTransfer.files.length)await afIngest([...e.dataTransfer.files]);});
+}
+async function afIngest(files){
+  const msgs=[];
+  for(const f of files){
+    let buf,res;
+    try{buf=await f.arrayBuffer();res=await afFileAoa(f,buf);}catch(e){msgs.push(`${f.name}: 읽을 수 없는 파일`);continue;}
+    const p=afParsePerf(res.aoa,f.name);
+    if(p){
+      if(!p.date){msgs.push(`${f.name}: 날짜를 못 찾았어요`);continue;}
+      p.src='끌어놓음';
+      if(!afToday||p.date>=afToday.date||p.date>=afTodayISO()){
+        afToday=p;
+        if(!afYestAuto&&afYest&&afYest.date>=p.date){afYestAuto=true;afYest=null;}
+        msgs.push(`오늘 오전 성과: ${afFmtD(p.date)}`);
+      }else{afYest=p;afYestAuto=false;msgs.push(`어제 성과(직접 지정): ${afFmtD(p.date)}`);}
+      continue;
+    }
+    const sh=res.wb&&afParseSheet(res.wb,f.name,buf);
+    if(sh){
+      if(!sh.cols.length){msgs.push(`${f.name}: 「오후…」「…(영)」「…(톡)」 열을 못 찾았어요`);continue;}
+      afSheet=sh;afTotOv={};
+      msgs.push(`분배 현황표: ${sh.cols.map(c=>c.letter+' '+c.label).join(', ')}`);continue;
+    }
+    msgs.push(`${f.name}: 일일성과도 분배 현황표도 아니에요`);
+  }
+  afSaveState();
+  afToast(msgs.join('\n'));
+  if(afYestAuto)await afRefreshYest(false);else afRender();
+}
+function afToast(t){const el=afEl('afToast');if(!el||!t)return;el.textContent=t;el.classList.remove('hidden');clearTimeout(afToast._t);afToast._t=setTimeout(()=>el.classList.add('hidden'),4000);}
+function afClearToday(){afToday=null;afSaveState();if(afYestAuto)afRefreshYest(false);else afRender();}
+function afClearSheet(){afSheet=null;afTotOv={};afRender();}
+function afUseAutoYest(){afYestAuto=true;afYest=null;afSaveState();afRefreshYest(false);}
+function afSetTot(key,v){const s=String(v).trim();if(s==='')delete afTotOv[key];else afTotOv[key]=Math.max(0,Math.round(afNum(s)));afRenderResult();}
+
+// ── 계산 ──
+function afScoreOf(bare){
+  const y=afYest&&afYest.rows[bare], t=afToday&&afToday.rows[bare];
+  const yc=y?y.c:0, td=t?t.dc:0;
+  return {yc,td,score:yc*AF_W_YEST+td*AF_W_TODAY,found:!!(y||t)};
+}
+// 최대 잔여법 — 합계가 정확히 total. 동률은 점수 높은 순 → 이름순. cap이 있으면 넘지 않는다
+function afLRM(total,items,wKey,cap){
+  const W=items.reduce((s,x)=>s+x[wKey],0);
+  if(!W||!total)return items.map(()=>0);
+  const raw=items.map(x=>total*x[wKey]/W);
+  const out=raw.map(Math.floor);
+  let left=total-out.reduce((s,v)=>s+v,0);
+  const ord=items.map((x,i)=>i).sort((a,b)=>(raw[b]-Math.floor(raw[b]))-(raw[a]-Math.floor(raw[a]))||items[b].score-items[a].score||items[a].bare.localeCompare(items[b].bare,'ko'));
+  for(let k=0;left>0&&k<ord.length*3;k++){const i=ord[k%ord.length];if(cap&&out[i]>=cap[i])continue;out[i]++;left--;}
+  return out;
+}
+// 사업부마다: ① 대상 열 수량을 모두 합쳐 사람별 총 개수를 점수 비례로 ② 열별로는 남은 몫에 비례해 채운다
+function afAllocate(){
+  if(!afSheet)return null;
+  const ex=new Set(afExcludes());
+  const out={pools:{},changes:new Map()};   // changes: 'r|c' → {old,new}
+  for(const pk in AF_POOLS){
+    const cols=afSheet.cols.filter(c=>c.pools.includes(pk));
+    if(!cols.length)continue;
+    const all=afSheet.rows.filter(r=>r.pool===pk);
+    // 받을 수 있는 사람 = 대상 그룹(I열) · 써놓은 값이 있거나 근태 「출근」 · 제외 명단 아님. H그룹은 무조건 0
+    const gs=afGroupSet(pk);
+    const zero=all.filter(r=>AF_ZERO_GROUPS.has(r.grp.toUpperCase())&&!ex.has(r.bare));
+    zero.forEach(r=>cols.forEach(c=>out.changes.set(c.letter+r.r,{old:r.vals[c.c],nw:0})));
+    const cand=all.filter(r=>!AF_ZERO_GROUPS.has(r.grp.toUpperCase())&&!ex.has(r.bare)&&(!gs.size||gs.has(r.grp.toUpperCase()))&&(r.att||cols.some(c=>r.vals[c.c]>0))).map(r=>Object.assign({},r,afScoreOf(r.bare)));
+    const elig=cand.filter(p=>p.score>=AF_MIN_SCORE).sort((a,b)=>b.score-a.score||a.bare.localeCompare(b.bare,'ko'));
+    // 나눌 수량 = 이번에 다시 쓰는 사람(대상 후보 + H그룹)에게 써놓은 값의 합 — 그대로 두는 사람 몫은 건드리지 않는다
+    const touched=new Set(cand.map(p=>p.r).concat(zero.map(r=>r.r)));
+    const colTot=cols.map(c=>{const k=c.c+'|'+pk;return k in afTotOv?afTotOv[k]:all.filter(r=>touched.has(r.r)).reduce((s,r)=>s+r.vals[c.c],0);});
+    const total=colTot.reduce((a,b)=>a+b,0);
+    const tot=afLRM(total,elig,'score');
+    const rem=tot.slice();
+    const by=elig.map(()=>({}));
+    cols.forEach((c,ci)=>{
+      const w=elig.map((p,i)=>({bare:p.bare,score:p.score,r:rem[i]}));
+      const a=afLRM(colTot[ci],w,'r',rem);
+      a.forEach((v,i)=>{by[i][c.c]=v;rem[i]-=v;});
+    });
+    elig.forEach((p,i)=>{p.total=tot[i];p.by=by[i];});
+    cand.filter(p=>p.score<AF_MIN_SCORE).forEach(p=>{p.total=0;p.by={};cols.forEach(c=>p.by[c.c]=0);});
+    cand.forEach(p=>cols.forEach(c=>out.changes.set(c.letter+p.r,{old:p.vals[c.c],nw:p.by[c.c]})));
+    const notFound=cand.filter(p=>!p.found).map(p=>p.bare);
+    out.pools[pk]={zero:zero.filter(r=>cols.some(c=>r.vals[c.c]>0)),cols,colTot,total,elig,rest:cand.filter(p=>p.score<AF_MIN_SCORE).sort((a,b)=>b.score-a.score||a.bare.localeCompare(b.bare,'ko')),S:elig.reduce((s,p)=>s+p.score,0),notFound};
+  }
+  return out;
+}
+
+// ── 렌더 ──
+function afRender(){afRenderSrc();afRenderResult();afRenderEx();}
+function afRenderSrc(){
+  const el=afEl('afSrc');if(!el)return;
+  const base=afBase();
+  const yMsg={nohandle:'공용폴더가 연결돼 있지 않아요. <b>계열별성과</b> 탭에서 「09_WM_데일리 성과 RAW」 폴더를 연결하거나, 어제 파일을 여기에 끌어놓으세요.',perm:'공용폴더 접근 허용이 필요해요.',nodir:'공용폴더에서 「15-7 일일성과」 폴더를 못 찾았어요.',nofile:`「15-7 일일성과」에 ${afFmtD(base)} 이전 영업일 파일이 없어요.`}[afFolderMsg]||'';
+  const box=(ttl,p,extra,empty)=>`<div class="af-src${p?'':' af-src-empty'}"><div class="af-src-t">${ttl}</div>${p?`<div class="af-src-d">${afFmtD(p.date)}</div><div class="af-src-f">${p.src} · ${afEsc(p.fileName||'')}</div>`:`<div class="af-src-f">${empty}</div>`}${extra||''}</div>`;
+  const yExtra=afBusy?'<div class="af-src-f">⏳ 공용폴더 확인 중…</div>':
+    (!afYestAuto?`<button class="pv-btn tg-mini" onclick="afUseAutoYest()">공용폴더 파일로 되돌리기</button>`:
+     (afFolderMsg==='perm'?`<button class="pv-btn pv-dark tg-mini" onclick="afRefreshYest(true)">공용폴더 허용</button>`:
+      `<button class="pv-btn tg-mini" onclick="afRefreshYest(true)">다시 찾기</button>`));
+  const sh=afSheet;
+  el.innerHTML=box('어제 계약 (×1점)',afYest,yExtra,yMsg||'파일 없음')+
+    box('오늘 오전 일계약 (×2점)',afToday,afToday?`<button class="pv-btn tg-mini" onclick="afClearToday()">지우기</button>`:'','<b>오늘 15-7 일일성과 파일을 끌어놓으세요</b>')+
+    `<div class="af-src${sh?'':' af-src-empty'}"><div class="af-src-t">DB 분배 현황표</div>${sh?`<div class="af-src-d" style="font-size:15px">${afEsc(sh.fileName)}</div><div class="af-src-f">${afEsc(sh.sheetName)} 시트 · 대상 열 ${sh.cols.map(c=>`<b>${c.letter}</b> ${afEsc(c.label)}`).join(', ')}</div><button class="pv-btn tg-mini" onclick="afClearSheet()">지우기</button>`:'<div class="af-src-f"><b>현황표 엑셀을 끌어놓으세요</b><br>「오후…」「…(영)」「…(톡)」 열만 다시 나눠요</div>'}</div>`;
+  const w=[];
+  if(afToday&&afToday.date!==afTodayISO())w.push(`오늘 오전 파일 날짜가 오늘이 아니에요 (${afFmtD(afToday.date)})`);
+  if(!afToday)w.push('오늘 오전 파일이 아직 없어서 어제 계약만으로 계산하고 있어요');
+  if(afToday&&afYest&&afYest.date>=afToday.date)w.push('어제 파일 날짜가 오늘 파일보다 늦거나 같아요');
+  if(afYest&&afIsOff(afYest.date))w.push(`어제 파일(${afFmtD(afYest.date)})이 주말·공휴일이에요`);
+  const warn=afEl('afWarn');warn.innerHTML=w.map(x=>`<div>⚠ ${x}</div>`).join('');warn.classList.toggle('hidden',!w.length);
+}
+function afRenderResult(){
+  const el=afEl('afResult');if(!el)return;
+  const btns=['afSheetBtn','afExcelBtn','afCopyBtn'];
+  const dis=v=>btns.forEach(id=>{const b=afEl(id);if(b)b.disabled=v;});
+  if(!afSheet){el.innerHTML='<div class="tg-none">DB 분배 현황표를 끌어놓으면 대상자별 수량이 나와요.</div>';dis(true);return;}
+  if(!afYest&&!afToday){el.innerHTML='<div class="tg-none">어제·오늘 성과 파일이 있어야 계산할 수 있어요.</div>';dis(true);return;}
+  const a=afAllocate();
+  let h='';
+  for(const pk in a.pools){
+    const P=a.pools[pk];
+    const multi=P.cols.length>1;
+    h+=`<div class="tg-h3" style="margin-top:6px">${AF_POOLS[pk].label} <span class="tg-src">(${AF_POOLS[pk].centers.join('·')})</span><label class="af-tot" style="margin-left:14px"><span class="tg-src">대상 그룹(${afSheet.grpLetter}열)</span><input class="pv-input tg-in" style="width:70px" value="${afEsc(afGroups()[pk])}" placeholder="전체" onchange="afSetGroups('${pk}',this.value)"></label></div>`;
+    h+=`<div class="af-tots">${P.cols.map((c,i)=>{const k=c.c+'|'+pk;const ov=k in afTotOv;return `<label class="af-tot"><span>${c.letter} ${afEsc(c.label)}</span><input class="pv-input tg-in" type="number" min="0" style="width:80px;text-align:right${ov?';border-color:#4361ee':''}" value="${P.colTot[i]}" onchange="afSetTot('${k}',this.value)"> 건${ov?` <button class="pv-btn tg-x" title="현황표 합계로" onclick="afSetTot('${k}','')">↺</button>`:''}</label>`;}).join('')}</div>`;
+    h+=`<div class="af-sum">대상 <b>${P.elig.length}명</b> · 총 <b>${P.S}점</b> · 나눌 수량 <b>${P.total.toLocaleString()}건</b>${P.S&&P.total?` · 1점당 <b>${(P.total/P.S).toFixed(2)}건</b>`:''}</div>`;
+    if(P.total&&!P.elig.length)h+=`<div class="af-warn">⚠ 2점 이상인 사람이 없어 ${P.total}건이 나눠지지 않아요.</div>`;
+    const list=P.elig.concat(P.rest);
+    if(list.length){
+      h+=`<div class="tg-scroll"><table class="tg-tbl af-tbl"><tr><th>코디명</th><th>센터</th><th>그룹</th><th>어제 계약</th><th>오늘 오전<br>일계약</th><th>점수</th>${P.cols.map(c=>`<th>${c.letter} ${afEsc(c.label)}<br><span class="tg-src">써놓은 값 → 변경</span></th>`).join('')}${multi?'<th>합계</th>':''}</tr>`;
+      h+=`<tr class="tg-sum"><td>합계</td><td></td><td></td><td class="n">${list.reduce((s,p)=>s+p.yc,0)}</td><td class="n">${list.reduce((s,p)=>s+p.td,0)}</td><td class="n">${P.S}</td>${P.cols.map((c,i)=>`<td class="n">${list.reduce((s,p)=>s+p.vals[c.c],0)} → ${P.colTot[i]}</td>`).join('')}${multi?`<td class="n">${P.total}</td>`:''}</tr>`;
+      for(const p of list){
+        const off=p.score<AF_MIN_SCORE;
+        h+=`<tr class="${off?'tg-off':''}"><td><b>${afEsc(p.bare)}</b>${p.found?'':' <span class="tg-tag">성과 없음</span>'}</td><td>${afEsc(p.center)}</td><td style="text-align:center">${afEsc(p.grp)}</td><td class="n">${p.yc}</td><td class="n">${p.td}</td><td class="n"><b>${p.score}</b></td>${P.cols.map(c=>{const o=p.vals[c.c],n=p.by[c.c];return `<td class="n${n?' af-db':''}"><span class="tg-src">${o}</span> → <b>${n}</b></td>`;}).join('')}${multi?`<td class="n af-db">${p.total}</td>`:''}</tr>`;
+      }
+      h+='</table></div>';
+    }
+    if(P.zero.length)h+=`<div class="tg-help">H그룹 → 0: ${P.zero.map(r=>afEsc(r.bare)+' ('+P.cols.map(c=>r.vals[c.c]).join('/')+' → 0)').join(', ')}</div>`;
+    if(P.notFound.length)h+=`<div class="tg-help">일일성과 파일에 없는 사람(0점 처리): ${P.notFound.map(afEsc).join(', ')}</div>`;
+  }
+  const untouched=afSheet.rows.filter(r=>!r.pool).length;
+  h+=`<div class="tg-help" style="margin-top:12px">다른 센터(강동·당산 등) ${untouched}명, 대상 그룹이 아닌 사람, 제외 명단, 대상이 아닌 열은 현황표에 써놓은 값 그대로 둡니다.</div>`;
+  el.innerHTML=h;
+  dis(false);
+}
+function afRenderEx(){
+  const ex=afExcludes();
+  const t=afEl('afExCnt');if(t)t.textContent=ex.length;
+  const ta=afEl('afExText');if(ta&&document.activeElement!==ta)ta.value=ex.join(' ');
+}
+
+// ── 내보내기 ──
+// ① 현황표 수정본: 원본 xlsx의 그 칸 값만 바꾼다(서식·수식·다른 시트 그대로). 열면 엑셀이 수식을 다시 계산
+async function afDownloadSheet(){
+  const a=afAllocate();if(!a)return;
+  const zip=await JSZip.loadAsync(afSheet.buf);
+  const wbx=await zip.file('xl/workbook.xml').async('string');
+  const rels=await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const sm=wbx.match(new RegExp('<sheet[^>]*name="'+esc(afSheet.sheetName.replace(/&/g,'&amp;'))+'"[^>]*r:id="([^"]+)"'))||wbx.match(new RegExp('<sheet[^>]*r:id="([^"]+)"[^>]*name="'+esc(afSheet.sheetName)+'"'));
+  if(!sm){alert('현황표 시트를 찾지 못했어요');return;}
+  const tm=rels.match(new RegExp('<Relationship[^>]*Id="'+esc(sm[1])+'"[^>]*Target="([^"]+)"'))||rels.match(new RegExp('<Relationship[^>]*Target="([^"]+)"[^>]*Id="'+esc(sm[1])+'"'));
+  const path=('xl/'+tm[1].replace(/^\/?xl\//,'')).replace(/\/\.\//g,'/');
+  let xml=await zip.file(path).async('string');
+  let n=0;
+  for(const [key,ch] of a.changes){
+    if(ch.old===ch.nw)continue;
+    xml=afSetCell(xml,key,+key.replace(/^[A-Z]+/,''),ch.nw);n++;
+  }
+  zip.file(path,xml);
+  zip.file('xl/workbook.xml',/<calcPr\b/.test(wbx)?wbx.replace(/<calcPr\b([^>]*?)\s*\/?>/,(m,at)=>`<calcPr${at.replace(/\s*fullCalcOnLoad="[^"]*"/,'')} fullCalcOnLoad="1"/>`):wbx.replace('</workbook>','<calcPr fullCalcOnLoad="1"/></workbook>'));
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const nm=afSheet.fileName.replace(/\.xlsx?$/i,'')+'_오후분배.xlsx';
+  const l=document.createElement('a');l.href=URL.createObjectURL(blob);l.download=nm;l.click();setTimeout(()=>URL.revokeObjectURL(l.href),3000);
+  afToast(`${n}칸을 고쳐 내려받았어요`);
+}
+// 시트 XML에서 한 칸을 숫자로 바꾼다(스타일 유지·수식 제거). 칸이 없으면 행 안 열 순서에 맞게 넣는다
+function afSetCell(xml,ref,row,val){
+  const re=new RegExp('<c r="'+ref+'"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+  const m=xml.match(re);
+  if(m){const s=(m[1].match(/\ss="\d+"/)||[''])[0];return xml.replace(re,`<c r="${ref}"${s}><v>${val}</v></c>`);}
+  const rr=new RegExp('(<row r="'+row+'"[^>]*?)(/>|>([\\s\\S]*?)</row>)');
+  const rm=xml.match(rr);
+  const cell=`<c r="${ref}"><v>${val}</v></c>`;
+  if(!rm)return xml;   // 행 자체가 없으면 건드리지 않는다(현황표 대상 행은 항상 있음)
+  if(rm[2]==='/>')return xml.replace(rr,`${rm[1]}>${cell}</row>`);
+  const col=XLSX.utils.decode_col(ref.replace(/\d+$/,''));
+  let inner=rm[3],placed=false;
+  inner=inner.replace(/<c r="([A-Z]+)\d+"/g,(t,cl)=>{if(!placed&&XLSX.utils.decode_col(cl)>col){placed=true;return cell+t;}return t;});
+  if(!placed)inner+=cell;
+  return xml.replace(rr,`${rm[1]}>${inner}</row>`);
+}
+// ② 코디명 | DB개수 (대상 열 합계, 받는 사람만)
+function afOutRows(){
+  const a=afAllocate();
+  const head=['코디명','DB개수'],rows=[];
+  for(const pk in a.pools){const P=a.pools[pk];P.elig.filter(p=>p.total>0).forEach(p=>rows.push([p.bare,p.total]));}
+  return {head,rows};
+}
+async function afCopy(){
+  const {head,rows}=afOutRows();
+  try{await navigator.clipboard.writeText([head,...rows].map(r=>r.join('\t')).join('\n'));afToast('복사했어요 — 엑셀에 붙여넣으세요');}catch(e){alert('복사 실패: '+e.message);}
+}
+async function afDownloadExcel(){
+  const {head,rows}=afOutRows();if(!rows.length)return;
+  const aoa=[head,...rows,['합계',rows.reduce((s,r)=>s+r[1],0)]];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const bd={top:{style:'thin',color:{rgb:'D0D5DD'}},bottom:{style:'thin',color:{rgb:'D0D5DD'}},left:{style:'thin',color:{rgb:'D0D5DD'}},right:{style:'thin',color:{rgb:'D0D5DD'}}};
+  for(let R=0;R<aoa.length;R++)for(let C=0;C<2;C++){
+    const ad=XLSX.utils.encode_cell({r:R,c:C});if(!ws[ad])continue;
+    const top=R===0,sum=R===aoa.length-1;
+    ws[ad].s={font:{bold:top||sum,color:{rgb:top?'FFFFFF':'1F2937'},name:'맑은 고딕',sz:10},fill:top?{fgColor:{rgb:'2D3748'}}:sum?{fgColor:{rgb:'EEF1FE'}}:undefined,alignment:{horizontal:C===0&&!top?'left':'center',vertical:'center'},border:bd};
+  }
+  ws['!cols']=[{wch:12},{wch:10}];
+  const wb=XLSX.utils.book_new();const d=afBase().slice(2).replace(/-/g,'');
+  XLSX.utils.book_append_sheet(wb,ws,'오후분배_'+d);
+  const zip=await JSZip.loadAsync(XLSX.write(wb,{bookType:'xlsx',type:'array',bookSST:true}));
+  for(const p of Object.keys(zip.files)){if(p.startsWith('xl/worksheets/sheet')&&p.endsWith('.xml')){const x=await zip.file(p).async('string');zip.file(p,x.replace(/<sheetView(?=[\s>])/g,'<sheetView showGridLines="0"'));}}
+  const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const l=document.createElement('a');l.href=URL.createObjectURL(blob);l.download=`오후분배_${d}.xlsx`;l.click();setTimeout(()=>URL.revokeObjectURL(l.href),2000);
+}
 </script>
 </body>
 </html>
